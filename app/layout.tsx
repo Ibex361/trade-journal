@@ -24,10 +24,10 @@ export default function RootLayout({
       <body className="font-body min-h-screen">
         <AccountProvider>
           <header className="border-b border-surface-border bg-surface-1/60 backdrop-blur sticky top-0 z-10">
-            <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
-              <div className="flex items-center gap-3">
+            <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 md:py-4 flex items-center justify-between gap-3 md:gap-6">
+              <div className="flex items-center gap-2 md:gap-3 shrink-0">
                 <span className="signal-bar h-6" />
-                <span className="font-display font-medium text-lg tracking-tight">
+                <span className="hidden sm:inline font-display font-medium text-lg tracking-tight">
                   Trade journal
                 </span>
               </div>
@@ -35,7 +35,7 @@ export default function RootLayout({
               <AccountSwitcher />
             </div>
           </header>
-          <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+          <main className="max-w-6xl mx-auto px-4 md:px-6 py-8">{children}</main>
         </AccountProvider>
       </body>
     </html>

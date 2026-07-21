@@ -26,7 +26,9 @@ export default function AccountSwitcher() {
         className="flex items-center gap-2 bg-surface-2 border border-surface-border rounded-full pl-3 pr-2 py-1.5 hover:border-brass-dim transition-colors"
       >
         <span className="signal-bar h-4" />
-        <span className="text-sm font-medium">{selectedAccount.name}</span>
+        <span className="text-sm font-medium max-w-[6rem] sm:max-w-none truncate">
+          {selectedAccount.name}
+        </span>
         {selectedAccount.is_demo && (
           <span className="text-[11px] uppercase tracking-wide bg-brass/15 text-brass px-2 py-0.5 rounded-full">
             Demo
