@@ -465,3 +465,67 @@ export function getTradesInRMultipleBucket(trades: Trade[], bucketKey: string): 
   const max = R_BUCKET_EDGES[idx + 1];
   return trades.filter((t) => t.r_multiple != null && !Number.isNaN(t.r_multiple) && t.r_multiple >= min && t.r_multiple < max);
 }
+
+/** Trades whose entry_date falls within the given calendar month. `month` is 1-indexed (Jan = 1). */
+export function getTradesInMonth(trades: Trade[], year: number, month: number): Trade[] {
+  return trades.filter((t) => {
+    const d = new Date(t.entry_date + "T00:00:00");
+    return d.getFullYear() === year && d.getMonth() + 1 === month;
+  });
+}
+
+export type MonthlyDayPnl = {
+  /** ISO date, YYYY-MM-DD. */
+  date: string;
+  day: number;
+  pnl: number;
+  count: number;
+};
+
+/**
+ * One entry per calendar day in the given month (1-indexed), with summed
+ * P&L and trade count — zeros for days with no trades. Used for the
+ * Reports calendar heatmap.
+ */
+export function getDailyPnlForMonth(trades: Trade[], year: number, month: number): MonthlyDayPnl[] {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const byDate = new Map<string, { pnl: number; count: number }>();
+
+  for (const t of trades) {
+    const d = new Date(t.entry_date + "T00:00:00");
+    if (d.getFullYear() !== year || d.getMonth() + 1 !== month) continue;
+    const existing = byDate.get(t.entry_date);
+    if (existing) {
+      existing.pnl += t.pnl;
+      existing.count += 1;
+    } else {
+      byDate.set(t.entry_date, { pnl: t.pnl, count: 1 });
+    }
+  }
+
+  const result: MonthlyDayPnl[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const entry = byDate.get(dateStr);
+    result.push({ date: dateStr, day, pnl: entry?.pnl ?? 0, count: entry?.count ?? 0 });
+  }
+  return result;
+}
+
+export type BestWorstDay = {
+  best: MonthlyDayPnl | null;
+  worst: MonthlyDayPnl | null;
+};
+
+/** The best and worst trading days (by P&L) among days that actually had trades. */
+export function getBestWorstDay(dailyPnls: MonthlyDayPnl[]): BestWorstDay {
+  const traded = dailyPnls.filter((d) => d.count > 0);
+  if (traded.length === 0) return { best: null, worst: null };
+  let best = traded[0];
+  let worst = traded[0];
+  for (const d of traded) {
+    if (d.pnl > best.pnl) best = d;
+    if (d.pnl < worst.pnl) worst = d;
+  }
+  return { best, worst };
+}
