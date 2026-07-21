@@ -28,3 +28,47 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #272c34 transparent;
 }
+
+/*
+ * Printable report (Reports page "Print report" button -> browser print,
+ * which doubles as "save as PDF"). The app's dark theme prints badly as-is,
+ * so this repaints surfaces/text/borders to a light, ink-friendly palette
+ * using attribute selectors on the existing Tailwind classes rather than
+ * touching every component. Anything not part of the report itself
+ * (nav, account switcher, buttons) is hidden via the `print:hidden`
+ * utility directly in those components.
+ */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #16181b !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  [class*="bg-surface"] {
+    background: #ffffff !important;
+  }
+  [class*="border-surface"] {
+    border-color: #d7dade !important;
+  }
+  [class*="text-ink-primary"] {
+    color: #16181b !important;
+  }
+  [class*="text-ink-secondary"] {
+    color: #55595f !important;
+  }
+  [class*="text-ink-muted"] {
+    color: #85888d !important;
+  }
+  [class*="text-brass"] {
+    color: #8a6f2a !important;
+  }
+  .signal-bar {
+    background: #8a6f2a !important;
+  }
+  .shadow,
+  .shadow-md,
+  .shadow-lg {
+    box-shadow: none !important;
+  }
+}

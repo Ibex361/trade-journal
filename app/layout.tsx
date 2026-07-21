@@ -23,7 +23,7 @@ export default function RootLayout({
     <html lang="en" className={`${manrope.variable} ${inter.variable} ${jbmono.variable}`}>
       <body className="font-body min-h-screen">
         <AccountProvider>
-          <header className="border-b border-surface-border bg-surface-1/60 backdrop-blur sticky top-0 z-10">
+          <header className="print:hidden border-b border-surface-border bg-surface-1/60 backdrop-blur sticky top-0 z-10">
             <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 md:py-4 flex items-center justify-between gap-3 md:gap-6">
               <div className="flex items-center gap-2 md:gap-3 shrink-0">
                 <span className="signal-bar h-6" />
@@ -35,7 +35,9 @@ export default function RootLayout({
               <AccountSwitcher />
             </div>
           </header>
-          <main className="max-w-6xl mx-auto px-4 md:px-6 py-8">{children}</main>
+          <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 print:max-w-none print:px-0 print:py-0">
+            {children}
+          </main>
         </AccountProvider>
       </body>
     </html>
