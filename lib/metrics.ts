@@ -104,3 +104,97 @@ export function buildEquityCurve(trades: Trade[], startingBalance: number): Equi
   }
   return points;
 }
+
+export type Streak = {
+  type: "win" | "loss" | null;
+  count: number;
+};
+
+/**
+ * Current win/loss streak, walking backward from the most recent trade.
+ * Breakeven trades (pnl === 0) end the streak rather than counting toward
+ * either side. Trades are sorted the same way as buildEquityCurve so this
+ * always agrees with the equity curve's chronological order.
+ */
+export function getCurrentStreak(trades: Trade[]): Streak {
+  const sorted = [...trades].sort(
+    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+  );
+
+  let type: "win" | "loss" | null = null;
+  let count = 0;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const pnl = sorted[i].pnl;
+    const outcome: "win" | "loss" | null = pnl > 0 ? "win" : pnl < 0 ? "loss" : null;
+    if (outcome === null) break;
+    if (type === null) type = outcome;
+    if (outcome !== type) break;
+    count++;
+  }
+  return { type: count > 0 ? type : null, count };
+}
+
+export type Drawdown = {
+  /** Amount below the equity curve's running peak, at the most recent point. */
+  currentAmount: number;
+  currentPct: number;
+  /** The largest peak-to-trough drop seen anywhere in the curve. */
+  maxAmount: number;
+  maxPct: number;
+};
+
+/**
+ * Peak-to-trough drawdown computed from the same equity curve points used
+ * by the chart, so this always agrees with what's plotted.
+ */
+export function getDrawdown(points: EquityPoint[]): Drawdown {
+  let peak = points[0]?.balance ?? 0;
+  let maxAmount = 0;
+  let maxPct = 0;
+
+  for (const p of points) {
+    if (p.balance > peak) peak = p.balance;
+    const amount = peak - p.balance;
+    const pct = peak > 0 ? (amount / peak) * 100 : 0;
+    if (amount > maxAmount) {
+      maxAmount = amount;
+      maxPct = pct;
+    }
+  }
+
+  const last = points[points.length - 1]?.balance ?? 0;
+  let lastPeak = points[0]?.balance ?? 0;
+  for (const p of points) {
+    if (p.balance > lastPeak) lastPeak = p.balance;
+  }
+  const currentAmount = lastPeak - last;
+  const currentPct = lastPeak > 0 ? (currentAmount / lastPeak) * 100 : 0;
+
+  return { currentAmount, currentPct, maxAmount, maxPct };
+}
+
+/** Trades whose entry_date falls in the current calendar month (local time). */
+export function getTradesInCurrentMonth(trades: Trade[]): Trade[] {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  return trades.filter((t) => {
+    const d = new Date(t.entry_date + "T00:00:00");
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+}
+
+/**
+ * Average risk per trade as a percentage of account balance, i.e.
+ * |entry - stop| * size / accountBalance * 100, averaged across trades
+ * that have all three inputs recorded. Used to compare against a target
+ * risk-per-trade ceiling set in Settings.
+ */
+export function getAvgRiskPct(trades: Trade[], accountBalance: number): number | null {
+  if (accountBalance <= 0) return null;
+  const pcts = trades
+    .filter((t) => t.entry_price != null && t.stop_loss_price != null && t.size != null)
+    .map((t) => (Math.abs(t.entry_price! - t.stop_loss_price!) * t.size!) / accountBalance * 100);
+  if (pcts.length === 0) return null;
+  return pcts.reduce((s, v) => s + v, 0) / pcts.length;
+}
