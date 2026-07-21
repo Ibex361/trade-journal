@@ -11,5 +11,10 @@ export type Account = {
   broker: string | null;
   currency: string;
   is_demo: boolean;
+  starting_balance: number;
+  journal_start_date: string;
+  target_risk_pct: number | null;
+  target_monthly_pnl: number | null;
+  target_monthly_winrate: number | null;
   created_at: string;
 };
