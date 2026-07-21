@@ -6,6 +6,7 @@ import { fetchTrades, Trade } from "@/lib/trades";
 import {
   DateRange,
   PeriodGranularity,
+  BreakdownDimension,
   filterTradesByRange,
   buildEquityCurveForRange,
   getDrawdown,
@@ -13,10 +14,14 @@ import {
   getExpectancy,
   getTotalReturnPct,
   getPnlByPeriod,
+  getBreakdownByDimension,
+  getTradesInBreakdownGroup,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
 import AnalyticsStats from "@/components/analytics/AnalyticsStats";
 import PnlByPeriodChart from "@/components/analytics/PnlByPeriodChart";
+import PerformanceBreakdown from "@/components/analytics/PerformanceBreakdown";
+import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
 import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
 
 export default function AnalyticsPage() {
@@ -25,6 +30,8 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<DateRange>("30d");
   const [granularity, setGranularity] = useState<PeriodGranularity>("day");
+  const [breakdownDimension, setBreakdownDimension] = useState<BreakdownDimension>("instrument");
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -55,6 +62,28 @@ export default function AnalyticsPage() {
   const pnlBuckets = useMemo(
     () => getPnlByPeriod(rangeTrades, granularity),
     [rangeTrades, granularity]
+  );
+
+  const breakdownGroups = useMemo(
+    () => getBreakdownByDimension(rangeTrades, breakdownDimension),
+    [rangeTrades, breakdownDimension]
+  );
+
+  // Clear the drill-down selection whenever the underlying trade set changes
+  // shape (range or dimension), so a stale key never lingers on screen.
+  useEffect(() => {
+    setSelectedGroupKey(null);
+  }, [range, breakdownDimension]);
+
+  const selectedGroup = useMemo(
+    () => breakdownGroups.find((g) => g.key === selectedGroupKey) ?? null,
+    [breakdownGroups, selectedGroupKey]
+  );
+
+  const drilldownTrades = useMemo(
+    () =>
+      selectedGroupKey ? getTradesInBreakdownGroup(rangeTrades, breakdownDimension, selectedGroupKey) : [],
+    [rangeTrades, breakdownDimension, selectedGroupKey]
   );
 
   return (
@@ -93,6 +122,22 @@ export default function AnalyticsPage() {
             granularity={granularity}
             onGranularityChange={setGranularity}
           />
+          <PerformanceBreakdown
+            groups={breakdownGroups}
+            currency={selectedAccount.currency}
+            dimension={breakdownDimension}
+            onDimensionChange={setBreakdownDimension}
+            selectedKey={selectedGroupKey}
+            onSelectGroup={setSelectedGroupKey}
+          />
+          {selectedGroup && (
+            <BreakdownDrilldown
+              groupLabel={selectedGroup.label}
+              trades={drilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={() => setSelectedGroupKey(null)}
+            />
+          )}
         </>
       )}
     </div>

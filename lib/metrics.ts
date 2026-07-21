@@ -328,3 +328,77 @@ export function getPnlByPeriod(trades: Trade[], granularity: PeriodGranularity):
   }
   return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
+
+/**
+ * Dimensions trades can be grouped by on the Analytics "Breakdowns" section.
+ * "direction" reads from the direction field; every other value reads the
+ * matching Trade field of the same name.
+ */
+export type BreakdownDimension = "instrument" | "asset_class" | "strategy" | "session" | "direction";
+
+export const BREAKDOWN_DIMENSIONS: { value: BreakdownDimension; label: string }[] = [
+  { value: "instrument", label: "Instrument" },
+  { value: "asset_class", label: "Asset class" },
+  { value: "strategy", label: "Strategy" },
+  { value: "session", label: "Session" },
+  { value: "direction", label: "Direction" },
+];
+
+export type BreakdownGroup = {
+  /** Raw field value used to match trades back for drill-down; "unspecified" if null. */
+  key: string;
+  label: string;
+  count: number;
+  totalPnl: number;
+  winRate: number | null;
+  avgR: number | null;
+};
+
+function breakdownFieldValue(trade: Trade, dimension: BreakdownDimension): string | null {
+  if (dimension === "direction") return trade.direction;
+  return trade[dimension];
+}
+
+function breakdownLabel(value: string | null, dimension: BreakdownDimension): string {
+  if (value == null) return "Unspecified";
+  if (dimension === "direction") return value === "long" ? "Long" : "Short";
+  return value;
+}
+
+/**
+ * Groups trades by the given dimension and summarizes each group using the
+ * same win-rate/avg-R logic as summarizeTrades, so these figures always
+ * agree with the rest of the app. Groups are sorted by total P&L descending
+ * (biggest contributor first, biggest drag last).
+ */
+export function getBreakdownByDimension(trades: Trade[], dimension: BreakdownDimension): BreakdownGroup[] {
+  const groups = new Map<string, Trade[]>();
+  for (const t of trades) {
+    const value = breakdownFieldValue(t, dimension);
+    const key = value ?? "unspecified";
+    const existing = groups.get(key);
+    if (existing) existing.push(t);
+    else groups.set(key, [t]);
+  }
+
+  const result: BreakdownGroup[] = [];
+  for (const [key, groupTrades] of groups.entries()) {
+    const summary = summarizeTrades(groupTrades);
+    const value = key === "unspecified" ? null : key;
+    result.push({
+      key,
+      label: breakdownLabel(value, dimension),
+      count: summary.count,
+      totalPnl: summary.totalPnl,
+      winRate: summary.winRate,
+      avgR: summary.avgR,
+    });
+  }
+
+  return result.sort((a, b) => b.totalPnl - a.totalPnl);
+}
+
+/** Trades matching a specific breakdown group's key for the given dimension — used for drill-down. */
+export function getTradesInBreakdownGroup(trades: Trade[], dimension: BreakdownDimension, key: string): Trade[] {
+  return trades.filter((t) => (breakdownFieldValue(t, dimension) ?? "unspecified") === key);
+}
