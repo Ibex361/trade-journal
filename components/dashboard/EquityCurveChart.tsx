@@ -8,7 +8,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  TooltipProps,
 } from "recharts";
 import { EquityPoint } from "@/lib/metrics";
 
@@ -20,7 +19,13 @@ function formatDateLabel(d: string) {
   });
 }
 
-function CustomTooltip({ active, payload, currency }: TooltipProps<number, string> & { currency: string }) {
+type CustomTooltipProps = {
+  active?: boolean;
+  payload?: { payload: EquityPoint }[];
+  currency: string;
+};
+
+function CustomTooltip({ active, payload, currency }: CustomTooltipProps) {
   if (!active || !payload || !payload.length) return null;
   const point = payload[0].payload as EquityPoint;
   const label =
@@ -97,7 +102,7 @@ export default function EquityCurveChart({
                 width={60}
                 tickFormatter={(v: number) => v.toLocaleString(undefined, { notation: "compact" })}
               />
-              <Tooltip content={(props) => <CustomTooltip {...props} currency={currency} />} />
+              <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
               <Area
                 type="monotone"
                 dataKey="balance"
