@@ -1,22 +1,36 @@
 import { supabase } from "./supabaseClient";
 
+// Postgres code for "unique_violation" — thrown by the
+// accounts_active_name_unique index when a name is already in use
+// by another active account.
+const UNIQUE_VIOLATION = "23505";
+const DUPLICATE_NAME_ERROR = { message: "An account with this name already exists." };
+
 export async function createAccount(input: {
   name: string;
   broker: string;
   currency: string;
   starting_balance: number;
 }) {
-  return supabase.from("accounts").insert({
+  const result = await supabase.from("accounts").insert({
     name: input.name,
     broker: input.broker || null,
     currency: input.currency,
     starting_balance: input.starting_balance,
     is_demo: false,
   });
+  if (result.error?.code === UNIQUE_VIOLATION) {
+    return { ...result, error: DUPLICATE_NAME_ERROR };
+  }
+  return result;
 }
 
 export async function renameAccount(id: string, name: string) {
-  return supabase.from("accounts").update({ name }).eq("id", id);
+  const result = await supabase.from("accounts").update({ name }).eq("id", id);
+  if (result.error?.code === UNIQUE_VIOLATION) {
+    return { ...result, error: DUPLICATE_NAME_ERROR };
+  }
+  return result;
 }
 
 export async function archiveAccount(id: string) {

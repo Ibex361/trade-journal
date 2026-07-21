@@ -14,6 +14,8 @@ export default function AccountManager() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -25,6 +27,7 @@ export default function AccountManager() {
   async function handleCreate() {
     if (!form.name.trim()) return;
     setBusy(true);
+    setCreateError(null);
     const { error } = await createAccount({
       name: form.name.trim(),
       broker: form.broker.trim(),
@@ -35,6 +38,8 @@ export default function AccountManager() {
       await refreshAccounts();
       setForm({ name: "", broker: "", currency: "USD", starting_balance: "" });
       setShowNew(false);
+    } else {
+      setCreateError(error.message);
     }
     setBusy(false);
   }
@@ -42,9 +47,14 @@ export default function AccountManager() {
   async function handleRename(id: string) {
     if (!renameValue.trim()) return;
     setBusy(true);
-    await renameAccount(id, renameValue.trim());
-    await refreshAccounts();
-    setRenamingId(null);
+    setRenameError(null);
+    const { error } = await renameAccount(id, renameValue.trim());
+    if (!error) {
+      await refreshAccounts();
+      setRenamingId(null);
+    } else {
+      setRenameError(error.message);
+    }
     setBusy(false);
   }
 
@@ -83,26 +93,37 @@ export default function AccountManager() {
             className="flex items-center justify-between bg-surface-2 border border-surface-border rounded-card px-4 py-3"
           >
             {renamingId === acc.id ? (
-              <div className="flex items-center gap-2 flex-1">
-                <input
-                  autoFocus
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  className="bg-surface-0 border border-surface-border rounded-md px-2 py-1 text-sm flex-1"
-                />
-                <button
-                  onClick={() => handleRename(acc.id)}
-                  disabled={busy}
-                  className="text-sm text-brass"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => setRenamingId(null)}
-                  className="text-sm text-ink-muted"
-                >
-                  Cancel
-                </button>
+              <div className="flex flex-col gap-1.5 flex-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => {
+                      setRenameValue(e.target.value);
+                      if (renameError) setRenameError(null);
+                    }}
+                    className="bg-surface-0 border border-surface-border rounded-md px-2 py-1 text-sm flex-1"
+                  />
+                  <button
+                    onClick={() => handleRename(acc.id)}
+                    disabled={busy}
+                    className="text-sm text-brass"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRenamingId(null);
+                      setRenameError(null);
+                    }}
+                    className="text-sm text-ink-muted"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {renameError && (
+                  <p className="text-xs text-loss">{renameError}</p>
+                )}
               </div>
             ) : (
               <>
@@ -122,6 +143,7 @@ export default function AccountManager() {
                     onClick={() => {
                       setRenamingId(acc.id);
                       setRenameValue(acc.name);
+                      setRenameError(null);
                     }}
                     className="text-xs text-ink-secondary hover:text-ink-primary"
                   >
@@ -149,7 +171,10 @@ export default function AccountManager() {
             <input
               placeholder="Account name"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, name: e.target.value });
+                if (createError) setCreateError(null);
+              }}
               className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm"
             />
             <input
@@ -172,6 +197,7 @@ export default function AccountManager() {
               className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm font-mono"
             />
           </div>
+          {createError && <p className="text-xs text-loss">{createError}</p>}
           <div className="flex gap-3">
             <button
               onClick={handleCreate}
@@ -181,7 +207,10 @@ export default function AccountManager() {
               Create account
             </button>
             <button
-              onClick={() => setShowNew(false)}
+              onClick={() => {
+                setShowNew(false);
+                setCreateError(null);
+              }}
               className="text-sm text-ink-muted"
             >
               Cancel
