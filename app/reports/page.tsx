@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchTrades, Trade } from "@/lib/trades";
-import { getTradesInMonth, getDailyPnlForMonth, getBestWorstDay, summarizeTrades } from "@/lib/metrics";
+import { getTradesInMonth, getDailyPnlForMonth, getBestWorstDay, getBestWorstTrade, getTagFrequency, summarizeTrades } from "@/lib/metrics";
 import MonthSelector from "@/components/reports/MonthSelector";
 import CalendarHeatmap from "@/components/reports/CalendarHeatmap";
 import ReportsSummaryStats from "@/components/reports/ReportsSummaryStats";
 import MonthlyTradesTable from "@/components/reports/MonthlyTradesTable";
 import ReportsToolbar from "@/components/reports/ReportsToolbar";
+import TradeSpotlight from "@/components/reports/TradeSpotlight";
+import TagFrequency from "@/components/reports/TagFrequency";
 
 const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
@@ -39,6 +41,8 @@ export default function ReportsPage() {
   const dailyPnls = useMemo(() => getDailyPnlForMonth(trades, year, month), [trades, year, month]);
   const summary = useMemo(() => summarizeTrades(monthTrades), [monthTrades]);
   const { best, worst } = useMemo(() => getBestWorstDay(dailyPnls), [dailyPnls]);
+  const { best: bestTrade, worst: worstTrade } = useMemo(() => getBestWorstTrade(monthTrades), [monthTrades]);
+  const tagFrequency = useMemo(() => getTagFrequency(monthTrades), [monthTrades]);
 
   return (
     <div className="space-y-6">
@@ -83,6 +87,8 @@ export default function ReportsPage() {
             currency={selectedAccount.currency}
           />
           <CalendarHeatmap year={year} month={month} days={dailyPnls} currency={selectedAccount.currency} />
+          <TradeSpotlight best={bestTrade} worst={worstTrade} />
+          <TagFrequency tags={tagFrequency} />
           <div>
             <h2 className="font-display text-base font-medium mb-3 print:mt-4">Trades this month</h2>
             <MonthlyTradesTable trades={monthTrades} />
