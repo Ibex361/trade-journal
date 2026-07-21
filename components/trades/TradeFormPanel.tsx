@@ -565,7 +565,7 @@ export default function TradeFormPanel({
           </label>
 
           <div className="block">
-            <span className={labelClass}>Chart screenshot</span>
+            <span className={`${labelClass} block mb-1`}>Chart screenshot</span>
             <input
               ref={fileInputRef}
               type="file"
@@ -574,7 +574,7 @@ export default function TradeFormPanel({
               className="hidden"
             />
             {screenshotPreview ? (
-              <div className="mt-1 relative w-full max-w-[220px] rounded-md overflow-hidden border border-surface-border">
+              <div className="relative w-full max-w-[220px] rounded-md overflow-hidden border border-surface-border">
                 <img
                   src={screenshotPreview}
                   alt="Trade chart screenshot preview"
@@ -601,7 +601,7 @@ export default function TradeFormPanel({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-1 w-full max-w-[220px] rounded-md border border-dashed border-surface-border bg-surface-2 px-3 py-4 text-center text-xs text-ink-secondary hover:text-ink-primary hover:border-brass/50 transition-colors"
+                className="w-full rounded-md border border-dashed border-surface-border bg-surface-2 px-3 py-4 text-center text-xs text-ink-secondary hover:text-ink-primary hover:border-brass/50 transition-colors"
               >
                 + Add screenshot
               </button>
