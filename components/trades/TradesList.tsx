@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trade } from "@/lib/trades";
+
+export type SortColumn = "entry_date" | "instrument" | "pnl" | "r_multiple";
+export type SortState = { column: SortColumn; direction: "asc" | "desc" };
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -63,19 +66,104 @@ function RulesBadge({ value }: { value: boolean | null }) {
   );
 }
 
+function ScreenshotThumb({ url, onOpen }: { url: string | null; onOpen: () => void }) {
+  if (!url) return <span className="text-ink-muted text-xs">—</span>;
+  return (
+    <button
+      onClick={onOpen}
+      className="w-9 h-9 rounded-md overflow-hidden border border-surface-border hover:border-brass/60 transition-colors"
+      aria-label="View chart screenshot"
+    >
+      <img src={url} alt="" className="w-full h-full object-cover" />
+    </button>
+  );
+}
+
+function ScreenshotLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <img
+        src={url}
+        alt="Trade chart screenshot"
+        className="relative max-w-full max-h-full rounded-lg border border-surface-border"
+      />
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 text-ink-primary/80 hover:text-ink-primary text-2xl leading-none"
+        aria-label="Close"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function SortHeader({
+  label,
+  column,
+  sort,
+  onSortChange,
+  align = "left",
+}: {
+  label: string;
+  column: SortColumn;
+  sort: SortState;
+  onSortChange: (s: SortState) => void;
+  align?: "left" | "right";
+}) {
+  const active = sort.column === column;
+
+  function handleClick() {
+    if (active) {
+      onSortChange({ column, direction: sort.direction === "asc" ? "desc" : "asc" });
+    } else {
+      onSortChange({ column, direction: column === "instrument" ? "asc" : "desc" });
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`flex items-center gap-1 font-medium transition-colors hover:text-ink-primary ${
+        active ? "text-ink-primary" : ""
+      } ${align === "right" ? "ml-auto" : ""}`}
+    >
+      {label}
+      <span className={`text-brass ${active ? "" : "opacity-0"}`}>
+        {sort.direction === "asc" ? "↑" : "↓"}
+      </span>
+    </button>
+  );
+}
+
 export default function TradesList({
   trades,
   onEdit,
   onDelete,
+  sort,
+  onSortChange,
 }: {
   trades: Trade[];
   onEdit: (trade: Trade) => void;
   onDelete: (id: string) => void;
+  sort: SortState;
+  onSortChange: (s: SortState) => void;
 }) {
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
   if (trades.length === 0) {
     return (
       <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
-        <p className="text-ink-muted text-sm">No trades yet for this account.</p>
+        <p className="text-ink-muted text-sm">No trades match the current filters.</p>
       </div>
     );
   }
@@ -87,15 +175,24 @@ export default function TradesList({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-surface-border text-left text-ink-secondary text-xs uppercase tracking-wide">
-              <th className="px-4 py-3 font-medium">Date</th>
-              <th className="px-4 py-3 font-medium">Instrument</th>
+              <th className="px-4 py-3">
+                <SortHeader label="Date" column="entry_date" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th className="px-4 py-3">
+                <SortHeader label="Instrument" column="instrument" sort={sort} onSortChange={onSortChange} />
+              </th>
               <th className="px-4 py-3 font-medium">Dir</th>
               <th className="px-4 py-3 font-medium">Asset class</th>
               <th className="px-4 py-3 font-medium">Strategy</th>
               <th className="px-4 py-3 font-medium">Session</th>
-              <th className="px-4 py-3 font-medium text-right">P&amp;L</th>
-              <th className="px-4 py-3 font-medium text-right">R</th>
+              <th className="px-4 py-3 text-right">
+                <SortHeader label="P&L" column="pnl" sort={sort} onSortChange={onSortChange} align="right" />
+              </th>
+              <th className="px-4 py-3 text-right">
+                <SortHeader label="R" column="r_multiple" sort={sort} onSortChange={onSortChange} align="right" />
+              </th>
               <th className="px-4 py-3 font-medium">Rules</th>
+              <th className="px-4 py-3 font-medium">Chart</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
@@ -123,6 +220,9 @@ export default function TradesList({
                 </td>
                 <td className="px-4 py-3">
                   <RulesBadge value={t.rules_followed} />
+                </td>
+                <td className="px-4 py-3">
+                  <ScreenshotThumb url={t.screenshot_url} onOpen={() => setLightboxUrl(t.screenshot_url)} />
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-3">
@@ -158,7 +258,10 @@ export default function TradesList({
                   </p>
                 </div>
               </div>
-              <PnlText value={t.pnl} className="text-base" />
+              <div className="flex items-center gap-2">
+                <ScreenshotThumb url={t.screenshot_url} onOpen={() => setLightboxUrl(t.screenshot_url)} />
+                <PnlText value={t.pnl} className="text-base" />
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-ink-secondary">
@@ -183,6 +286,10 @@ export default function TradesList({
           </div>
         ))}
       </div>
+
+      {lightboxUrl && (
+        <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      )}
     </>
   );
 }

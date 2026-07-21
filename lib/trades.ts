@@ -41,6 +41,7 @@ export type TradeInput = {
   r_multiple: number | null;
   rules_followed: boolean | null;
   notes: string | null;
+  screenshot_url: string | null;
   tags: string[];
 };
 
