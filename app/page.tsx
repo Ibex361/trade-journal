@@ -15,8 +15,6 @@ import DashboardStats from "@/components/dashboard/DashboardStats";
 import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
 import RecentTradesFeed from "@/components/dashboard/RecentTradesFeed";
 import TargetProgress from "@/components/dashboard/TargetProgress";
-import WinLossStreak from "@/components/dashboard/WinLossStreak";
-import DrawdownStrip from "@/components/dashboard/DrawdownStrip";
 
 export default function DashboardPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -72,28 +70,27 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <DashboardStats summary={summary} currency={selectedAccount.currency} accountBalance={accountBalance} />
+          <DashboardStats
+            summary={summary}
+            currency={selectedAccount.currency}
+            accountBalance={accountBalance}
+            streak={streak}
+          />
           <EquityCurveChart points={equityCurve} currency={selectedAccount.currency} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <TargetProgress
-                targetMonthlyPnl={selectedAccount.target_monthly_pnl}
-                targetMonthlyWinrate={selectedAccount.target_monthly_winrate}
-                targetRiskPct={selectedAccount.target_risk_pct}
-                monthlyPnl={monthSummary.totalPnl}
-                monthlyWinRate={monthSummary.winRate}
-                avgRiskPct={avgRiskPct}
-                currency={selectedAccount.currency}
-              />
-            </div>
-            <div className="flex flex-col gap-4">
-              <WinLossStreak streak={streak} />
-              <DrawdownStrip drawdown={drawdown} currency={selectedAccount.currency} />
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <TargetProgress
+              targetMonthlyPnl={selectedAccount.target_monthly_pnl}
+              targetMonthlyWinrate={selectedAccount.target_monthly_winrate}
+              targetRiskPct={selectedAccount.target_risk_pct}
+              monthlyPnl={monthSummary.totalPnl}
+              monthlyWinRate={monthSummary.winRate}
+              avgRiskPct={avgRiskPct}
+              currency={selectedAccount.currency}
+              drawdown={drawdown}
+            />
+            <RecentTradesFeed trades={trades} />
           </div>
-
-          <RecentTradesFeed trades={trades} />
         </>
       )}
     </div>
