@@ -16,13 +16,19 @@ import {
   getPnlByPeriod,
   getBreakdownByDimension,
   getTradesInBreakdownGroup,
+  getRMultipleDistribution,
+  getTradesInRMultipleBucket,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
 import AnalyticsStats from "@/components/analytics/AnalyticsStats";
 import PnlByPeriodChart from "@/components/analytics/PnlByPeriodChart";
 import PerformanceBreakdown from "@/components/analytics/PerformanceBreakdown";
 import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
+import RMultipleHistogram from "@/components/analytics/RMultipleHistogram";
+import RulesFollowedComparison from "@/components/analytics/RulesFollowedComparison";
 import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
+
+const EMOTION_DIMENSIONS: { value: BreakdownDimension; label: string }[] = [{ value: "emotion", label: "Emotion" }];
 
 export default function AnalyticsPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -32,6 +38,9 @@ export default function AnalyticsPage() {
   const [granularity, setGranularity] = useState<PeriodGranularity>("day");
   const [breakdownDimension, setBreakdownDimension] = useState<BreakdownDimension>("instrument");
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
+  const [selectedRBucketKey, setSelectedRBucketKey] = useState<string | null>(null);
+  const [selectedRulesKey, setSelectedRulesKey] = useState<string | null>(null);
+  const [selectedEmotionKey, setSelectedEmotionKey] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -86,6 +95,44 @@ export default function AnalyticsPage() {
     [rangeTrades, breakdownDimension, selectedGroupKey]
   );
 
+  const rBuckets = useMemo(() => getRMultipleDistribution(rangeTrades), [rangeTrades]);
+  const rDrilldownTrades = useMemo(
+    () => (selectedRBucketKey ? getTradesInRMultipleBucket(rangeTrades, selectedRBucketKey) : []),
+    [rangeTrades, selectedRBucketKey]
+  );
+  const selectedRBucket = useMemo(
+    () => rBuckets.find((b) => b.key === selectedRBucketKey) ?? null,
+    [rBuckets, selectedRBucketKey]
+  );
+
+  const rulesGroups = useMemo(() => getBreakdownByDimension(rangeTrades, "rules_followed"), [rangeTrades]);
+  const rulesDrilldownTrades = useMemo(
+    () => (selectedRulesKey ? getTradesInBreakdownGroup(rangeTrades, "rules_followed", selectedRulesKey) : []),
+    [rangeTrades, selectedRulesKey]
+  );
+  const selectedRulesGroup = useMemo(
+    () => rulesGroups.find((g) => g.key === selectedRulesKey) ?? null,
+    [rulesGroups, selectedRulesKey]
+  );
+
+  const emotionGroups = useMemo(() => getBreakdownByDimension(rangeTrades, "emotion"), [rangeTrades]);
+  const emotionDrilldownTrades = useMemo(
+    () => (selectedEmotionKey ? getTradesInBreakdownGroup(rangeTrades, "emotion", selectedEmotionKey) : []),
+    [rangeTrades, selectedEmotionKey]
+  );
+  const selectedEmotionGroup = useMemo(
+    () => emotionGroups.find((g) => g.key === selectedEmotionKey) ?? null,
+    [emotionGroups, selectedEmotionKey]
+  );
+
+  // Clear every drill-down selection whenever the date range changes, so a
+  // stale key never lingers on screen.
+  useEffect(() => {
+    setSelectedRBucketKey(null);
+    setSelectedRulesKey(null);
+    setSelectedEmotionKey(null);
+  }, [range]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3">
@@ -136,6 +183,56 @@ export default function AnalyticsPage() {
               trades={drilldownTrades}
               currency={selectedAccount.currency}
               onClose={() => setSelectedGroupKey(null)}
+            />
+          )}
+
+          <RMultipleHistogram
+            buckets={rBuckets}
+            currency={selectedAccount.currency}
+            selectedKey={selectedRBucketKey}
+            onSelectBucket={setSelectedRBucketKey}
+          />
+          {selectedRBucket && (
+            <BreakdownDrilldown
+              groupLabel={selectedRBucket.label}
+              trades={rDrilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={() => setSelectedRBucketKey(null)}
+            />
+          )}
+
+          <RulesFollowedComparison
+            groups={rulesGroups}
+            currency={selectedAccount.currency}
+            selectedKey={selectedRulesKey}
+            onSelectGroup={setSelectedRulesKey}
+          />
+          {selectedRulesGroup && (
+            <BreakdownDrilldown
+              groupLabel={selectedRulesGroup.label}
+              trades={rulesDrilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={() => setSelectedRulesKey(null)}
+            />
+          )}
+
+          <PerformanceBreakdown
+            groups={emotionGroups}
+            currency={selectedAccount.currency}
+            dimension="emotion"
+            dimensions={EMOTION_DIMENSIONS}
+            onDimensionChange={() => {}}
+            selectedKey={selectedEmotionKey}
+            onSelectGroup={setSelectedEmotionKey}
+            title="Performance by emotion"
+            subtitle="Win rate, avg R, and P&L by emotion tag — click a bar to drill in"
+          />
+          {selectedEmotionGroup && (
+            <BreakdownDrilldown
+              groupLabel={selectedEmotionGroup.label}
+              trades={emotionDrilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={() => setSelectedEmotionKey(null)}
             />
           )}
         </>

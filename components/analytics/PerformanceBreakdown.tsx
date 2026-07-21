@@ -39,42 +39,50 @@ export default function PerformanceBreakdown({
   groups,
   currency,
   dimension,
+  dimensions = BREAKDOWN_DIMENSIONS,
   onDimensionChange,
   selectedKey,
   onSelectGroup,
+  title = "Performance breakdown",
+  subtitle = "Win rate, avg R, and P&L by group — click a bar to drill in",
 }: {
   groups: BreakdownGroup[];
   currency: string;
   dimension: BreakdownDimension;
+  dimensions?: { value: BreakdownDimension; label: string }[];
   onDimensionChange: (d: BreakdownDimension) => void;
   selectedKey: string | null;
   onSelectGroup: (key: string | null) => void;
+  title?: string;
+  subtitle?: string;
 }) {
   return (
     <div className="bg-surface-1 border border-surface-border rounded-card p-5">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
-          <h2 className="font-display text-base font-medium">Performance breakdown</h2>
-          <p className="text-ink-muted text-xs mt-0.5">Win rate, avg R, and P&amp;L by group — click a bar to drill in</p>
+          <h2 className="font-display text-base font-medium">{title}</h2>
+          <p className="text-ink-muted text-xs mt-0.5">{subtitle}</p>
         </div>
-        <div className="inline-flex items-center bg-surface-2 border border-surface-border rounded-full p-1 flex-wrap">
-          {BREAKDOWN_DIMENSIONS.map((d) => (
-            <button
-              key={d.value}
-              onClick={() => {
-                onDimensionChange(d.value);
-                onSelectGroup(null);
-              }}
-              className={`px-3 py-1 text-xs font-mono rounded-full transition-colors ${
-                dimension === d.value
-                  ? "bg-brass text-surface-0 font-medium"
-                  : "text-ink-secondary hover:text-ink-primary"
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        {dimensions.length > 1 && (
+          <div className="inline-flex items-center bg-surface-2 border border-surface-border rounded-full p-1 flex-wrap">
+            {dimensions.map((d) => (
+              <button
+                key={d.value}
+                onClick={() => {
+                  onDimensionChange(d.value);
+                  onSelectGroup(null);
+                }}
+                className={`px-3 py-1 text-xs font-mono rounded-full transition-colors ${
+                  dimension === d.value
+                    ? "bg-brass text-surface-0 font-medium"
+                    : "text-ink-secondary hover:text-ink-primary"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {groups.length === 0 ? (

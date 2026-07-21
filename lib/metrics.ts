@@ -330,11 +330,21 @@ export function getPnlByPeriod(trades: Trade[], granularity: PeriodGranularity):
 }
 
 /**
- * Dimensions trades can be grouped by on the Analytics "Breakdowns" section.
- * "direction" reads from the direction field; every other value reads the
- * matching Trade field of the same name.
+ * Dimensions trades can be grouped by. "instrument" through "direction" power
+ * the Analytics "Performance breakdown" section (Part 2); "emotion" and
+ * "rules_followed" power the behavioral-analytics section (Part 3).
+ * "direction" and "rules_followed" read from their own fields (the latter
+ * is a boolean mapped to "yes"/"no"); every other value reads the matching
+ * Trade field of the same name.
  */
-export type BreakdownDimension = "instrument" | "asset_class" | "strategy" | "session" | "direction";
+export type BreakdownDimension =
+  | "instrument"
+  | "asset_class"
+  | "strategy"
+  | "session"
+  | "direction"
+  | "emotion"
+  | "rules_followed";
 
 export const BREAKDOWN_DIMENSIONS: { value: BreakdownDimension; label: string }[] = [
   { value: "instrument", label: "Instrument" },
@@ -356,12 +366,14 @@ export type BreakdownGroup = {
 
 function breakdownFieldValue(trade: Trade, dimension: BreakdownDimension): string | null {
   if (dimension === "direction") return trade.direction;
+  if (dimension === "rules_followed") return trade.rules_followed === null ? null : trade.rules_followed ? "yes" : "no";
   return trade[dimension];
 }
 
 function breakdownLabel(value: string | null, dimension: BreakdownDimension): string {
   if (value == null) return "Unspecified";
   if (dimension === "direction") return value === "long" ? "Long" : "Short";
+  if (dimension === "rules_followed") return value === "yes" ? "Rules followed" : "Rules not followed";
   return value;
 }
 
@@ -401,4 +413,55 @@ export function getBreakdownByDimension(trades: Trade[], dimension: BreakdownDim
 /** Trades matching a specific breakdown group's key for the given dimension — used for drill-down. */
 export function getTradesInBreakdownGroup(trades: Trade[], dimension: BreakdownDimension, key: string): Trade[] {
   return trades.filter((t) => (breakdownFieldValue(t, dimension) ?? "unspecified") === key);
+}
+
+/** Fixed R-multiple bucket edges: bucket i covers [edges[i], edges[i+1]). */
+const R_BUCKET_EDGES = [-Infinity, -2, -1, 0, 1, 2, 3, Infinity];
+const R_BUCKET_LABELS = ["< -2R", "-2R to -1R", "-1R to 0R", "0R to 1R", "1R to 2R", "2R to 3R", "> 3R"];
+
+export type RMultipleBucket = {
+  key: string;
+  label: string;
+  count: number;
+  totalPnl: number;
+  /** True if this bucket represents a losing R range (used for bar color). */
+  isLoss: boolean;
+};
+
+/**
+ * Distributes trades with a recorded r_multiple into fixed R-sized buckets,
+ * for the "R-multiple distribution" histogram on Analytics. Trades without
+ * a recorded r_multiple are excluded (same convention as summarizeTrades'
+ * avgR, which also only considers trades that have one).
+ */
+export function getRMultipleDistribution(trades: Trade[]): RMultipleBucket[] {
+  const buckets: RMultipleBucket[] = R_BUCKET_LABELS.map((label, i) => ({
+    key: `r${i}`,
+    label,
+    count: 0,
+    totalPnl: 0,
+    isLoss: R_BUCKET_EDGES[i + 1] <= 0,
+  }));
+
+  for (const t of trades) {
+    if (t.r_multiple == null || Number.isNaN(t.r_multiple)) continue;
+    for (let i = 0; i < R_BUCKET_EDGES.length - 1; i++) {
+      if (t.r_multiple >= R_BUCKET_EDGES[i] && t.r_multiple < R_BUCKET_EDGES[i + 1]) {
+        buckets[i].count += 1;
+        buckets[i].totalPnl += t.pnl;
+        break;
+      }
+    }
+  }
+
+  return buckets;
+}
+
+/** Trades falling into a specific R-multiple bucket (by its "r0".."r6" key) — used for drill-down. */
+export function getTradesInRMultipleBucket(trades: Trade[], bucketKey: string): Trade[] {
+  const idx = R_BUCKET_LABELS.findIndex((_, i) => `r${i}` === bucketKey);
+  if (idx === -1) return [];
+  const min = R_BUCKET_EDGES[idx];
+  const max = R_BUCKET_EDGES[idx + 1];
+  return trades.filter((t) => t.r_multiple != null && !Number.isNaN(t.r_multiple) && t.r_multiple >= min && t.r_multiple < max);
 }
