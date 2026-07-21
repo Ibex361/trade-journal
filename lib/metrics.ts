@@ -529,3 +529,46 @@ export function getBestWorstDay(dailyPnls: MonthlyDayPnl[]): BestWorstDay {
   }
   return { best, worst };
 }
+
+export type BestWorstTrade = {
+  best: Trade | null;
+  worst: Trade | null;
+};
+
+/**
+ * The single biggest-winning and biggest-losing trade (by raw P&L) in a set
+ * of trades — used for the Reports "spotlight" cards. Distinct from
+ * getBestWorstDay, which aggregates by calendar day rather than by trade.
+ */
+export function getBestWorstTrade(trades: Trade[]): BestWorstTrade {
+  if (trades.length === 0) return { best: null, worst: null };
+  let best = trades[0];
+  let worst = trades[0];
+  for (const t of trades) {
+    if (t.pnl > best.pnl) best = t;
+    if (t.pnl < worst.pnl) worst = t;
+  }
+  return { best, worst };
+}
+
+export type TagCount = {
+  tag: string;
+  count: number;
+};
+
+/**
+ * Counts how often each tag appears across a set of trades, sorted by
+ * frequency descending (ties broken alphabetically for a stable order).
+ * Used for the Reports "tag frequency" view.
+ */
+export function getTagFrequency(trades: Trade[]): TagCount[] {
+  const counts = new Map<string, number>();
+  for (const t of trades) {
+    for (const tag of t.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
