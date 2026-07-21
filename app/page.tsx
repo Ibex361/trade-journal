@@ -1,44 +1,62 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
+import { fetchTrades, Trade } from "@/lib/trades";
+import { summarizeTrades, buildEquityCurve } from "@/lib/metrics";
+import DashboardStats from "@/components/dashboard/DashboardStats";
+import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
+import RecentTradesFeed from "@/components/dashboard/RecentTradesFeed";
 
 export default function DashboardPage() {
-  const { selectedAccount, loading } = useAccount();
+  const { selectedAccount, loading: accountLoading } = useAccount();
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      if (!selectedAccount) return;
+      setLoading(true);
+      const { data } = await fetchTrades(selectedAccount.id);
+      if (data) setTrades(data as Trade[]);
+      setLoading(false);
+    }
+    load();
+  }, [selectedAccount?.id]);
+
+  const summary = useMemo(() => summarizeTrades(trades), [trades]);
+
+  const equityCurve = useMemo(
+    () => (selectedAccount ? buildEquityCurve(trades, selectedAccount.starting_balance) : []),
+    [trades, selectedAccount?.starting_balance]
+  );
+
+  const accountBalance = (selectedAccount?.starting_balance ?? 0) + summary.totalPnl;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-medium tracking-tight">
-          Dashboard
-        </h1>
+        <h1 className="font-display text-2xl font-medium tracking-tight">Dashboard</h1>
         <p className="text-ink-secondary text-sm mt-1">
-          Phase 0 — foundation. Real widgets arrive in later phases.
+          {selectedAccount ? `Overview for ${selectedAccount.name}` : "Your trading at a glance."}
         </p>
       </div>
 
-      <div className="bg-surface-1 border border-surface-border rounded-card p-6">
-        {loading ? (
-          <p className="text-ink-muted text-sm">Connecting to your database…</p>
-        ) : selectedAccount ? (
-          <div className="flex items-center gap-4">
-            <span className="signal-bar h-10" />
-            <div>
-              <p className="text-ink-secondary text-sm">Connected account</p>
-              <p className="font-display text-xl font-medium">
-                {selectedAccount.name}
-              </p>
-              <p className="font-mono text-sm text-ink-secondary mt-1">
-                Starting balance: {selectedAccount.currency}{" "}
-                {selectedAccount.starting_balance.toLocaleString()}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-ink-muted text-sm">
-            No accounts found yet. Run the schema.sql seed in Supabase.
-          </p>
-        )}
-      </div>
+      {accountLoading || loading ? (
+        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+          <p className="text-ink-muted text-sm">Loading dashboard…</p>
+        </div>
+      ) : !selectedAccount ? (
+        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+          <p className="text-ink-muted text-sm">No account selected yet.</p>
+        </div>
+      ) : (
+        <>
+          <DashboardStats summary={summary} currency={selectedAccount.currency} accountBalance={accountBalance} />
+          <EquityCurveChart points={equityCurve} currency={selectedAccount.currency} />
+          <RecentTradesFeed trades={trades} />
+        </>
+      )}
     </div>
   );
 }

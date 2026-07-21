@@ -77,3 +77,30 @@ export function summarizeTrades(trades: Trade[]): TradeSummary {
 
   return { count, totalPnl, winRate, avgR, wins, losses, breakeven };
 }
+
+export type EquityPoint = {
+  /** The trade's entry_date, or "start" for the seed point before any trades. */
+  date: string;
+  balance: number;
+};
+
+/**
+ * Builds a running equity curve from a starting balance plus each trade's
+ * P&L, applied in chronological order. One point per trade (plus a seed
+ * point for the starting balance) rather than per calendar day — this keeps
+ * it exactly consistent with summarizeTrades' totals with no separate
+ * date-bucketing logic to drift out of sync.
+ */
+export function buildEquityCurve(trades: Trade[], startingBalance: number): EquityPoint[] {
+  const sorted = [...trades].sort(
+    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+  );
+
+  let balance = startingBalance;
+  const points: EquityPoint[] = [{ date: "start", balance }];
+  for (const t of sorted) {
+    balance += t.pnl;
+    points.push({ date: t.entry_date, balance });
+  }
+  return points;
+}
