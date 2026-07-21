@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { deleteScreenshotsByUrls } from "./screenshots";
 
 // Friendlier text for the one conflict we expect regularly
 // (the accounts_name_unique index in phase1c_migration.sql,
@@ -50,6 +51,21 @@ export async function restoreAccount(id: string) {
 }
 
 export async function deleteAccountPermanently(id: string) {
+  // The DB cascade (trades.account_id references accounts on delete cascade)
+  // will remove the trade rows themselves, but it has no idea those rows
+  // point at files in storage — clean those up first, or they'd sit
+  // orphaned in the bucket forever.
+  const { data: trades } = await supabase
+    .from("trades")
+    .select("screenshot_url")
+    .eq("account_id", id)
+    .not("screenshot_url", "is", null);
+
+  if (trades && trades.length > 0) {
+    const urls = trades.map((t) => t.screenshot_url as string);
+    await deleteScreenshotsByUrls(urls);
+  }
+
   return supabase.from("accounts").delete().eq("id", id);
 }
 
@@ -90,6 +106,16 @@ function dateOffset(days: number) {
 }
 
 export async function resetDemoData() {
+  const { data: existing } = await supabase
+    .from("trades")
+    .select("screenshot_url")
+    .eq("account_id", DEMO_ACCOUNT_ID)
+    .not("screenshot_url", "is", null);
+
+  if (existing && existing.length > 0) {
+    await deleteScreenshotsByUrls(existing.map((t) => t.screenshot_url as string));
+  }
+
   await supabase.from("trades").delete().eq("account_id", DEMO_ACCOUNT_ID);
   const rows = DEMO_TRADES.map((t) => ({
     account_id: DEMO_ACCOUNT_ID,

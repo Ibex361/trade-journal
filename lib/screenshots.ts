@@ -51,7 +51,14 @@ function pathFromPublicUrl(url: string): string | null {
 
 /** Removes a previously-uploaded screenshot from storage, given its public URL. */
 export async function deleteScreenshotByUrl(url: string): Promise<void> {
-  const path = pathFromPublicUrl(url);
-  if (!path) return;
-  await supabase.storage.from(SCREENSHOT_BUCKET).remove([path]);
+  return deleteScreenshotsByUrls([url]);
+}
+
+/** Removes multiple previously-uploaded screenshots from storage in one call. */
+export async function deleteScreenshotsByUrls(urls: string[]): Promise<void> {
+  const paths = urls
+    .map(pathFromPublicUrl)
+    .filter((p): p is string => p !== null);
+  if (paths.length === 0) return;
+  await supabase.storage.from(SCREENSHOT_BUCKET).remove(paths);
 }
