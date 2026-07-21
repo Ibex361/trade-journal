@@ -1,10 +1,16 @@
 import { supabase } from "./supabaseClient";
 
-// Postgres code for "unique_violation" — thrown by the
-// accounts_active_name_unique index when a name is already in use
-// by another active account.
-const UNIQUE_VIOLATION = "23505";
-const DUPLICATE_NAME_ERROR = { message: "An account with this name already exists." };
+// Friendlier text for the one conflict we expect regularly
+// (the accounts_name_unique index in phase1c_migration.sql,
+// which applies to ALL accounts, active or archived).
+// Any OTHER database error still gets shown, just with its
+// original message — nothing fails silently.
+function friendlyAccountError(message: string) {
+  if (/duplicate key|already exists|unique constraint/i.test(message)) {
+    return "An account with this name already exists.";
+  }
+  return message;
+}
 
 export async function createAccount(input: {
   name: string;
@@ -19,16 +25,18 @@ export async function createAccount(input: {
     starting_balance: input.starting_balance,
     is_demo: false,
   });
-  if (result.error?.code === UNIQUE_VIOLATION) {
-    return { ...result, error: DUPLICATE_NAME_ERROR };
+  if (result.error) {
+    console.error("createAccount failed:", result.error);
+    return { ...result, error: { ...result.error, message: friendlyAccountError(result.error.message) } };
   }
   return result;
 }
 
 export async function renameAccount(id: string, name: string) {
   const result = await supabase.from("accounts").update({ name }).eq("id", id);
-  if (result.error?.code === UNIQUE_VIOLATION) {
-    return { ...result, error: DUPLICATE_NAME_ERROR };
+  if (result.error) {
+    console.error("renameAccount failed:", result.error);
+    return { ...result, error: { ...result.error, message: friendlyAccountError(result.error.message) } };
   }
   return result;
 }

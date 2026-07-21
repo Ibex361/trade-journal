@@ -28,34 +28,46 @@ export default function AccountManager() {
     if (!form.name.trim()) return;
     setBusy(true);
     setCreateError(null);
-    const { error } = await createAccount({
-      name: form.name.trim(),
-      broker: form.broker.trim(),
-      currency: form.currency,
-      starting_balance: parseFloat(form.starting_balance) || 0,
-    });
-    if (!error) {
-      await refreshAccounts();
-      setForm({ name: "", broker: "", currency: "USD", starting_balance: "" });
-      setShowNew(false);
-    } else {
-      setCreateError(error.message);
+    try {
+      const { error } = await createAccount({
+        name: form.name.trim(),
+        broker: form.broker.trim(),
+        currency: form.currency,
+        starting_balance: parseFloat(form.starting_balance) || 0,
+      });
+      if (!error) {
+        await refreshAccounts();
+        setForm({ name: "", broker: "", currency: "USD", starting_balance: "" });
+        setShowNew(false);
+      } else {
+        setCreateError(error.message);
+      }
+    } catch (err) {
+      console.error("handleCreate threw:", err);
+      setCreateError("Something went wrong creating this account. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function handleRename(id: string) {
     if (!renameValue.trim()) return;
     setBusy(true);
     setRenameError(null);
-    const { error } = await renameAccount(id, renameValue.trim());
-    if (!error) {
-      await refreshAccounts();
-      setRenamingId(null);
-    } else {
-      setRenameError(error.message);
+    try {
+      const { error } = await renameAccount(id, renameValue.trim());
+      if (!error) {
+        await refreshAccounts();
+        setRenamingId(null);
+      } else {
+        setRenameError(error.message);
+      }
+    } catch (err) {
+      console.error("handleRename threw:", err);
+      setRenameError("Something went wrong renaming this account. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function handleArchive(id: string) {
