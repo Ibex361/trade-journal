@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: #0b0d10;
+  color: #edeef0;
+}
+
+/* Signature element: a thin vertical signal bar, echoing a trade's R-multiple */
+.signal-bar {
+  display: inline-block;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #d4a73c 0%, #8a6f2a 100%);
+}
+
+::selection {
+  background: #d4a73c;
+  color: #0b0d10;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #272c34 transparent;
+}

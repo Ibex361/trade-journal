@@ -1,0 +1,43 @@
+import type { Metadata } from "next";
+import { Manrope, Inter, JetBrains_Mono } from "next/font/google";
+import "./globals.css";
+import AccountSwitcher from "@/components/AccountSwitcher";
+import NavTabs from "@/components/NavTabs";
+import { AccountProvider } from "@/lib/AccountContext";
+
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono" });
+
+export const metadata: Metadata = {
+  title: "Trade journal",
+  description: "A personal trading journal",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en" className={`${manrope.variable} ${inter.variable} ${jbmono.variable}`}>
+      <body className="font-body min-h-screen">
+        <AccountProvider>
+          <header className="border-b border-surface-border bg-surface-1/60 backdrop-blur sticky top-0 z-10">
+            <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+              <div className="flex items-center gap-3">
+                <span className="signal-bar h-6" />
+                <span className="font-display font-medium text-lg tracking-tight">
+                  Trade journal
+                </span>
+              </div>
+              <NavTabs />
+              <AccountSwitcher />
+            </div>
+          </header>
+          <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+        </AccountProvider>
+      </body>
+    </html>
+  );
+}
