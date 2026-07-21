@@ -11,6 +11,7 @@ import { supabase, Account } from "./supabaseClient";
 
 type AccountContextType = {
   accounts: Account[];
+  archivedAccounts: Account[];
   selectedAccount: Account | null;
   selectAccount: (id: string) => void;
   loading: boolean;
@@ -19,6 +20,7 @@ type AccountContextType = {
 
 const AccountContext = createContext<AccountContextType>({
   accounts: [],
+  archivedAccounts: [],
   selectedAccount: null,
   selectAccount: () => {},
   loading: true,
@@ -29,6 +31,7 @@ const STORAGE_KEY = "trade-journal:selected-account";
 
 export function AccountProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [archivedAccounts, setArchivedAccounts] = useState<Account[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,13 +42,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .order("created_at", { ascending: true });
 
     if (!error && data) {
-      setAccounts(data as Account[]);
+      const active = (data as Account[]).filter((a) => !a.is_archived);
+      const archived = (data as Account[]).filter((a) => a.is_archived);
+      setAccounts(active);
+      setArchivedAccounts(archived);
       const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-      const stillExists = data.find((a) => a.id === stored);
+      const stillExists = active.find((a) => a.id === stored);
       if (stillExists) {
         setSelectedId(stored);
-      } else if (data.length > 0) {
-        setSelectedId(data[0].id);
+      } else if (active.length > 0) {
+        setSelectedId(active[0].id);
+      } else {
+        setSelectedId(null);
       }
     }
     setLoading(false);
@@ -66,7 +74,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   return (
     <AccountContext.Provider
-      value={{ accounts, selectedAccount, selectAccount, loading, refreshAccounts }}
+      value={{ accounts, archivedAccounts, selectedAccount, selectAccount, loading, refreshAccounts }}
     >
       {children}
     </AccountContext.Provider>

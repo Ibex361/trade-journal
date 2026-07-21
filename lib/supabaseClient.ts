@@ -11,6 +11,7 @@ export type Account = {
   broker: string | null;
   currency: string;
   is_demo: boolean;
+  is_archived: boolean;
   starting_balance: number;
   journal_start_date: string;
   target_risk_pct: number | null;
