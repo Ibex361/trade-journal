@@ -198,3 +198,133 @@ export function getAvgRiskPct(trades: Trade[], accountBalance: number): number |
   if (pcts.length === 0) return null;
   return pcts.reduce((s, v) => s + v, 0) / pcts.length;
 }
+
+export type DateRange = "7d" | "30d" | "90d" | "ytd" | "all";
+
+/** The earliest entry_date (inclusive) to include for a given range, or null for "all". */
+export function getRangeCutoffDate(range: DateRange): string | null {
+  if (range === "all") return null;
+
+  const now = new Date();
+  let cutoff: Date;
+  if (range === "ytd") {
+    cutoff = new Date(now.getFullYear(), 0, 1);
+  } else {
+    const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+    cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - days);
+  }
+  return cutoff.toISOString().slice(0, 10);
+}
+
+/** Filters trades to those with entry_date within the given range, ending today. */
+export function filterTradesByRange(trades: Trade[], range: DateRange): Trade[] {
+  const cutoffStr = getRangeCutoffDate(range);
+  if (cutoffStr == null) return trades;
+  return trades.filter((t) => t.entry_date >= cutoffStr);
+}
+
+/**
+ * Builds an equity curve scoped to a date range: trades before the range
+ * cutoff are folded into a single seed balance (so the curve still reflects
+ * the account's true balance at the start of the range), then one point is
+ * added per trade inside the range, exactly like buildEquityCurve.
+ */
+export function buildEquityCurveForRange(
+  trades: Trade[],
+  startingBalance: number,
+  range: DateRange
+): EquityPoint[] {
+  const sorted = [...trades].sort(
+    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+  );
+  const cutoffStr = getRangeCutoffDate(range);
+
+  const before = cutoffStr == null ? [] : sorted.filter((t) => t.entry_date < cutoffStr);
+  const within = cutoffStr == null ? sorted : sorted.filter((t) => t.entry_date >= cutoffStr);
+
+  const seedBalance = startingBalance + before.reduce((s, t) => s + t.pnl, 0);
+  return buildEquityCurve(within, seedBalance);
+}
+
+/**
+ * Profit factor = gross profit / gross loss. Null if there are no losing
+ * trades to divide by (undefined ratio) or no trades at all.
+ */
+export function getProfitFactor(trades: Trade[]): number | null {
+  const grossProfit = trades.filter((t) => t.pnl > 0).reduce((s, t) => s + t.pnl, 0);
+  const grossLoss = Math.abs(trades.filter((t) => t.pnl < 0).reduce((s, t) => s + t.pnl, 0));
+  if (grossLoss === 0) return null;
+  return grossProfit / grossLoss;
+}
+
+export type Expectancy = {
+  /** Average P&L per trade, in account currency. */
+  perTrade: number | null;
+  /** Average R-multiple per trade, across trades that have one recorded. */
+  perR: number | null;
+};
+
+/** Average result per trade — both in currency and in R, so either lens is available. */
+export function getExpectancy(trades: Trade[]): Expectancy {
+  if (trades.length === 0) return { perTrade: null, perR: null };
+  const perTrade = trades.reduce((s, t) => s + t.pnl, 0) / trades.length;
+  const rValues = trades.map((t) => t.r_multiple).filter((r): r is number => r != null && !Number.isNaN(r));
+  const perR = rValues.length > 0 ? rValues.reduce((s, r) => s + r, 0) / rValues.length : null;
+  return { perTrade, perR };
+}
+
+/** Total P&L across the trades as a percentage of the account's starting balance. */
+export function getTotalReturnPct(trades: Trade[], startingBalance: number): number | null {
+  if (startingBalance <= 0) return null;
+  const totalPnl = trades.reduce((s, t) => s + t.pnl, 0);
+  return (totalPnl / startingBalance) * 100;
+}
+
+export type PeriodGranularity = "day" | "week" | "month";
+
+export type PeriodBucket = {
+  /** ISO date for day/week (week = that week's Monday), or "YYYY-MM" for month. */
+  key: string;
+  label: string;
+  pnl: number;
+  count: number;
+};
+
+function periodKey(dateStr: string, granularity: PeriodGranularity): { key: string; label: string } {
+  const d = new Date(dateStr + "T00:00:00");
+  if (granularity === "month") {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+    return { key, label };
+  }
+  if (granularity === "week") {
+    const monday = new Date(d);
+    const dow = (d.getDay() + 6) % 7; // 0 = Monday
+    monday.setDate(d.getDate() - dow);
+    const key = monday.toISOString().slice(0, 10);
+    const label = monday.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return { key, label };
+  }
+  const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return { key: dateStr, label };
+}
+
+/**
+ * Buckets trades' P&L by day, week (Monday-start), or month, sorted
+ * chronologically. Used for the P&L-by-period bar chart on Analytics.
+ */
+export function getPnlByPeriod(trades: Trade[], granularity: PeriodGranularity): PeriodBucket[] {
+  const buckets = new Map<string, PeriodBucket>();
+  for (const t of trades) {
+    const { key, label } = periodKey(t.entry_date, granularity);
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.pnl += t.pnl;
+      existing.count += 1;
+    } else {
+      buckets.set(key, { key, label, pnl: t.pnl, count: 1 });
+    }
+  }
+  return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
