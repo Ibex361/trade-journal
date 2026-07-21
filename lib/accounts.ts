@@ -27,6 +27,10 @@ export async function restoreAccount(id: string) {
   return supabase.from("accounts").update({ is_archived: false }).eq("id", id);
 }
 
+export async function deleteAccountPermanently(id: string) {
+  return supabase.from("accounts").delete().eq("id", id);
+}
+
 export async function updateTargets(
   id: string,
   targets: {

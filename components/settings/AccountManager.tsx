@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { createAccount, renameAccount, archiveAccount, restoreAccount } from "@/lib/accounts";
+import { createAccount, renameAccount, archiveAccount, restoreAccount, deleteAccountPermanently } from "@/lib/accounts";
 import SettingsCard from "./SettingsCard";
 
 export default function AccountManager() {
@@ -11,6 +11,8 @@ export default function AccountManager() {
   const [showArchived, setShowArchived] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
 
   const [form, setForm] = useState({
@@ -57,6 +59,15 @@ export default function AccountManager() {
     setBusy(true);
     await restoreAccount(id);
     await refreshAccounts();
+    setBusy(false);
+  }
+
+  async function handleDeletePermanently(id: string) {
+    setBusy(true);
+    await deleteAccountPermanently(id);
+    await refreshAccounts();
+    setDeletingId(null);
+    setDeleteConfirmText("");
     setBusy(false);
   }
 
@@ -199,16 +210,52 @@ export default function AccountManager() {
               {archivedAccounts.map((acc) => (
                 <div
                   key={acc.id}
-                  className="flex items-center justify-between bg-surface-2/50 border border-surface-border rounded-card px-4 py-2.5"
+                  className="bg-surface-2/50 border border-surface-border rounded-card px-4 py-2.5"
                 >
-                  <span className="text-sm text-ink-muted">{acc.name}</span>
-                  <button
-                    onClick={() => handleRestore(acc.id)}
-                    disabled={busy}
-                    className="text-xs text-brass"
-                  >
-                    Restore
-                  </button>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-ink-muted">{acc.name}</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleRestore(acc.id)}
+                        disabled={busy}
+                        className="text-xs text-brass"
+                      >
+                        Restore
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeletingId(deletingId === acc.id ? null : acc.id);
+                          setDeleteConfirmText("");
+                        }}
+                        className="text-xs text-loss/80 hover:text-loss"
+                      >
+                        Delete permanently
+                      </button>
+                    </div>
+                  </div>
+                  {deletingId === acc.id && (
+                    <div className="mt-3 pt-3 border-t border-surface-border">
+                      <p className="text-xs text-loss mb-2">
+                        This deletes "{acc.name}" and every trade in it, forever.
+                        Type the account name to confirm.
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          value={deleteConfirmText}
+                          onChange={(e) => setDeleteConfirmText(e.target.value)}
+                          placeholder={acc.name}
+                          className="bg-surface-0 border border-surface-border rounded-md px-2 py-1 text-sm flex-1"
+                        />
+                        <button
+                          onClick={() => handleDeletePermanently(acc.id)}
+                          disabled={busy || deleteConfirmText !== acc.name}
+                          className="text-xs bg-loss text-surface-0 font-medium px-3 py-1.5 rounded-full disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          Confirm delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
