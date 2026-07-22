@@ -13,7 +13,7 @@ export default function AnalyticsStats({
   totalReturnPct: number | null;
   profitFactor: number | null;
   expectancy: Expectancy;
-  maxDrawdownPct: number;
+  maxDrawdownPct: number | null;
   currency: string;
 }) {
   const returnClass =
@@ -52,8 +52,9 @@ export default function AnalyticsStats({
       <StatCard label="Expectancy (R)" value={expectancy.perR != null ? expectancy.perR.toFixed(2) : "—"} />
       <StatCard
         label="Max drawdown"
-        value={`${maxDrawdownPct.toFixed(1)}%`}
-        valueClassName={maxDrawdownPct > 0 ? "text-loss" : "text-ink-primary"}
+        value={maxDrawdownPct != null ? `${maxDrawdownPct.toFixed(1)}%` : "—"}
+        valueClassName={maxDrawdownPct != null && maxDrawdownPct > 0 ? "text-loss" : "text-ink-primary"}
+        hint={maxDrawdownPct == null ? "Peak balance was $0 or below — % undefined" : undefined}
       />
     </div>
   );

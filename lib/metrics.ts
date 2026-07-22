@@ -189,10 +189,20 @@ export function getCurrentStreak(trades: Trade[]): Streak {
 export type Drawdown = {
   /** Amount below the equity curve's running peak, at the most recent point. */
   currentAmount: number;
-  currentPct: number;
+  /**
+   * Percentage form of currentAmount, relative to the peak balance it drew
+   * down from. Null when that peak was zero or negative — a starting
+   * balance of $0, or an account that was already underwater at its best
+   * point, has no meaningful "percent below peak" (dividing by a
+   * zero-or-negative peak either throws or silently produces a number that
+   * understates how bad things are). The dollar amount is always well
+   * defined regardless; only the percentage is undefined here.
+   */
+  currentPct: number | null;
   /** The largest peak-to-trough drop seen anywhere in the curve. */
   maxAmount: number;
-  maxPct: number;
+  /** Percentage form of maxAmount — same zero-or-negative-peak caveat as currentPct. */
+  maxPct: number | null;
 };
 
 /**
@@ -202,15 +212,14 @@ export type Drawdown = {
 export function getDrawdown(points: EquityPoint[]): Drawdown {
   let peak = points[0]?.balance ?? 0;
   let maxAmount = 0;
-  let maxPct = 0;
+  let maxPct: number | null = null;
 
   for (const p of points) {
     if (p.balance > peak) peak = p.balance;
     const amount = peak - p.balance;
-    const pct = peak > 0 ? (amount / peak) * 100 : 0;
     if (amount > maxAmount) {
       maxAmount = amount;
-      maxPct = pct;
+      maxPct = peak > 0 ? (amount / peak) * 100 : null;
     }
   }
 
@@ -220,7 +229,7 @@ export function getDrawdown(points: EquityPoint[]): Drawdown {
     if (p.balance > lastPeak) lastPeak = p.balance;
   }
   const currentAmount = lastPeak - last;
-  const currentPct = lastPeak > 0 ? (currentAmount / lastPeak) * 100 : 0;
+  const currentPct = lastPeak > 0 ? (currentAmount / lastPeak) * 100 : null;
 
   return { currentAmount, currentPct, maxAmount, maxPct };
 }
