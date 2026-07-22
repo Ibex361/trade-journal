@@ -149,6 +149,20 @@ export default function TradeFormPanel({
     [form.direction, entryNum, exitNum, stopNum]
   );
 
+  // Non-blocking sanity check: when P&L has been manually overridden and
+  // entry/exit/size are all present, flag it if the manual figure doesn't
+  // match what those inputs imply. This never blocks saving — fees,
+  // slippage, and partial fills are all legitimate reasons the numbers
+  // won't line up exactly. It just makes sure the mismatch isn't silent.
+  const pnlMismatch = useMemo(() => {
+    if (pnlAuto || computedPnl == null) return null;
+    const manual = parseFloat(form.pnl);
+    if (Number.isNaN(manual)) return null;
+    const diff = Math.abs(manual - computedPnl);
+    if (diff < 0.005) return null;
+    return { computed: computedPnl, manual, diff };
+  }, [pnlAuto, computedPnl, form.pnl]);
+
   // Keep the P&L / R-multiple text fields in sync while in auto mode.
   useEffect(() => {
     if (pnlAuto && computedPnl != null) {
@@ -510,6 +524,24 @@ export default function TradeFormPanel({
                 <span className="text-[11px] text-ink-muted">
                   Auto-calculated from entry, exit &amp; size
                 </span>
+              )}
+              {pnlMismatch && (
+                <div className="mt-1.5 rounded-md border border-brass/30 bg-brass/10 px-2.5 py-1.5">
+                  <p className="text-[11px] text-brass leading-snug">
+                    This P&amp;L doesn&apos;t match what entry/exit/size imply
+                    (calculated: {pnlMismatch.computed.toFixed(2)}, entered:{" "}
+                    {pnlMismatch.manual.toFixed(2)}). Keep it if that&apos;s
+                    intentional — e.g. fees or slippage — or{" "}
+                    <button
+                      type="button"
+                      onClick={resetPnlToAuto}
+                      className="underline hover:no-underline"
+                    >
+                      use the calculated value
+                    </button>
+                    .
+                  </p>
+                </div>
               )}
             </label>
             <label className="block">
