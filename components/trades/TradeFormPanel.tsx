@@ -63,6 +63,19 @@ function initialRAuto(trade: Trade | null): boolean {
   return matchesCalc(trade.r_multiple, autoR);
 }
 
+// Rounds off binary floating-point noise (e.g. 129.99999999999997 from
+// (110-100)*13) without collapsing genuine sub-cent precision to zero.
+// The P&L field previously used toFixed(2) here, which is a *display*
+// rounding rule — applying it before the value is ever saved meant a real
+// P&L of $0.004 was stored as exactly $0.00, indistinguishable from an
+// actual breakeven trade everywhere else in the app (win rate, streaks,
+// color coding). Components that display P&L already round to 2 decimals
+// on their own for presentation; this only removes noise past the 8th
+// decimal, well beyond what any real trade needs.
+function roundForStorage(value: number): number {
+  return Math.round(value * 1e8) / 1e8;
+}
+
 type FormState = typeof emptyForm;
 
 // Human-readable labels for validation messages.
@@ -184,14 +197,14 @@ export default function TradeFormPanel({
   // Keep the P&L / R-multiple text fields in sync while in auto mode.
   useEffect(() => {
     if (pnlAuto && computedPnl != null) {
-      setForm((f) => ({ ...f, pnl: computedPnl.toFixed(2) }));
+      setForm((f) => ({ ...f, pnl: String(roundForStorage(computedPnl)) }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computedPnl, pnlAuto]);
 
   useEffect(() => {
     if (rAuto && computedR != null) {
-      setForm((f) => ({ ...f, r_multiple: computedR.toFixed(2) }));
+      setForm((f) => ({ ...f, r_multiple: String(roundForStorage(computedR)) }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computedR, rAuto]);
@@ -219,12 +232,12 @@ export default function TradeFormPanel({
 
   function resetPnlToAuto() {
     setPnlAuto(true);
-    if (computedPnl != null) set("pnl", computedPnl.toFixed(2));
+    if (computedPnl != null) set("pnl", String(roundForStorage(computedPnl)));
   }
 
   function resetRToAuto() {
     setRAuto(true);
-    if (computedR != null) set("r_multiple", computedR.toFixed(2));
+    if (computedR != null) set("r_multiple", String(roundForStorage(computedR)));
   }
 
   function handleScreenshotSelect(e: React.ChangeEvent<HTMLInputElement>) {
