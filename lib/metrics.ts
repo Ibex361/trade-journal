@@ -78,6 +78,18 @@ export function summarizeTrades(trades: Trade[]): TradeSummary {
   return { count, totalPnl, winRate, avgR, wins, losses, breakeven };
 }
 
+/**
+ * The single chronological ordering used by every equity/balance-over-time
+ * calculation below (buildEquityCurve, getCurrentStreak,
+ * getBalanceBeforeTrade) — sorted here once so those can never disagree
+ * with each other about trade order.
+ */
+function sortTradesChronologically(trades: Trade[]): Trade[] {
+  return [...trades].sort(
+    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+  );
+}
+
 export type EquityPoint = {
   /** The trade's entry_date, or "start" for the seed point before any trades. */
   date: string;
@@ -92,9 +104,7 @@ export type EquityPoint = {
  * date-bucketing logic to drift out of sync.
  */
 export function buildEquityCurve(trades: Trade[], startingBalance: number): EquityPoint[] {
-  const sorted = [...trades].sort(
-    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
-  );
+  const sorted = sortTradesChronologically(trades);
 
   let balance = startingBalance;
   const points: EquityPoint[] = [{ date: "start", balance }];
@@ -103,6 +113,30 @@ export function buildEquityCurve(trades: Trade[], startingBalance: number): Equi
     points.push({ date: t.entry_date, balance });
   }
   return points;
+}
+
+/**
+ * Maps each trade's id to the account balance immediately BEFORE that
+ * trade's P&L was applied — i.e. the balance it was actually risked
+ * against, as opposed to today's balance. Built from the exact same
+ * chronological order and running total as buildEquityCurve (in fact each
+ * trade's "before" balance is just the prior point on that same curve), so
+ * the two can never disagree.
+ *
+ * Pass the account's FULL trade history here, not a filtered subset — a
+ * trade's balance-before depends on everything that happened earlier in
+ * the account, not just on whichever subset you're currently averaging
+ * over (e.g. this month). Look results up by trade id afterward.
+ */
+export function getBalanceBeforeTrade(trades: Trade[], startingBalance: number): Map<string, number> {
+  const sorted = sortTradesChronologically(trades);
+  const map = new Map<string, number>();
+  let balance = startingBalance;
+  for (const t of sorted) {
+    map.set(t.id, balance);
+    balance += t.pnl;
+  }
+  return map;
 }
 
 export type Streak = {
@@ -117,9 +151,7 @@ export type Streak = {
  * always agrees with the equity curve's chronological order.
  */
 export function getCurrentStreak(trades: Trade[]): Streak {
-  const sorted = [...trades].sort(
-    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
-  );
+  const sorted = sortTradesChronologically(trades);
 
   let type: "win" | "loss" | null = null;
   let count = 0;
@@ -186,15 +218,23 @@ export function getTradesInCurrentMonth(trades: Trade[]): Trade[] {
 
 /**
  * Average risk per trade as a percentage of account balance, i.e.
- * |entry - stop| * size / accountBalance * 100, averaged across trades
- * that have all three inputs recorded. Used to compare against a target
- * risk-per-trade ceiling set in Settings.
+ * |entry - stop| * size / balance-at-that-trade * 100, averaged across
+ * trades that have all three inputs recorded. Used to compare against a
+ * target risk-per-trade ceiling set in Settings.
+ *
+ * Each trade is measured against the balance it actually had BEFORE that
+ * trade (via balanceBeforeByTradeId, from getBalanceBeforeTrade) rather
+ * than today's balance — a trade placed early in the month shouldn't have
+ * its risk % distorted by wins or losses that happened after it.
  */
-export function getAvgRiskPct(trades: Trade[], accountBalance: number): number | null {
-  if (accountBalance <= 0) return null;
-  const pcts = trades
-    .filter((t) => t.entry_price != null && t.stop_loss_price != null && t.size != null)
-    .map((t) => (Math.abs(t.entry_price! - t.stop_loss_price!) * t.size!) / accountBalance * 100);
+export function getAvgRiskPct(trades: Trade[], balanceBeforeByTradeId: Map<string, number>): number | null {
+  const pcts: number[] = [];
+  for (const t of trades) {
+    if (t.entry_price == null || t.stop_loss_price == null || t.size == null) continue;
+    const balance = balanceBeforeByTradeId.get(t.id);
+    if (balance == null || balance <= 0) continue;
+    pcts.push((Math.abs(t.entry_price - t.stop_loss_price) * t.size) / balance * 100);
+  }
   if (pcts.length === 0) return null;
   return pcts.reduce((s, v) => s + v, 0) / pcts.length;
 }
@@ -274,11 +314,19 @@ export function getExpectancy(trades: Trade[]): Expectancy {
   return { perTrade, perR };
 }
 
-/** Total P&L across the trades as a percentage of the account's starting balance. */
-export function getTotalReturnPct(trades: Trade[], startingBalance: number): number | null {
-  if (startingBalance <= 0) return null;
+/**
+ * Total P&L across the trades as a percentage of `baseBalance`. For a
+ * range-scoped figure (e.g. "30-day return"), pass the equity curve's
+ * balance at the START of that range — not the account's all-time
+ * starting_balance — or growth/drawdown since inception will distort the
+ * period return. Callers should derive baseBalance from the same equity
+ * curve object used to draw the chart (its first point), so the two can
+ * never disagree.
+ */
+export function getTotalReturnPct(trades: Trade[], baseBalance: number): number | null {
+  if (baseBalance <= 0) return null;
   const totalPnl = trades.reduce((s, t) => s + t.pnl, 0);
-  return (totalPnl / startingBalance) * 100;
+  return (totalPnl / baseBalance) * 100;
 }
 
 export type PeriodGranularity = "day" | "week" | "month";

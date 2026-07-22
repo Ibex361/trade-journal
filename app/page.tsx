@@ -10,6 +10,7 @@ import {
   getDrawdown,
   getTradesInCurrentMonth,
   getAvgRiskPct,
+  getBalanceBeforeTrade,
 } from "@/lib/metrics";
 import DashboardStats from "@/components/dashboard/DashboardStats";
 import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
@@ -46,9 +47,15 @@ export default function DashboardPage() {
 
   const monthTrades = useMemo(() => getTradesInCurrentMonth(trades), [trades]);
   const monthSummary = useMemo(() => summarizeTrades(monthTrades), [monthTrades]);
+  // Each trade's risk % is measured against the balance it actually had at
+  // the time, not today's balance — see getAvgRiskPct / getBalanceBeforeTrade.
+  const balanceBeforeByTradeId = useMemo(
+    () => (selectedAccount ? getBalanceBeforeTrade(trades, selectedAccount.starting_balance) : new Map<string, number>()),
+    [trades, selectedAccount?.starting_balance]
+  );
   const avgRiskPct = useMemo(
-    () => getAvgRiskPct(monthTrades, accountBalance),
-    [monthTrades, accountBalance]
+    () => getAvgRiskPct(monthTrades, balanceBeforeByTradeId),
+    [monthTrades, balanceBeforeByTradeId]
   );
 
   return (

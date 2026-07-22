@@ -65,8 +65,8 @@ export default function AnalyticsPage() {
   const profitFactor = useMemo(() => getProfitFactor(rangeTrades), [rangeTrades]);
   const expectancy = useMemo(() => getExpectancy(rangeTrades), [rangeTrades]);
   const totalReturnPct = useMemo(
-    () => (selectedAccount ? getTotalReturnPct(rangeTrades, selectedAccount.starting_balance) : null),
-    [rangeTrades, selectedAccount?.starting_balance]
+    () => getTotalReturnPct(rangeTrades, equityCurve[0]?.balance ?? selectedAccount?.starting_balance ?? 0),
+    [rangeTrades, equityCurve]
   );
   const pnlBuckets = useMemo(
     () => getPnlByPeriod(rangeTrades, granularity),
