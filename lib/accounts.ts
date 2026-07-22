@@ -59,6 +59,29 @@ export async function renameAccount(id: string, name: string) {
   return result;
 }
 
+export async function updateAccountDetails(
+  id: string,
+  details: {
+    broker: string;
+    currency: string;
+    starting_balance: number;
+  }
+) {
+  const result = await supabase
+    .from("accounts")
+    .update({
+      broker: details.broker || null,
+      currency: details.currency,
+      starting_balance: details.starting_balance,
+    })
+    .eq("id", id);
+  if (result.error) {
+    console.error("updateAccountDetails failed:", result.error);
+    return { ...result, error: { ...result.error, message: friendlyAccountError(result.error.message) } };
+  }
+  return result;
+}
+
 export async function archiveAccount(id: string) {
   return supabase.from("accounts").update({ is_archived: true }).eq("id", id);
 }
