@@ -47,8 +47,19 @@ export function calculateRMultiple(
 export type TradeSummary = {
   count: number;
   totalPnl: number;
-  /** Win rate as a 0-100 percentage across decided (non-breakeven) trades. Null if there are none. */
-  winRate: number | null;
+  /**
+   * Win rate as a 0-100 percentage, counting breakeven trades (pnl === 0)
+   * against you: wins ÷ ALL trades. This is the app's default convention —
+   * see WinRateModeContext. Null if there are no trades.
+   */
+  winRateStrict: number | null;
+  /**
+   * Win rate as a 0-100 percentage across only "decided" trades: wins ÷
+   * (wins + losses), with breakeven trades excluded from both sides. Kept
+   * alongside winRateStrict so the user can switch conventions without any
+   * numbers disagreeing. Null if there are no decided trades.
+   */
+  winRateDecided: number | null;
   /** Average R-multiple across trades that have one recorded. Null if there are none. */
   avgR: number | null;
   wins: number;
@@ -68,14 +79,23 @@ export function summarizeTrades(trades: Trade[]): TradeSummary {
   const losses = trades.filter((t) => t.pnl < 0).length;
   const breakeven = count - wins - losses;
   const decided = wins + losses;
-  const winRate = decided > 0 ? (wins / decided) * 100 : null;
+  const winRateStrict = count > 0 ? (wins / count) * 100 : null;
+  const winRateDecided = decided > 0 ? (wins / decided) * 100 : null;
 
   const rValues = trades
     .map((t) => t.r_multiple)
     .filter((r): r is number => r != null && !Number.isNaN(r));
   const avgR = rValues.length > 0 ? rValues.reduce((s, r) => s + r, 0) / rValues.length : null;
 
-  return { count, totalPnl, winRate, avgR, wins, losses, breakeven };
+  return { count, totalPnl, winRateStrict, winRateDecided, avgR, wins, losses, breakeven };
+}
+
+/** Picks the right winRate figure off a TradeSummary/BreakdownGroup-shaped object for the given mode. */
+export function pickWinRate(
+  summary: { winRateStrict: number | null; winRateDecided: number | null },
+  mode: "strict" | "decided"
+): number | null {
+  return mode === "strict" ? summary.winRateStrict : summary.winRateDecided;
 }
 
 /**
@@ -408,7 +428,8 @@ export type BreakdownGroup = {
   label: string;
   count: number;
   totalPnl: number;
-  winRate: number | null;
+  winRateStrict: number | null;
+  winRateDecided: number | null;
   avgR: number | null;
 };
 
@@ -450,7 +471,8 @@ export function getBreakdownByDimension(trades: Trade[], dimension: BreakdownDim
       label: breakdownLabel(value, dimension),
       count: summary.count,
       totalPnl: summary.totalPnl,
-      winRate: summary.winRate,
+      winRateStrict: summary.winRateStrict,
+      winRateDecided: summary.winRateDecided,
       avgR: summary.avgR,
     });
   }

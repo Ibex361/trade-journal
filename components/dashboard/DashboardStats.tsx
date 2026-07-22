@@ -1,6 +1,7 @@
 "use client";
 
-import { TradeSummary, Streak } from "@/lib/metrics";
+import { TradeSummary, Streak, pickWinRate } from "@/lib/metrics";
+import { useWinRateMode, WIN_RATE_MODE_LABELS } from "@/lib/WinRateModeContext";
 import StatCard from "@/components/shared/StatCard";
 
 export default function DashboardStats({
@@ -14,6 +15,8 @@ export default function DashboardStats({
   accountBalance: number;
   streak: Streak;
 }) {
+  const { mode } = useWinRateMode();
+  const winRate = pickWinRate(summary, mode);
   const pnlClass =
     summary.totalPnl > 0 ? "text-gain" : summary.totalPnl < 0 ? "text-loss" : "text-ink-primary";
   const pnlSign = summary.totalPnl > 0 ? "+" : "";
@@ -37,7 +40,8 @@ export default function DashboardStats({
       />
       <StatCard
         label="Win rate"
-        value={summary.winRate != null ? `${summary.winRate.toFixed(0)}%` : "—"}
+        value={winRate != null ? `${winRate.toFixed(0)}%` : "—"}
+        hint={WIN_RATE_MODE_LABELS[mode]}
       />
       <StatCard label="Avg R" value={summary.avgR != null ? summary.avgR.toFixed(2) : "—"} />
       <StatCard label="Trades logged" value={summary.count.toString()} />

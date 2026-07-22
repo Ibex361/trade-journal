@@ -1,6 +1,7 @@
 "use client";
 
-import { TradeSummary, MonthlyDayPnl } from "@/lib/metrics";
+import { TradeSummary, MonthlyDayPnl, pickWinRate } from "@/lib/metrics";
+import { useWinRateMode, WIN_RATE_MODE_LABELS } from "@/lib/WinRateModeContext";
 import StatCard from "@/components/shared/StatCard";
 
 export default function ReportsSummaryStats({
@@ -14,6 +15,8 @@ export default function ReportsSummaryStats({
   worstDay: MonthlyDayPnl | null;
   currency: string;
 }) {
+  const { mode } = useWinRateMode();
+  const winRate = pickWinRate(summary, mode);
   const pnlColor = summary.totalPnl > 0 ? "text-gain" : summary.totalPnl < 0 ? "text-loss" : "text-ink-primary";
   const pnlSign = summary.totalPnl > 0 ? "+" : "";
 
@@ -24,7 +27,11 @@ export default function ReportsSummaryStats({
         value={`${pnlSign}${summary.totalPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`}
         valueClassName={pnlColor}
       />
-      <StatCard label="Win rate" value={summary.winRate != null ? `${summary.winRate.toFixed(0)}%` : "—"} />
+      <StatCard
+        label="Win rate"
+        value={winRate != null ? `${winRate.toFixed(0)}%` : "—"}
+        hint={WIN_RATE_MODE_LABELS[mode]}
+      />
       <StatCard label="Trades" value={String(summary.count)} />
       <StatCard label="Avg R" value={summary.avgR != null ? summary.avgR.toFixed(2) : "—"} />
       <StatCard

@@ -11,7 +11,9 @@ import {
   getTradesInCurrentMonth,
   getAvgRiskPct,
   getBalanceBeforeTrade,
+  pickWinRate,
 } from "@/lib/metrics";
+import { useWinRateMode } from "@/lib/WinRateModeContext";
 import DashboardStats from "@/components/dashboard/DashboardStats";
 import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
 import RecentTradesFeed from "@/components/dashboard/RecentTradesFeed";
@@ -19,6 +21,7 @@ import TargetProgress from "@/components/dashboard/TargetProgress";
 
 export default function DashboardPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
+  const { mode: winRateMode } = useWinRateMode();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -91,7 +94,7 @@ export default function DashboardPage() {
               targetMonthlyWinrate={selectedAccount.target_monthly_winrate}
               targetRiskPct={selectedAccount.target_risk_pct}
               monthlyPnl={monthSummary.totalPnl}
-              monthlyWinRate={monthSummary.winRate}
+              monthlyWinRate={pickWinRate(monthSummary, winRateMode)}
               avgRiskPct={avgRiskPct}
               currency={selectedAccount.currency}
               drawdown={drawdown}

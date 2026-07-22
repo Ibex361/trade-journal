@@ -1,6 +1,7 @@
 "use client";
 
-import { BreakdownGroup } from "@/lib/metrics";
+import { BreakdownGroup, pickWinRate } from "@/lib/metrics";
+import { useWinRateMode } from "@/lib/WinRateModeContext";
 
 function ComparisonColumn({
   group,
@@ -15,6 +16,8 @@ function ComparisonColumn({
   selected: boolean;
   onClick: () => void;
 }) {
+  const { mode } = useWinRateMode();
+  const winRate = pickWinRate(group, mode);
   const pnlColor = group.totalPnl > 0 ? "text-gain" : group.totalPnl < 0 ? "text-loss" : "text-ink-primary";
   const pnlSign = group.totalPnl > 0 ? "+" : "";
 
@@ -33,7 +36,7 @@ function ComparisonColumn({
       <div className="flex items-center gap-4 mt-3">
         <div>
           <p className="text-[10px] uppercase tracking-wide text-ink-secondary">Win rate</p>
-          <p className="font-mono text-sm mt-0.5">{group.winRate != null ? `${group.winRate.toFixed(0)}%` : "—"}</p>
+          <p className="font-mono text-sm mt-0.5">{winRate != null ? `${winRate.toFixed(0)}%` : "—"}</p>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wide text-ink-secondary">Avg R</p>
@@ -67,7 +70,8 @@ export default function RulesFollowedComparison({
     label,
     count: 0,
     totalPnl: 0,
-    winRate: null,
+    winRateStrict: null,
+    winRateDecided: null,
     avgR: null,
   });
   const followed = groups.find((g) => g.key === "yes") ?? zero("yes", "Rules followed");

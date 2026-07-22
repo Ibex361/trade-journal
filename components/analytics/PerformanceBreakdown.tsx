@@ -1,7 +1,8 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
-import { BREAKDOWN_DIMENSIONS, BreakdownDimension, BreakdownGroup } from "@/lib/metrics";
+import { BREAKDOWN_DIMENSIONS, BreakdownDimension, BreakdownGroup, pickWinRate } from "@/lib/metrics";
+import { useWinRateMode } from "@/lib/WinRateModeContext";
 
 type TooltipPayloadItem = { payload: BreakdownGroup };
 
@@ -14,8 +15,10 @@ function CustomTooltip({
   payload?: TooltipPayloadItem[];
   currency: string;
 }) {
+  const { mode } = useWinRateMode();
   if (!active || !payload || !payload.length) return null;
   const g = payload[0].payload;
+  const winRate = pickWinRate(g, mode);
   const color = g.totalPnl >= 0 ? "text-gain" : "text-loss";
   const sign = g.totalPnl > 0 ? "+" : "";
   return (
@@ -26,7 +29,7 @@ function CustomTooltip({
         {g.totalPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currency}
       </p>
       <p className="text-xs text-ink-muted mt-0.5">
-        {g.winRate != null ? `${g.winRate.toFixed(0)}% win rate` : "No decided trades"} · {g.count} trade
+        {winRate != null ? `${winRate.toFixed(0)}% win rate` : "No decided trades"} · {g.count} trade
         {g.count === 1 ? "" : "s"}
       </p>
       {g.avgR != null && <p className="text-xs text-ink-muted mt-0.5">Avg R {g.avgR.toFixed(2)}</p>}
