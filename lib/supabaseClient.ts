@@ -1,9 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// createBrowserClient (rather than the plain supabase-js createClient)
+// stores the session in a cookie instead of localStorage, so the same
+// session middleware.ts checks on the server is the one the browser uses
+// here — sign-in/sign-out stay in sync between the two.
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
 
 export type Account = {
   id: string;

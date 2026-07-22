@@ -1,53 +1,42 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { getSessionFromRequest } from "@/lib/supabase/middleware";
 
-// Gates every page in the app behind a single username/password, so that
-// having the deployment URL alone isn't enough to view or edit anything —
-// this is a personal, single-user journal, not a public app.
+// Gates every page in the app behind a real Supabase login, so that having
+// the deployment URL alone isn't enough to view or edit anything — this is
+// a personal, single-user journal, not a public app.
 //
-// Credentials live in environment variables (set in Vercel's project
-// settings, never committed to the repo):
-//   BASIC_AUTH_USER
-//   BASIC_AUTH_PASSWORD
-//
-// If either is unset, the app fails CLOSED (blocks everything) rather than
-// silently falling back to open access — a misconfigured deployment should
-// be obviously broken, not silently public.
+// Replaces the previous HTTP Basic Auth gate: this uses proper sessions
+// (cookie-based, survives browser restarts, no native browser popup) backed
+// by Supabase Auth, and pairs with RLS policies that require a logged-in
+// user (see supabase/phase3_auth_migration.sql) — so even someone with the
+// public anon key can't read or write data without being signed in.
 
-function unauthorized() {
-  return new NextResponse("Authentication required.", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Trade journal", charset="UTF-8"' },
-  });
-}
+const PUBLIC_PATHS = ["/login"];
 
-export function middleware(request: NextRequest) {
-  const expectedUser = process.env.BASIC_AUTH_USER;
-  const expectedPassword = process.env.BASIC_AUTH_PASSWORD;
+export async function middleware(request: NextRequest) {
+  const { response, user } = await getSessionFromRequest(request);
 
-  if (!expectedUser || !expectedPassword) {
-    return unauthorized();
+  const isPublicPath = PUBLIC_PATHS.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
+
+  if (!user && !isPublicPath) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Basic ")) {
-    return unauthorized();
+  // Already signed in and trying to view the login page — send them home.
+  if (user && isPublicPath) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
-  const decoded = atob(authHeader.slice("Basic ".length));
-  const separatorIndex = decoded.indexOf(":");
-  const user = decoded.slice(0, separatorIndex);
-  const password = decoded.slice(separatorIndex + 1);
-
-  if (user !== expectedUser || password !== expectedPassword) {
-    return unauthorized();
-  }
-
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
   // Protect everything except Next.js's own internal asset requests —
   // those are just static JS/CSS chunks with no trade data in them, and
-  // excluding them avoids an extra auth prompt cycle on every asset load.
+  // excluding them avoids an extra auth check cycle on every asset load.
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
