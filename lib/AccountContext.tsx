@@ -60,7 +60,29 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    refreshAccounts();
+    let active = true;
+
+    async function init() {
+      // The browser client loads the session from the cookie asynchronously.
+      // If we query before that finishes, the request goes out looking
+      // signed-out, and RLS silently returns zero rows instead of an error —
+      // which looked like "no accounts" right after logging in. Waiting for
+      // getSession() first ensures the very first query is authenticated.
+      await supabase.auth.getSession();
+      if (active) await refreshAccounts();
+    }
+    init();
+
+    // Also refetch on sign-in/sign-out elsewhere in the app, so state never
+    // goes stale relative to the actual session.
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      refreshAccounts();
+    });
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   function selectAccount(id: string) {
