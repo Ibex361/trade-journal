@@ -26,6 +26,43 @@ const emptyForm = {
   tags: [] as string[],
 };
 
+// A small absolute tolerance for comparing a stored figure against a
+// freshly-recomputed one. Floating point arithmetic on prices (e.g.
+// 1.105 - 1.1 in JS) essentially never lands on the exact same bit
+// pattern twice, so a strict equality check would treat almost every
+// genuinely auto-calculated trade as "manually overridden."
+const CALC_MATCH_TOLERANCE = 0.005;
+
+function matchesCalc(stored: number | null, calculated: number | null): boolean {
+  if (stored == null || calculated == null) return false;
+  return Math.abs(stored - calculated) < CALC_MATCH_TOLERANCE;
+}
+
+// Whether the P&L / R-multiple fields should start in auto mode: always
+// true for a brand new trade, or for an existing one whose stored value
+// matches what entry/exit/size (or entry/exit/stop) imply. This has to be
+// computed synchronously, as part of the initial state, rather than in a
+// useEffect that runs after mount — otherwise the very first render briefly
+// sees the default "auto" state and the sync effect below overwrites a
+// genuinely manual figure (e.g. a real fee-adjusted P&L) with the raw
+// auto-calculated one before this check has had a chance to correct it.
+function initialPnlAuto(trade: Trade | null): boolean {
+  if (!trade) return true;
+  const autoPnl = calculatePnl(trade.direction, trade.entry_price, trade.exit_price, trade.size);
+  return matchesCalc(trade.pnl, autoPnl);
+}
+
+function initialRAuto(trade: Trade | null): boolean {
+  if (!trade) return true;
+  const autoR = calculateRMultiple(
+    trade.direction,
+    trade.entry_price,
+    trade.exit_price,
+    trade.stop_loss_price
+  );
+  return matchesCalc(trade.r_multiple, autoR);
+}
+
 type FormState = typeof emptyForm;
 
 // Human-readable labels for validation messages.
@@ -78,9 +115,9 @@ export default function TradeFormPanel({
   // auto-calculation, or have been taken over by manual entry.
   // Starts in manual mode when editing an existing trade whose stored
   // value doesn't match what auto-calc would produce (so we never
-  // silently overwrite a deliberate manual figure).
-  const [pnlAuto, setPnlAuto] = useState(true);
-  const [rAuto, setRAuto] = useState(true);
+  // silently overwrite a deliberate manual figure) — see initialPnlAuto.
+  const [pnlAuto, setPnlAuto] = useState(() => initialPnlAuto(trade));
+  const [rAuto, setRAuto] = useState(() => initialRAuto(trade));
 
   // Chart screenshot: file staged for upload, current preview (existing
   // trade's screenshot_url or a local object URL for a newly-picked file),
@@ -108,25 +145,6 @@ export default function TradeFormPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  useEffect(() => {
-    if (!trade) return;
-    const autoPnl = calculatePnl(
-      trade.direction,
-      trade.entry_price,
-      trade.exit_price,
-      trade.size
-    );
-    const autoR = calculateRMultiple(
-      trade.direction,
-      trade.entry_price,
-      trade.exit_price,
-      trade.stop_loss_price
-    );
-    setPnlAuto(autoPnl != null && trade.pnl === autoPnl);
-    setRAuto(autoR != null && trade.r_multiple === autoR);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trade?.id]);
 
   const optionsFor = (category: string) =>
     dropdowns
@@ -159,7 +177,7 @@ export default function TradeFormPanel({
     const manual = parseFloat(form.pnl);
     if (Number.isNaN(manual)) return null;
     const diff = Math.abs(manual - computedPnl);
-    if (diff < 0.005) return null;
+    if (diff < CALC_MATCH_TOLERANCE) return null;
     return { computed: computedPnl, manual, diff };
   }, [pnlAuto, computedPnl, form.pnl]);
 
