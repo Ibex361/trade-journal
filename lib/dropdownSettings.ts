@@ -10,6 +10,43 @@ export type DropdownItem = {
   sort_order: number;
 };
 
+// Starter values for every new account. "tag" is deliberately excluded —
+// tags are freeform per-account labels, not a fixed reference list, so a
+// new account should start with an empty tag list.
+export const DEFAULT_DROPDOWN_ITEMS: { category: DropdownCategory; value: string }[] = [
+  { category: "asset_class", value: "Forex" },
+  { category: "asset_class", value: "Indices" },
+  { category: "asset_class", value: "Crypto" },
+  { category: "strategy", value: "Breakout" },
+  { category: "strategy", value: "Mean reversion" },
+  { category: "strategy", value: "Trend following" },
+  { category: "session", value: "London" },
+  { category: "session", value: "New York" },
+  { category: "session", value: "Asia" },
+  { category: "emotion", value: "Calm" },
+  { category: "emotion", value: "Confident" },
+  { category: "emotion", value: "Anxious" },
+  { category: "emotion", value: "Impatient" },
+];
+
+// Seeds the default dropdown items for a freshly created account. Best-effort:
+// if it fails, the account still exists — it just opens with empty lists,
+// same as before this feature, rather than blocking account creation.
+export async function seedDefaultDropdownItems(accountId: string) {
+  const bySortOrder = new Map<DropdownCategory, number>();
+  const rows = DEFAULT_DROPDOWN_ITEMS.map(({ category, value }) => {
+    const nextOrder = (bySortOrder.get(category) ?? 0) + 1;
+    bySortOrder.set(category, nextOrder);
+    return {
+      account_id: accountId,
+      category,
+      value,
+      sort_order: nextOrder,
+    };
+  });
+  return supabase.from("dropdown_settings").insert(rows);
+}
+
 export async function fetchDropdownItems(accountId: string) {
   return supabase
     .from("dropdown_settings")

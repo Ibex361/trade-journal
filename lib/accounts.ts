@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { deleteScreenshotsByUrls } from "./screenshots";
+import { seedDefaultDropdownItems } from "./dropdownSettings";
 
 // Friendlier text for the one conflict we expect regularly
 // (the accounts_name_unique index in phase1c_migration.sql,
@@ -19,17 +20,33 @@ export async function createAccount(input: {
   currency: string;
   starting_balance: number;
 }) {
-  const result = await supabase.from("accounts").insert({
-    name: input.name,
-    broker: input.broker || null,
-    currency: input.currency,
-    starting_balance: input.starting_balance,
-    is_demo: false,
-  });
+  const result = await supabase
+    .from("accounts")
+    .insert({
+      name: input.name,
+      broker: input.broker || null,
+      currency: input.currency,
+      starting_balance: input.starting_balance,
+      is_demo: false,
+    })
+    .select()
+    .single();
   if (result.error) {
     console.error("createAccount failed:", result.error);
     return { ...result, error: { ...result.error, message: friendlyAccountError(result.error.message) } };
   }
+
+  // New accounts start with the standard asset class / strategy / session /
+  // emotion options already in place, so trading can start right away
+  // instead of building every dropdown list from scratch. Tags are left
+  // empty on purpose — see seedDefaultDropdownItems. This is best-effort:
+  // the account was already created successfully above, so a seeding
+  // failure here is logged but doesn't fail account creation.
+  const { error: seedError } = await seedDefaultDropdownItems(result.data.id);
+  if (seedError) {
+    console.error("seedDefaultDropdownItems failed:", seedError);
+  }
+
   return result;
 }
 
