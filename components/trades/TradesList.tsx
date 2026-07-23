@@ -241,6 +241,34 @@ export default function TradesList({
         </table>
       </div>
 
+      {/* Mobile sort control — the desktop table has per-column sort headers,
+          but that whole table is hidden on small screens, which meant sorting
+          wasn't reachable at all on mobile. */}
+      <div className="md:hidden flex items-center gap-2 mb-3">
+        <span className="text-[11px] text-ink-secondary">Sort by</span>
+        <select
+          value={sort.column}
+          onChange={(e) => {
+            const column = e.target.value as SortColumn;
+            onSortChange({ column, direction: column === "instrument" ? "asc" : "desc" });
+          }}
+          className="bg-surface-2 border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary"
+        >
+          <option value="entry_date">Date</option>
+          <option value="instrument">Instrument</option>
+          <option value="pnl">P&amp;L</option>
+          <option value="r_multiple">R</option>
+        </select>
+        <button
+          type="button"
+          onClick={() => onSortChange({ column: sort.column, direction: sort.direction === "asc" ? "desc" : "asc" })}
+          className="bg-surface-2 border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-secondary hover:text-ink-primary"
+          aria-label="Toggle sort direction"
+        >
+          {sort.direction === "asc" ? "↑ Asc" : "↓ Desc"}
+        </button>
+      </div>
+
       {/* Mobile cards */}
       <div className="md:hidden space-y-3">
         {trades.map((t) => (

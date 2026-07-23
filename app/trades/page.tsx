@@ -28,6 +28,7 @@ function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
     if (filters.pnlMax !== "" && t.pnl > parseFloat(filters.pnlMax)) return false;
     if (filters.dateFrom && t.entry_date < filters.dateFrom) return false;
     if (filters.dateTo && t.entry_date > filters.dateTo) return false;
+    if (filters.tag && !(t.tags ?? []).includes(filters.tag)) return false;
     return true;
   });
 }
@@ -89,6 +90,15 @@ export default function TradesPage() {
   );
 
   const summary = useMemo(() => summarizeTrades(visibleTrades), [visibleTrades]);
+
+  // Tags actually used on trades but no longer present in Settings would
+  // otherwise be impossible to filter by (and easy to lose track of) —
+  // union them with the active list so every tag in use stays findable.
+  const availableTags = useMemo(() => {
+    const active = dropdowns.filter((d) => d.category === "tag").map((d) => d.value);
+    const used = trades.flatMap((t) => t.tags ?? []);
+    return Array.from(new Set([...active, ...used])).sort();
+  }, [dropdowns, trades]);
 
   function openNew() {
     setEditingTrade(null);
@@ -155,7 +165,12 @@ export default function TradesPage() {
       ) : (
         <>
           <TradesSummaryStrip summary={summary} currency={selectedAccount.currency} />
-          <TradesFilterBar filters={filters} onChange={setFilters} dropdowns={dropdowns} />
+          <TradesFilterBar
+            filters={filters}
+            onChange={setFilters}
+            dropdowns={dropdowns}
+            availableTags={availableTags}
+          />
           {deleteError && (
             <div className="rounded-md border border-loss/30 bg-loss/10 px-4 py-3 flex items-center justify-between gap-4">
               <p className="text-xs text-loss">{deleteError}</p>

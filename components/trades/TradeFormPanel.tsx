@@ -160,6 +160,35 @@ export default function TradeFormPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Make the browser/hardware back button close this panel instead of
+  // navigating away from the Trades page underneath it. We push a
+  // placeholder history entry when the panel opens; a back-button press
+  // pops it and fires popstate, which we treat as "close the panel".
+  // For every other way of closing (Cancel, X, overlay, Escape, a
+  // successful save), we pop that same placeholder ourselves on unmount —
+  // but only if it's still the current top-of-stack entry, so we don't
+  // accidentally undo a real navigation (e.g. the user clicking a nav
+  // link while the panel happened to be open).
+  useEffect(() => {
+    const stateId = Math.random().toString(36).slice(2);
+    window.history.pushState({ tradeFormPanel: stateId }, "");
+    let closedByPopState = false;
+
+    function handlePopState() {
+      closedByPopState = true;
+      onClose();
+    }
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      if (!closedByPopState && window.history.state?.tradeFormPanel === stateId) {
+        window.history.back();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const optionsFor = (category: string) =>
     dropdowns
       .filter((d) => d.category === category)
@@ -191,6 +220,7 @@ export default function TradeFormPanel({
   }
 
   const tagOptions = optionsFor("tag");
+  const orphanedTags = form.tags.filter((t) => !tagOptions.some((o) => o.value === t));
 
   const entryNum = form.entry_price ? parseFloat(form.entry_price) : null;
   const exitNum = form.exit_price ? parseFloat(form.exit_price) : null;
@@ -688,7 +718,7 @@ export default function TradeFormPanel({
             )}
           </div>
 
-          {tagOptions.length > 0 && (
+          {(tagOptions.length > 0 || orphanedTags.length > 0) && (
             <label className="block">
               <span className={labelClass}>Tags</span>
               <div className="mt-1 flex flex-wrap gap-2">
@@ -704,6 +734,17 @@ export default function TradeFormPanel({
                     }`}
                   >
                     {o.value}
+                  </button>
+                ))}
+                {orphanedTags.map((t) => (
+                  <button
+                    key={`orphan-${t}`}
+                    type="button"
+                    onClick={() => toggleTag(t)}
+                    title="Removed from Settings — click to remove it from this trade"
+                    className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
+                  >
+                    {t} (removed from list)
                   </button>
                 ))}
               </div>

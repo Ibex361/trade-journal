@@ -14,6 +14,7 @@ export type TradeFilters = {
   pnlMax: string;
   dateFrom: string;
   dateTo: string;
+  tag: string;
 };
 
 export const EMPTY_FILTERS: TradeFilters = {
@@ -28,6 +29,7 @@ export const EMPTY_FILTERS: TradeFilters = {
   pnlMax: "",
   dateFrom: "",
   dateTo: "",
+  tag: "",
 };
 
 export function isFiltersActive(f: TradeFilters): boolean {
@@ -42,10 +44,12 @@ export default function TradesFilterBar({
   filters,
   onChange,
   dropdowns,
+  availableTags,
 }: {
   filters: TradeFilters;
   onChange: (f: TradeFilters) => void;
   dropdowns: DropdownItem[];
+  availableTags: string[];
 }) {
   function set<K extends keyof TradeFilters>(key: K, value: TradeFilters[K]) {
     onChange({ ...filters, [key]: value });
@@ -114,6 +118,22 @@ export default function TradesFilterBar({
             {optionsFor("session").map((o) => (
               <option key={o.id} value={o.value}>
                 {o.value}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <span className={labelClass}>Tag</span>
+          <select
+            value={filters.tag}
+            onChange={(e) => set("tag", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All</option>
+            {availableTags.map((t) => (
+              <option key={t} value={t}>
+                {t}
               </option>
             ))}
           </select>
