@@ -21,6 +21,11 @@ function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
     if (filters.direction && t.direction !== filters.direction) return false;
     if (filters.rulesFollowed === "yes" && t.rules_followed !== true) return false;
     if (filters.rulesFollowed === "no" && t.rules_followed !== false) return false;
+    if (filters.pnlOutcome === "win" && !(t.pnl > 0)) return false;
+    if (filters.pnlOutcome === "loss" && !(t.pnl < 0)) return false;
+    if (filters.pnlOutcome === "breakeven" && t.pnl !== 0) return false;
+    if (filters.pnlMin !== "" && t.pnl < parseFloat(filters.pnlMin)) return false;
+    if (filters.pnlMax !== "" && t.pnl > parseFloat(filters.pnlMax)) return false;
     if (filters.dateFrom && t.entry_date < filters.dateFrom) return false;
     if (filters.dateTo && t.entry_date > filters.dateTo) return false;
     return true;

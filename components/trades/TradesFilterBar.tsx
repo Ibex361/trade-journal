@@ -9,6 +9,9 @@ export type TradeFilters = {
   session: string;
   direction: "" | "long" | "short";
   rulesFollowed: "" | "yes" | "no";
+  pnlOutcome: "" | "win" | "loss" | "breakeven";
+  pnlMin: string;
+  pnlMax: string;
   dateFrom: string;
   dateTo: string;
 };
@@ -20,6 +23,9 @@ export const EMPTY_FILTERS: TradeFilters = {
   session: "",
   direction: "",
   rulesFollowed: "",
+  pnlOutcome: "",
+  pnlMin: "",
+  pnlMax: "",
   dateFrom: "",
   dateTo: "",
 };
@@ -159,6 +165,57 @@ export default function TradesFilterBar({
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <span className={labelClass}>P&amp;L outcome</span>
+          <div className="flex gap-1 bg-surface-2 rounded-full p-1 border border-surface-border">
+            {[
+              { label: "All", value: "" },
+              { label: "Win", value: "win" },
+              { label: "Loss", value: "loss" },
+              { label: "B/E", value: "breakeven" },
+            ].map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() => set("pnlOutcome", opt.value as TradeFilters["pnlOutcome"])}
+                className={`px-3 py-1 rounded-full text-xs transition-colors ${
+                  filters.pnlOutcome === opt.value
+                    ? "bg-brass text-surface-0 font-medium"
+                    : "text-ink-secondary hover:text-ink-primary"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className={labelClass}>Min P&amp;L</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={filters.pnlMin}
+            onChange={(e) => set("pnlMin", e.target.value)}
+            placeholder="−∞"
+            className={`${selectClass} font-mono w-24`}
+          />
+        </div>
+
+        <div>
+          <span className={labelClass}>Max P&amp;L</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={filters.pnlMax}
+            onChange={(e) => set("pnlMax", e.target.value)}
+            placeholder="+∞"
+            className={`${selectClass} font-mono w-24`}
+          />
         </div>
 
         <div>
