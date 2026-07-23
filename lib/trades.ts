@@ -74,3 +74,17 @@ export async function deleteTrade(id: string) {
   if (result.error) console.error("deleteTrade failed:", result.error);
   return result;
 }
+
+/** Deletes multiple trades in a single request — used by the Trades page's bulk-delete action. */
+export async function deleteTrades(ids: string[]) {
+  const result = await supabase.from("trades").delete().in("id", ids);
+  if (result.error) console.error("deleteTrades failed:", result.error);
+  return result;
+}
+
+/** Narrow update used by the bulk "add tag" action — only touches the tags column. */
+export async function updateTradeTags(id: string, tags: string[]) {
+  const result = await supabase.from("trades").update({ tags }).eq("id", id);
+  if (result.error) console.error("updateTradeTags failed:", result.error);
+  return result;
+}

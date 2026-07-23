@@ -112,15 +112,21 @@ function tradeToForm(trade: Trade): FormState {
 
 export default function TradeFormPanel({
   trade,
+  duplicateFrom,
   onClose,
   onSaved,
 }: {
   trade: Trade | null;
+  duplicateFrom?: Trade | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { selectedAccount } = useAccount();
-  const [form, setForm] = useState<FormState>(trade ? tradeToForm(trade) : emptyForm);
+  const [form, setForm] = useState<FormState>(() => {
+    if (trade) return tradeToForm(trade);
+    if (duplicateFrom) return { ...tradeToForm(duplicateFrom), entry_date: localDateString() };
+    return emptyForm;
+  });
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -130,8 +136,8 @@ export default function TradeFormPanel({
   // Starts in manual mode when editing an existing trade whose stored
   // value doesn't match what auto-calc would produce (so we never
   // silently overwrite a deliberate manual figure) — see initialPnlAuto.
-  const [pnlAuto, setPnlAuto] = useState(() => initialPnlAuto(trade));
-  const [rAuto, setRAuto] = useState(() => initialRAuto(trade));
+  const [pnlAuto, setPnlAuto] = useState(() => initialPnlAuto(trade ?? duplicateFrom ?? null));
+  const [rAuto, setRAuto] = useState(() => initialRAuto(trade ?? duplicateFrom ?? null));
 
   // Chart screenshot: file staged for upload, current preview (existing
   // trade's screenshot_url or a local object URL for a newly-picked file),
@@ -425,7 +431,7 @@ export default function TradeFormPanel({
           <div className="flex items-center gap-3">
             <span className="signal-bar h-6" />
             <h2 className="font-display text-lg font-medium">
-              {trade ? "Edit trade" : "New trade"}
+              {trade ? "Edit trade" : duplicateFrom ? "Duplicate trade" : "New trade"}
             </h2>
           </div>
           <button

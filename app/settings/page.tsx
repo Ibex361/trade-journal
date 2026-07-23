@@ -2,6 +2,7 @@ import AccountManager from "@/components/settings/AccountManager";
 import DropdownLists from "@/components/settings/DropdownLists";
 import TargetsCard from "@/components/settings/TargetsCard";
 import WinRateModeCard from "@/components/settings/WinRateModeCard";
+import DataExportCard from "@/components/settings/DataExportCard";
 
 export default function SettingsPage() {
   return (
@@ -19,6 +20,7 @@ export default function SettingsPage() {
       <TargetsCard />
       <WinRateModeCard />
       <DropdownLists />
+      <DataExportCard />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, deleteTrade, Trade } from "@/lib/trades";
+import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, Trade } from "@/lib/trades";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { deleteScreenshotByUrl } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
@@ -10,6 +10,7 @@ import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
 import TradesFilterBar, { TradeFilters, EMPTY_FILTERS } from "@/components/trades/TradesFilterBar";
 import TradesSummaryStrip from "@/components/trades/TradesSummaryStrip";
+import BulkActionsBar from "@/components/trades/BulkActionsBar";
 
 function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
   const search = filters.search.trim().toLowerCase();
@@ -62,9 +63,11 @@ export default function TradesPage() {
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   async function load() {
     if (!selectedAccount) return;
@@ -84,6 +87,10 @@ export default function TradesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [filters]);
+
   const visibleTrades = useMemo(
     () => applySort(applyFilters(trades, filters), sort),
     [trades, filters, sort]
@@ -102,17 +109,26 @@ export default function TradesPage() {
 
   function openNew() {
     setEditingTrade(null);
+    setDuplicateSource(null);
     setPanelOpen(true);
   }
 
   function openEdit(trade: Trade) {
     setEditingTrade(trade);
+    setDuplicateSource(null);
+    setPanelOpen(true);
+  }
+
+  function openDuplicate(trade: Trade) {
+    setEditingTrade(null);
+    setDuplicateSource(trade);
     setPanelOpen(true);
   }
 
   function closePanel() {
     setPanelOpen(false);
     setEditingTrade(null);
+    setDuplicateSource(null);
   }
 
   async function handleSaved() {
@@ -131,6 +147,46 @@ export default function TradesPage() {
     if (trade?.screenshot_url) {
       deleteScreenshotByUrl(trade.screenshot_url).catch(() => {});
     }
+    await load();
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const allCurrentlySelected =
+        visibleTrades.length > 0 && visibleTrades.every((t) => prev.has(t.id));
+      return allCurrentlySelected ? new Set() : new Set(visibleTrades.map((t) => t.id));
+    });
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    setDeleteError(null);
+    const targets = trades.filter((t) => ids.includes(t.id));
+    const { error } = await deleteTrades(ids);
+    if (error) {
+      setDeleteError("Couldn't delete the selected trades. Please try again.");
+      return;
+    }
+    targets.forEach((t) => {
+      if (t.screenshot_url) deleteScreenshotByUrl(t.screenshot_url).catch(() => {});
+    });
+    setSelectedIds(new Set());
+    await load();
+  }
+
+  async function handleBulkAddTag(tag: string) {
+    const ids = Array.from(selectedIds);
+    const targets = trades.filter((t) => ids.includes(t.id) && !(t.tags ?? []).includes(tag));
+    await Promise.all(targets.map((t) => updateTradeTags(t.id, [...t.tags, tag])));
     await load();
   }
 
@@ -182,18 +238,36 @@ export default function TradesPage() {
               </button>
             </div>
           )}
+          {selectedIds.size > 0 && (
+            <BulkActionsBar
+              count={selectedIds.size}
+              tagOptions={dropdowns.filter((d) => d.category === "tag").sort((a, b) => a.sort_order - b.sort_order)}
+              onAddTag={handleBulkAddTag}
+              onDelete={handleBulkDelete}
+              onClear={() => setSelectedIds(new Set())}
+            />
+          )}
           <TradesList
             trades={visibleTrades}
             onEdit={openEdit}
+            onDuplicate={openDuplicate}
             onDelete={handleDelete}
             sort={sort}
             onSortChange={setSort}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
           />
         </>
       )}
 
       {panelOpen && (
-        <TradeFormPanel trade={editingTrade} onClose={closePanel} onSaved={handleSaved} />
+        <TradeFormPanel
+          trade={editingTrade}
+          duplicateFrom={duplicateSource}
+          onClose={closePanel}
+          onSaved={handleSaved}
+        />
       )}
     </div>
   );

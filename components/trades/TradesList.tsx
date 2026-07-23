@@ -148,17 +148,26 @@ function SortHeader({
 export default function TradesList({
   trades,
   onEdit,
+  onDuplicate,
   onDelete,
   sort,
   onSortChange,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }: {
   trades: Trade[];
   onEdit: (trade: Trade) => void;
+  onDuplicate: (trade: Trade) => void;
   onDelete: (id: string) => void;
   sort: SortState;
   onSortChange: (s: SortState) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onToggleSelectAll: () => void;
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const allSelected = trades.length > 0 && trades.every((t) => selectedIds.has(t.id));
 
   if (trades.length === 0) {
     return (
@@ -175,6 +184,15 @@ export default function TradesList({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-surface-border text-left text-ink-secondary text-xs uppercase tracking-wide">
+              <th className="px-4 py-3 w-8">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={onToggleSelectAll}
+                  aria-label="Select all trades"
+                  className="accent-brass"
+                />
+              </th>
               <th className="px-4 py-3">
                 <SortHeader label="Date" column="entry_date" sort={sort} onSortChange={onSortChange} />
               </th>
@@ -202,6 +220,15 @@ export default function TradesList({
                 key={t.id}
                 className="border-b border-surface-border last:border-0 hover:bg-surface-2/50 transition-colors"
               >
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(t.id)}
+                    onChange={() => onToggleSelect(t.id)}
+                    aria-label={`Select trade ${t.instrument}`}
+                    className="accent-brass"
+                  />
+                </td>
                 <td className="px-4 py-3 font-mono text-ink-secondary whitespace-nowrap">
                   {formatDate(t.entry_date)}
                 </td>
@@ -231,6 +258,12 @@ export default function TradesList({
                       className="text-xs text-ink-secondary hover:text-brass"
                     >
                       Edit
+                    </button>
+                    <button
+                      onClick={() => onDuplicate(t)}
+                      className="text-xs text-ink-secondary hover:text-brass"
+                    >
+                      Duplicate
                     </button>
                     <DeleteButton onConfirm={() => onDelete(t.id)} />
                   </div>
@@ -271,6 +304,16 @@ export default function TradesList({
 
       {/* Mobile cards */}
       <div className="md:hidden space-y-3">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={onToggleSelectAll}
+            aria-label="Select all trades"
+            className="accent-brass"
+          />
+          <span className="text-[11px] text-ink-secondary">Select all</span>
+        </div>
         {trades.map((t) => (
           <div
             key={t.id}
@@ -278,6 +321,13 @@ export default function TradesList({
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(t.id)}
+                  onChange={() => onToggleSelect(t.id)}
+                  aria-label={`Select trade ${t.instrument}`}
+                  className="accent-brass mt-1"
+                />
                 <span className="signal-bar h-8" />
                 <div>
                   <p className="font-medium">{t.instrument}</p>
@@ -308,6 +358,12 @@ export default function TradesList({
                 className="text-xs text-ink-secondary hover:text-brass"
               >
                 Edit
+              </button>
+              <button
+                onClick={() => onDuplicate(t)}
+                className="text-xs text-ink-secondary hover:text-brass"
+              >
+                Duplicate
               </button>
               <DeleteButton onConfirm={() => onDelete(t.id)} />
             </div>
