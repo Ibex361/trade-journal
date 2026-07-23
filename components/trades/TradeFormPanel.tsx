@@ -5,10 +5,11 @@ import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { createTrade, updateTrade, Trade, TradeInput, Direction } from "@/lib/trades";
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
+import { localDateString } from "@/lib/date";
 import { uploadScreenshot, deleteScreenshotByUrl, validateScreenshotFile } from "@/lib/screenshots";
 
 const emptyForm = {
-  entry_date: new Date().toISOString().slice(0, 10),
+  entry_date: localDateString(),
   instrument: "",
   asset_class: "",
   strategy: "",
@@ -163,6 +164,31 @@ export default function TradeFormPanel({
     dropdowns
       .filter((d) => d.category === category)
       .sort((a, b) => a.sort_order - b.sort_order);
+
+  // If a trade's stored value was later removed from Settings, it won't be
+  // in optionsFor(...) anymore. Rather than have the <select> silently show
+  // blank (which risks the field getting cleared on save if the user
+  // doesn't notice and re-saves), keep it as a selectable option — just
+  // marked so it's clear it's no longer an active list item.
+  function renderOptions(category: string, currentValue: string) {
+    const active = optionsFor(category);
+    const isOrphaned = currentValue !== "" && !active.some((o) => o.value === currentValue);
+    return (
+      <>
+        <option value="">—</option>
+        {active.map((o) => (
+          <option key={o.id} value={o.value}>
+            {o.value}
+          </option>
+        ))}
+        {isOrphaned && (
+          <option value={currentValue} style={{ color: "#8a8f98" }}>
+            {currentValue} (removed from list)
+          </option>
+        )}
+      </>
+    );
+  }
 
   const tagOptions = optionsFor("tag");
 
@@ -426,12 +452,7 @@ export default function TradeFormPanel({
                 onChange={(e) => set("asset_class", e.target.value)}
                 className={selectClass}
               >
-                <option value="">—</option>
-                {optionsFor("asset_class").map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.value}
-                  </option>
-                ))}
+                {renderOptions("asset_class", form.asset_class)}
               </select>
             </label>
           </div>
@@ -444,12 +465,7 @@ export default function TradeFormPanel({
                 onChange={(e) => set("strategy", e.target.value)}
                 className={selectClass}
               >
-                <option value="">—</option>
-                {optionsFor("strategy").map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.value}
-                  </option>
-                ))}
+                {renderOptions("strategy", form.strategy)}
               </select>
             </label>
             <label className="block">
@@ -459,12 +475,7 @@ export default function TradeFormPanel({
                 onChange={(e) => set("session", e.target.value)}
                 className={selectClass}
               >
-                <option value="">—</option>
-                {optionsFor("session").map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.value}
-                  </option>
-                ))}
+                {renderOptions("session", form.session)}
               </select>
             </label>
           </div>
@@ -476,12 +487,7 @@ export default function TradeFormPanel({
               onChange={(e) => set("emotion", e.target.value)}
               className={selectClass}
             >
-              <option value="">—</option>
-              {optionsFor("emotion").map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.value}
-                </option>
-              ))}
+              {renderOptions("emotion", form.emotion)}
             </select>
           </label>
 

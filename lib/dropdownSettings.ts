@@ -73,6 +73,32 @@ export async function deleteDropdownItem(id: string) {
   return supabase.from("dropdown_settings").delete().eq("id", id);
 }
 
+/**
+ * How many trades on this account currently have this value set, for the
+ * given category — used to warn before deleting a dropdown option that's
+ * still in use. "tag" is stored as an array column on trades, so it needs
+ * a containment check instead of a plain equality match.
+ */
+export async function getDropdownItemUsageCount(
+  accountId: string,
+  category: DropdownCategory,
+  value: string
+): Promise<number> {
+  let query = supabase
+    .from("trades")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", accountId);
+
+  query = category === "tag" ? query.contains("tags", [value]) : query.eq(category, value);
+
+  const { count, error } = await query;
+  if (error) {
+    console.error("getDropdownItemUsageCount failed:", error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export async function reorderDropdownItem(id: string, newSortOrder: number) {
   return supabase
     .from("dropdown_settings")

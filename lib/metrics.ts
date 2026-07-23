@@ -3,6 +3,7 @@
 // here so the numbers can never drift apart between pages.
 
 import { Direction, Trade } from "./trades";
+import { localDateString } from "./date";
 
 /**
  * P&L = (exit - entry) * size for a long, or (entry - exit) * size for a short.
@@ -283,7 +284,7 @@ export function getRangeCutoffDate(range: DateRange): string | null {
     cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() - days);
   }
-  return cutoff.toISOString().slice(0, 10);
+  return localDateString(cutoff);
 }
 
 /** Filters trades to those with entry_date within the given range, ending today. */
@@ -379,7 +380,7 @@ function periodKey(dateStr: string, granularity: PeriodGranularity): { key: stri
     const monday = new Date(d);
     const dow = (d.getDay() + 6) % 7; // 0 = Monday
     monday.setDate(d.getDate() - dow);
-    const key = monday.toISOString().slice(0, 10);
+    const key = localDateString(monday);
     const label = monday.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     return { key, label };
   }

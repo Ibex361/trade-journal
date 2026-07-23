@@ -7,6 +7,7 @@ import {
   addDropdownItem,
   deleteDropdownItem,
   reorderDropdownItem,
+  getDropdownItemUsageCount,
   DropdownItem,
   DropdownCategory,
 } from "@/lib/dropdownSettings";
@@ -19,6 +20,77 @@ const CATEGORIES: { key: DropdownCategory; label: string }[] = [
   { key: "emotion", label: "Emotion" },
   { key: "tag", label: "Tags" },
 ];
+
+function RemoveButton({
+  item,
+  accountId,
+  onRemoved,
+}: {
+  item: DropdownItem;
+  accountId: string;
+  onRemoved: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [checkingCount, setCheckingCount] = useState(false);
+  const [usageCount, setUsageCount] = useState<number | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  async function startConfirm() {
+    setConfirming(true);
+    setCheckingCount(true);
+    const count = await getDropdownItemUsageCount(accountId, item.category, item.value);
+    setUsageCount(count);
+    setCheckingCount(false);
+  }
+
+  function cancel() {
+    setConfirming(false);
+    setUsageCount(null);
+  }
+
+  async function confirmRemove() {
+    setRemoving(true);
+    await deleteDropdownItem(item.id);
+    setRemoving(false);
+    onRemoved();
+  }
+
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-2">
+        {checkingCount ? (
+          <span className="text-[11px] text-ink-muted">Checking…</span>
+        ) : (
+          <span className="text-[11px] text-ink-secondary">
+            {usageCount && usageCount > 0
+              ? `Used by ${usageCount} trade${usageCount === 1 ? "" : "s"} — they'll keep it, but it won't be pickable for new ones.`
+              : "Remove this item?"}
+          </span>
+        )}
+        <button
+          onClick={confirmRemove}
+          disabled={checkingCount || removing}
+          className="text-xs text-loss font-medium hover:underline disabled:opacity-50"
+        >
+          {removing ? "Removing…" : "Confirm"}
+        </button>
+        <button
+          onClick={cancel}
+          disabled={removing}
+          className="text-xs text-ink-muted hover:text-ink-primary"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={startConfirm} className="text-xs text-loss/80 hover:text-loss">
+      Remove
+    </button>
+  );
+}
 
 export default function DropdownLists() {
   const { selectedAccount } = useAccount();
@@ -50,11 +122,6 @@ export default function DropdownLists() {
       activeItems.length > 0 ? Math.max(...activeItems.map((i) => i.sort_order)) + 1 : 1;
     await addDropdownItem(selectedAccount.id, activeTab, newValue.trim(), nextOrder);
     setNewValue("");
-    load();
-  }
-
-  async function handleDelete(id: string) {
-    await deleteDropdownItem(id);
     load();
   }
 
@@ -113,12 +180,9 @@ export default function DropdownLists() {
                 >
                   ↓
                 </button>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="text-xs text-loss/80 hover:text-loss"
-                >
-                  Remove
-                </button>
+                {selectedAccount && (
+                  <RemoveButton item={item} accountId={selectedAccount.id} onRemoved={load} />
+                )}
               </div>
             </div>
           ))}

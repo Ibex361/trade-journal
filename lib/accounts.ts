@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { deleteScreenshotsByUrls } from "./screenshots";
 import { seedDefaultDropdownItems } from "./dropdownSettings";
+import { localDateString } from "./date";
 
 // Friendlier text for the one conflict we expect regularly
 // (the accounts_name_unique index in phase1c_migration.sql,
@@ -142,7 +143,7 @@ const DEMO_TRADES = [
 function dateOffset(days: number) {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return localDateString(d);
 }
 
 export async function resetDemoData() {
