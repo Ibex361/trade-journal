@@ -104,45 +104,15 @@ export default function BulkActionsBar({
 
         <div className="flex items-center gap-2 px-4 pt-2.5 pb-3.5 overflow-x-auto no-scrollbar">
           {tagOptions.length > 0 && (
-            <div className="relative shrink-0">
-              <Chip onClick={() => { setAddTagOpen((v) => !v); setRemoveTagOpen(false); }} disabled={busy}>
-                + Tag
-              </Chip>
-              {addTagOpen && (
-                <div className="absolute top-full mt-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
-                  {tagOptions.map((o) => (
-                    <button
-                      key={o.id}
-                      onClick={() => handlePickAddTag(o.value)}
-                      className="block w-full text-left px-3 py-1.5 text-xs text-ink-secondary hover:text-ink-primary hover:bg-surface-1"
-                    >
-                      {o.value}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Chip onClick={() => { setAddTagOpen((v) => !v); setRemoveTagOpen(false); }} disabled={busy}>
+              + Tag
+            </Chip>
           )}
 
           {removableTags.length > 0 && (
-            <div className="relative shrink-0">
-              <Chip onClick={() => { setRemoveTagOpen((v) => !v); setAddTagOpen(false); }} disabled={busy}>
-                − Tag
-              </Chip>
-              {removeTagOpen && (
-                <div className="absolute top-full mt-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
-                  {removableTags.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => handlePickRemoveTag(tag)}
-                      className="block w-full text-left px-3 py-1.5 text-xs text-ink-secondary hover:text-ink-primary hover:bg-surface-1"
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Chip onClick={() => { setRemoveTagOpen((v) => !v); setAddTagOpen(false); }} disabled={busy}>
+              − Tag
+            </Chip>
           )}
 
           <Chip onClick={() => handleSetRules(true)} disabled={busy} tone="positive">
@@ -177,6 +147,35 @@ export default function BulkActionsBar({
             </Chip>
           )}
         </div>
+
+        {/* Tag pickers render as an inline panel in normal document flow rather
+            than an absolutely-positioned popover — the chip row above scrolls
+            horizontally, and an overflow-x-auto container also clips vertical
+            overflow, which was cutting the popover off. */}
+        {(addTagOpen || removableTags.length > 0 && removeTagOpen) && (
+          <div className="border-t border-brass/20 px-4 py-2.5 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+            {addTagOpen &&
+              tagOptions.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => handlePickAddTag(o.value)}
+                  className="text-xs text-ink-secondary border border-surface-border rounded-full px-3 py-1 hover:text-ink-primary hover:bg-surface-1"
+                >
+                  {o.value}
+                </button>
+              ))}
+            {removeTagOpen &&
+              removableTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => handlePickRemoveTag(tag)}
+                  className="text-xs text-ink-secondary border border-surface-border rounded-full px-3 py-1 hover:text-ink-primary hover:bg-surface-1"
+                >
+                  {tag}
+                </button>
+              ))}
+          </div>
+        )}
       </div>
     </div>
   );
