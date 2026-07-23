@@ -87,31 +87,29 @@ export default function BulkActionsBar({
   }
 
   return (
-    <div
-      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pointer-events-none"
-      style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
-    >
-      <div className="w-full max-w-2xl bg-surface-1 border border-brass/30 rounded-2xl shadow-2xl shadow-black/40 pointer-events-auto overflow-hidden">
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <span className="text-xs font-semibold text-ink-primary tracking-wide">
+    <div className="sticky top-[52px] md:top-[68px] z-20 -mx-4 px-4 md:mx-0 md:px-0 mb-4 pointer-events-none">
+      <div className="bg-brass/15 border border-brass/50 rounded-2xl shadow-lg shadow-black/30 pointer-events-auto overflow-hidden ring-1 ring-brass/20 backdrop-blur-sm">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-brass/20">
+          <span className="flex items-center gap-2 text-xs font-semibold text-brass tracking-wide">
+            <span className="signal-bar h-4" />
             {count} selected
           </span>
           <button
             onClick={onClear}
-            className="text-xs text-ink-muted hover:text-ink-primary"
+            className="text-xs text-ink-secondary hover:text-ink-primary font-medium"
           >
             Done
           </button>
         </div>
 
-        <div className="flex items-center gap-2 px-4 pb-3.5 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 px-4 pt-2.5 pb-3.5 overflow-x-auto no-scrollbar">
           {tagOptions.length > 0 && (
             <div className="relative shrink-0">
               <Chip onClick={() => { setAddTagOpen((v) => !v); setRemoveTagOpen(false); }} disabled={busy}>
                 + Tag
               </Chip>
               {addTagOpen && (
-                <div className="absolute bottom-full mb-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
+                <div className="absolute top-full mt-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
                   {tagOptions.map((o) => (
                     <button
                       key={o.id}
@@ -132,7 +130,7 @@ export default function BulkActionsBar({
                 − Tag
               </Chip>
               {removeTagOpen && (
-                <div className="absolute bottom-full mb-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
+                <div className="absolute top-full mt-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
                   {removableTags.map((tag) => (
                     <button
                       key={tag}

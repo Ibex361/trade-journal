@@ -446,6 +446,19 @@ export default function TradesList({
               </span>
             </div>
 
+            {t.tags && t.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {t.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[11px] text-brass bg-brass/10 border border-brass/25 rounded-full px-2 py-0.5"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-surface-border">
               <button
                 onClick={() => onEdit(t)}

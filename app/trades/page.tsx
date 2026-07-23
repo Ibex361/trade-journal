@@ -251,7 +251,7 @@ export default function TradesPage() {
   );
 
   return (
-    <div className={`space-y-6 ${selectedIds.size > 0 ? "pb-28" : ""}`}>
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-medium tracking-tight">Trades</h1>
@@ -289,6 +289,20 @@ export default function TradesPage() {
           </div>
         )}
       </div>
+
+      {selectedIds.size > 0 && (
+        <BulkActionsBar
+          count={selectedIds.size}
+          tagOptions={dropdowns.filter((d) => d.category === "tag").sort((a, b) => a.sort_order - b.sort_order)}
+          removableTags={removableTags}
+          onAddTag={handleBulkAddTag}
+          onRemoveTag={handleBulkRemoveTag}
+          onSetRules={handleBulkSetRules}
+          onExport={handleBulkExport}
+          onDelete={handleBulkDelete}
+          onClear={exitSelectionMode}
+        />
+      )}
 
       {accountLoading || loading ? (
         <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
@@ -341,20 +355,6 @@ export default function TradesPage() {
           duplicateFrom={duplicateSource}
           onClose={closePanel}
           onSaved={handleSaved}
-        />
-      )}
-
-      {selectedIds.size > 0 && (
-        <BulkActionsBar
-          count={selectedIds.size}
-          tagOptions={dropdowns.filter((d) => d.category === "tag").sort((a, b) => a.sort_order - b.sort_order)}
-          removableTags={removableTags}
-          onAddTag={handleBulkAddTag}
-          onRemoveTag={handleBulkRemoveTag}
-          onSetRules={handleBulkSetRules}
-          onExport={handleBulkExport}
-          onDelete={handleBulkDelete}
-          onClear={exitSelectionMode}
         />
       )}
     </div>
