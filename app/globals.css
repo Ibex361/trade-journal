@@ -2,26 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens — Concept C ("Cinematic Depth"). These mirror the values in
+ * tailwind.config.ts so raw CSS/SVG (chart gradients, etc.) can reference the
+ * same palette Tailwind utility classes use, instead of hardcoding hex twice.
+ */
+:root {
+  --ink: #edeff7;
+  --ink-2: #9ba0be;
+  --ink-3: #5c6180;
+  --glow: #5ce6c8;
+  --glow-2: #7c6ff0;
+  --loss: #fb7185;
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-b: rgba(255, 255, 255, 0.09);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
+}
+
 html {
   color-scheme: dark;
 }
 
 body {
-  background: #0b0d10;
-  color: #edeef0;
+  /* Atmospheric backdrop: violet glow upper-left, teal glow upper-right,
+     fading to near-black. Not `background-attachment: fixed` on purpose —
+     that's unreliable on iOS Safari/Samsung Internet, which this app has
+     been bitten by before. */
+  background: radial-gradient(900px 500px at 15% -10%, rgba(124, 111, 240, 0.28), transparent 60%),
+    radial-gradient(700px 500px at 100% 10%, rgba(92, 230, 200, 0.16), transparent 55%),
+    linear-gradient(180deg, #0b0d16 0%, #090a11 100%);
+  color: var(--ink);
 }
 
-/* Signature element: a thin vertical signal bar, echoing a trade's R-multiple */
+/*
+ * Signature element. Previously a static gold vertical bar; now the same
+ * teal-to-violet glow that is Concept C's signature motif and will run
+ * through the equity curve and progress bars once Step 3/4 rebuild those.
+ */
 .signal-bar {
   display: inline-block;
   width: 3px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #d4a73c 0%, #8a6f2a 100%);
+  background: linear-gradient(180deg, var(--glow) 0%, var(--glow-2) 100%);
 }
 
 ::selection {
-  background: #d4a73c;
-  color: #0b0d10;
+  background: var(--glow);
+  color: #090a11;
 }
 
 .no-scrollbar {
@@ -34,7 +65,22 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #272c34 transparent;
+  scrollbar-color: var(--panel-b) transparent;
+}
+
+/*
+ * Foundation-level glass effect. Every existing panel already uses the
+ * `bg-surface-1`/`bg-surface-2` + `rounded-card` recipe (StatCard,
+ * SettingsCard, every page section, etc.), so giving that shape a blur +
+ * elevation shadow here makes the whole app read as glass immediately,
+ * without editing each component. Step 3 should formalize this into a
+ * proper shared Card/Panel component instead of this attribute-selector
+ * shim (the same technique the print rules below already use).
+ */
+[class*="rounded-card"] {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 /*
@@ -69,10 +115,14 @@ body {
     color: #85888d !important;
   }
   [class*="text-brass"] {
-    color: #8a6f2a !important;
+    color: #1f8a76 !important; /* darkened teal, legible on white */
+  }
+  [class*="rounded-card"] {
+    backdrop-filter: none !important;
+    box-shadow: none !important;
   }
   .signal-bar {
-    background: #8a6f2a !important;
+    background: #1f8a76 !important;
   }
   .shadow,
   .shadow-md,

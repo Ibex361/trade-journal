@@ -5,31 +5,59 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Neutral surfaces. 1/2 are translucent "glass" fills meant to sit on
+        // top of the atmospheric gradient body background (see globals.css) —
+        // every existing bg-surface-1 / bg-surface-2 panel becomes a glass
+        // panel automatically, no component changes needed.
         surface: {
-          0: "#0B0D10",
-          1: "#14171C",
-          2: "#1B1F26",
-          border: "#272C34",
+          0: "#090A11", // solid near-black — inputs, overlays, text-on-accent
+          1: "rgba(255,255,255,0.045)", // primary glass panel fill
+          2: "rgba(255,255,255,0.07)", // nested / hover glass fill
+          border: "rgba(255,255,255,0.09)",
         },
         ink: {
-          primary: "#EDEEF0",
-          secondary: "#9AA2AF",
-          muted: "#5C636F",
+          primary: "#EDEFF7",
+          secondary: "#9BA0BE",
+          muted: "#5C6180",
         },
+        // Signature two-tone accent for Concept C: a teal-to-violet glow.
+        // This is the real going-forward name — Step 3 should reach for this
+        // (and `glow-violet`) directly when it rebuilds shared components.
+        glow: {
+          DEFAULT: "#5CE6C8",
+          violet: "#7C6FF0",
+        },
+        // Deprecated alias for the old single-tone gold accent. Kept only so
+        // the ~60 existing `brass-*` / `bg-brass` / `accent-brass` classes
+        // scattered across components stay styled (now in teal) until Step 3
+        // renames each of them onto `glow`. Remove this block once that's done.
         brass: {
-          DEFAULT: "#D4A73C",
-          dim: "#8A6F2A",
+          DEFAULT: "#5CE6C8",
+          dim: "#2F9885",
         },
-        gain: "#2BB673",
-        loss: "#E5484D",
+        gain: "#5CE6C8", // same teal as glow — a win is the glow signal
+        loss: "#FB7185",
       },
       fontFamily: {
-        display: ["var(--font-manrope)", "sans-serif"],
-        body: ["var(--font-inter)", "sans-serif"],
-        mono: ["var(--font-jbmono)", "monospace"],
+        display: ["var(--font-display)", "sans-serif"], // Space Grotesk
+        body: ["var(--font-body)", "sans-serif"], // Inter
+        mono: ["var(--font-mono)", "monospace"], // JetBrains Mono
       },
       borderRadius: {
-        card: "14px",
+        card: "18px", // was 14px — every existing panel picks this up as-is
+        panel: "20px", // new, larger radius for Step 3's bigger glass sections
+      },
+      boxShadow: {
+        glass: "0 20px 50px rgba(0,0,0,.35)",
+        glow: "0 0 18px rgba(92,230,200,.5)",
+      },
+      transitionDuration: {
+        fast: "150ms",
+        base: "250ms",
+        slow: "400ms",
+      },
+      transitionTimingFunction: {
+        out: "cubic-bezier(.16,1,.3,1)",
       },
     },
   },
