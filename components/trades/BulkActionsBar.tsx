@@ -3,6 +3,34 @@
 import { useState } from "react";
 import { DropdownItem } from "@/lib/dropdownSettings";
 
+function Chip({
+  children,
+  onClick,
+  disabled,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "default" | "danger" | "positive";
+}) {
+  const toneClasses =
+    tone === "danger"
+      ? "border-loss/40 text-loss hover:bg-loss/10"
+      : tone === "positive"
+      ? "border-gain/40 text-gain hover:bg-gain/10"
+      : "border-surface-border text-ink-secondary hover:text-ink-primary hover:bg-surface-1";
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`shrink-0 whitespace-nowrap text-xs font-medium border rounded-full px-3 py-1.5 transition-colors disabled:opacity-40 ${toneClasses}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function BulkActionsBar({
   count,
   tagOptions,
@@ -24,159 +52,132 @@ export default function BulkActionsBar({
   onDelete: () => Promise<void>;
   onClear: () => void;
 }) {
-  const [tagToAdd, setTagToAdd] = useState("");
-  const [addingTag, setAddingTag] = useState(false);
-  const [tagToRemove, setTagToRemove] = useState("");
-  const [removingTag, setRemovingTag] = useState(false);
-  const [settingRules, setSettingRules] = useState<"yes" | "no" | null>(null);
+  const [addTagOpen, setAddTagOpen] = useState(false);
+  const [removeTagOpen, setRemoveTagOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  async function handleAddTag() {
-    if (!tagToAdd) return;
-    setAddingTag(true);
-    await onAddTag(tagToAdd);
-    setAddingTag(false);
-    setTagToAdd("");
+  async function handlePickAddTag(tag: string) {
+    setAddTagOpen(false);
+    if (!tag) return;
+    setBusy(true);
+    await onAddTag(tag);
+    setBusy(false);
   }
 
-  async function handleRemoveTag() {
-    if (!tagToRemove) return;
-    setRemovingTag(true);
-    await onRemoveTag(tagToRemove);
-    setRemovingTag(false);
-    setTagToRemove("");
+  async function handlePickRemoveTag(tag: string) {
+    setRemoveTagOpen(false);
+    if (!tag) return;
+    setBusy(true);
+    await onRemoveTag(tag);
+    setBusy(false);
   }
 
   async function handleSetRules(value: boolean) {
-    setSettingRules(value ? "yes" : "no");
+    setBusy(true);
     await onSetRules(value);
-    setSettingRules(null);
+    setBusy(false);
   }
 
   async function handleDelete() {
-    setDeleting(true);
+    setBusy(true);
     await onDelete();
-    setDeleting(false);
+    setBusy(false);
     setConfirmingDelete(false);
   }
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-brass/40 bg-surface-2/95 backdrop-blur supports-[backdrop-filter]:bg-surface-2/80"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pointer-events-none"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
     >
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-ink-primary whitespace-nowrap">
-            {count} trade{count === 1 ? "" : "s"} selected
+      <div className="w-full max-w-2xl bg-surface-1 border border-brass/30 rounded-2xl shadow-2xl shadow-black/40 pointer-events-auto overflow-hidden">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <span className="text-xs font-semibold text-ink-primary tracking-wide">
+            {count} selected
           </span>
+          <button
+            onClick={onClear}
+            className="text-xs text-ink-muted hover:text-ink-primary"
+          >
+            Done
+          </button>
+        </div>
 
-          <div className="hidden sm:block w-px h-5 bg-surface-border" />
-
+        <div className="flex items-center gap-2 px-4 pb-3.5 overflow-x-auto no-scrollbar">
           {tagOptions.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <select
-                value={tagToAdd}
-                onChange={(e) => setTagToAdd(e.target.value)}
-                className="bg-surface-1 border border-surface-border rounded-md px-2 py-1 text-xs text-ink-primary"
-              >
-                <option value="">Add tag…</option>
-                {tagOptions.map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.value}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleAddTag}
-                disabled={!tagToAdd || addingTag}
-                className="text-xs text-brass hover:underline disabled:opacity-50 disabled:no-underline"
-              >
-                {addingTag ? "Adding…" : "Add"}
-              </button>
+            <div className="relative shrink-0">
+              <Chip onClick={() => { setAddTagOpen((v) => !v); setRemoveTagOpen(false); }} disabled={busy}>
+                + Tag
+              </Chip>
+              {addTagOpen && (
+                <div className="absolute bottom-full mb-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
+                  {tagOptions.map((o) => (
+                    <button
+                      key={o.id}
+                      onClick={() => handlePickAddTag(o.value)}
+                      className="block w-full text-left px-3 py-1.5 text-xs text-ink-secondary hover:text-ink-primary hover:bg-surface-1"
+                    >
+                      {o.value}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {removableTags.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <select
-                value={tagToRemove}
-                onChange={(e) => setTagToRemove(e.target.value)}
-                className="bg-surface-1 border border-surface-border rounded-md px-2 py-1 text-xs text-ink-primary"
-              >
-                <option value="">Remove tag…</option>
-                {removableTags.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleRemoveTag}
-                disabled={!tagToRemove || removingTag}
-                className="text-xs text-brass hover:underline disabled:opacity-50 disabled:no-underline"
-              >
-                {removingTag ? "Removing…" : "Remove"}
-              </button>
+            <div className="relative shrink-0">
+              <Chip onClick={() => { setRemoveTagOpen((v) => !v); setAddTagOpen(false); }} disabled={busy}>
+                − Tag
+              </Chip>
+              {removeTagOpen && (
+                <div className="absolute bottom-full mb-2 left-0 bg-surface-2 border border-surface-border rounded-lg shadow-xl py-1 min-w-[9rem] max-h-48 overflow-y-auto z-10">
+                  {removableTags.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => handlePickRemoveTag(tag)}
+                      className="block w-full text-left px-3 py-1.5 text-xs text-ink-secondary hover:text-ink-primary hover:bg-surface-1"
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-ink-secondary whitespace-nowrap">Rules:</span>
-            <button
-              onClick={() => handleSetRules(true)}
-              disabled={settingRules !== null}
-              className="text-xs text-gain hover:underline disabled:opacity-50 disabled:no-underline"
-            >
-              {settingRules === "yes" ? "Setting…" : "Yes"}
-            </button>
-            <button
-              onClick={() => handleSetRules(false)}
-              disabled={settingRules !== null}
-              className="text-xs text-loss hover:underline disabled:opacity-50 disabled:no-underline"
-            >
-              {settingRules === "no" ? "Setting…" : "No"}
-            </button>
-          </div>
+          <Chip onClick={() => handleSetRules(true)} disabled={busy} tone="positive">
+            Rules ✓
+          </Chip>
+          <Chip onClick={() => handleSetRules(false)} disabled={busy} tone="danger">
+            Rules ✕
+          </Chip>
 
-          <div className="flex items-center gap-3 sm:ml-auto">
-            <button onClick={onExport} className="text-xs text-ink-secondary hover:text-brass whitespace-nowrap">
-              Export CSV
-            </button>
+          <div className="w-px h-5 bg-surface-border shrink-0" />
 
-            {confirmingDelete ? (
-              <>
-                <span className="text-[11px] text-ink-secondary whitespace-nowrap">
-                  Delete {count} trade{count === 1 ? "" : "s"}?
-                </span>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="text-xs text-loss font-medium hover:underline disabled:opacity-50 whitespace-nowrap"
-                >
-                  {deleting ? "Deleting…" : "Confirm"}
-                </button>
-                <button
-                  onClick={() => setConfirmingDelete(false)}
-                  disabled={deleting}
-                  className="text-xs text-ink-muted hover:text-ink-primary whitespace-nowrap"
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
+          <Chip onClick={onExport} disabled={busy}>
+            Export
+          </Chip>
+
+          {confirmingDelete ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[11px] text-ink-secondary whitespace-nowrap">Delete {count}?</span>
+              <Chip onClick={handleDelete} disabled={busy} tone="danger">
+                Confirm
+              </Chip>
               <button
-                onClick={() => setConfirmingDelete(true)}
-                className="text-xs text-loss/80 hover:text-loss whitespace-nowrap"
+                onClick={() => setConfirmingDelete(false)}
+                className="text-xs text-ink-muted hover:text-ink-primary whitespace-nowrap"
               >
-                Delete selected
+                Cancel
               </button>
-            )}
-            <button onClick={onClear} className="text-xs text-ink-muted hover:text-ink-primary whitespace-nowrap">
-              Clear
-            </button>
-          </div>
+            </div>
+          ) : (
+            <Chip onClick={() => setConfirmingDelete(true)} disabled={busy} tone="danger">
+              Delete
+            </Chip>
+          )}
         </div>
       </div>
     </div>

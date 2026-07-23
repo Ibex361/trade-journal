@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
 
 export type SortColumn = "entry_date" | "instrument" | "pnl" | "r_multiple";
 export type SortState = { column: SortColumn; direction: "asc" | "desc" };
+
+const LONG_PRESS_MS = 450;
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -152,10 +154,12 @@ export default function TradesList({
   onDelete,
   sort,
   onSortChange,
+  selectionMode,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
   onSelectRange,
+  onEnterSelectionMode,
 }: {
   trades: Trade[];
   onEdit: (trade: Trade) => void;
@@ -163,19 +167,58 @@ export default function TradesList({
   onDelete: (id: string) => void;
   sort: SortState;
   onSortChange: (s: SortState) => void;
+  selectionMode: boolean;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
   onSelectRange: (ids: string[]) => void;
+  onEnterSelectionMode: (id: string) => void;
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const allSelected = trades.length > 0 && trades.every((t) => selectedIds.has(t.id));
 
+  // Long-press (or mouse-hold) support so selection mode can be entered by
+  // pressing a trade directly, the way most mobile apps handle multi-select,
+  // rather than checkboxes sitting on screen permanently.
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  function clearPressTimer() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  function startPress(id: string, target: EventTarget) {
+    if ((target as HTMLElement).closest("button, a, input")) return;
+    longPressFired.current = false;
+    clearPressTimer();
+    pressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      onEnterSelectionMode(id);
+    }, LONG_PRESS_MS);
+  }
+
+  // In selection mode, tapping anywhere on the row (outside its buttons)
+  // toggles that row, not just the checkbox — matching how mail/file apps
+  // behave once you're already in a multi-select state.
+  function handleRowClick(e: React.MouseEvent, id: string) {
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (!selectionMode) return;
+    if ((e.target as HTMLElement).closest("button, a")) return;
+    onToggleSelect(id);
+  }
+
   // Shift-click extends the selection to every row between the last checkbox
   // clicked and this one (inclusive) — the standard file-manager convention,
   // so selecting a long run of trades doesn't mean clicking each one.
   function handleCheckboxClick(e: React.MouseEvent<HTMLInputElement>, id: string, index: number) {
+    e.stopPropagation();
     if (e.shiftKey && lastClickedIndex !== null) {
       e.preventDefault();
       const [start, end] = index < lastClickedIndex ? [index, lastClickedIndex] : [lastClickedIndex, index];
@@ -201,15 +244,17 @@ export default function TradesList({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-surface-border text-left text-ink-secondary text-xs uppercase tracking-wide">
-              <th className="px-4 py-3 w-8">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={onToggleSelectAll}
-                  aria-label="Select all trades"
-                  className="accent-brass"
-                />
-              </th>
+              {selectionMode && (
+                <th className="px-4 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={onToggleSelectAll}
+                    aria-label="Select all trades"
+                    className="accent-brass"
+                  />
+                </th>
+              )}
               <th className="px-4 py-3">
                 <SortHeader label="Date" column="entry_date" sort={sort} onSortChange={onSortChange} />
               </th>
@@ -235,20 +280,31 @@ export default function TradesList({
             {trades.map((t, index) => (
               <tr
                 key={t.id}
-                className={`border-b border-surface-border last:border-0 transition-colors ${
+                onPointerDown={(e) => startPress(t.id, e.target)}
+                onPointerUp={clearPressTimer}
+                onPointerLeave={clearPressTimer}
+                onPointerCancel={clearPressTimer}
+                onContextMenu={(e) => {
+                  if (longPressFired.current) e.preventDefault();
+                }}
+                onClick={(e) => handleRowClick(e, t.id)}
+                className={`border-b border-surface-border last:border-0 transition-colors select-none ${
                   selectedIds.has(t.id) ? "bg-brass/10 hover:bg-brass/15" : "hover:bg-surface-2/50"
-                }`}
+                } ${selectionMode ? "cursor-pointer" : ""}`}
+                style={{ touchAction: "manipulation" }}
               >
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(t.id)}
-                    onChange={() => {}}
-                    onClick={(e) => handleCheckboxClick(e, t.id, index)}
-                    aria-label={`Select trade ${t.instrument}`}
-                    className="accent-brass"
-                  />
-                </td>
+                {selectionMode && (
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(t.id)}
+                      onChange={() => {}}
+                      onClick={(e) => handleCheckboxClick(e, t.id, index)}
+                      aria-label={`Select trade ${t.instrument}`}
+                      className="accent-brass"
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-3 font-mono text-ink-secondary whitespace-nowrap">
                   {formatDate(t.entry_date)}
                 </td>
@@ -324,35 +380,48 @@ export default function TradesList({
 
       {/* Mobile cards */}
       <div className="md:hidden space-y-3">
-        <div className="flex items-center gap-2 px-1">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={onToggleSelectAll}
-            aria-label="Select all trades"
-            className="accent-brass"
-          />
-          <span className="text-[11px] text-ink-secondary">Select all</span>
-        </div>
+        {selectionMode && (
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={onToggleSelectAll}
+              aria-label="Select all trades"
+              className="accent-brass"
+            />
+            <span className="text-[11px] text-ink-secondary">Select all</span>
+          </div>
+        )}
         {trades.map((t, index) => (
           <div
             key={t.id}
-            className={`border rounded-card p-4 transition-colors ${
+            onPointerDown={(e) => startPress(t.id, e.target)}
+            onPointerUp={clearPressTimer}
+            onPointerLeave={clearPressTimer}
+            onPointerCancel={clearPressTimer}
+            onContextMenu={(e) => {
+              if (longPressFired.current) e.preventDefault();
+            }}
+            onClick={(e) => handleRowClick(e, t.id)}
+            className={`border rounded-card p-4 transition-colors select-none ${
               selectedIds.has(t.id)
                 ? "bg-brass/10 border-brass/40"
                 : "bg-surface-1 border-surface-border"
             }`}
+            style={{ touchAction: "manipulation" }}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(t.id)}
-                  onChange={() => {}}
-                  onClick={(e) => handleCheckboxClick(e, t.id, index)}
-                  aria-label={`Select trade ${t.instrument}`}
-                  className="accent-brass mt-1"
-                />
+                {selectionMode && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(t.id)}
+                    onChange={() => {}}
+                    onClick={(e) => handleCheckboxClick(e, t.id, index)}
+                    aria-label={`Select trade ${t.instrument}`}
+                    className="accent-brass mt-1"
+                  />
+                )}
                 <span className="signal-bar h-8" />
                 <div>
                   <p className="font-medium">{t.instrument}</p>

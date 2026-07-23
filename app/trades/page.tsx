@@ -68,7 +68,18 @@ export default function TradesPage() {
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  function exitSelectionMode() {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function enterSelectionMode(id: string) {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  }
 
   async function load() {
     if (!selectedAccount) return;
@@ -89,14 +100,18 @@ export default function TradesPage() {
   }, [selectedAccount?.id]);
 
   useEffect(() => {
-    setSelectedIds(new Set());
+    exitSelectionMode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  // Lets a keyboard user dismiss the selection quickly without hunting for
-  // the "Clear" button, matching the convention used by the screenshot lightbox.
+  // Lets a keyboard user back out of selection mode quickly without hunting
+  // for the Cancel button, matching the convention used by the screenshot lightbox.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelectedIds((prev) => (prev.size > 0 ? new Set() : prev));
+      if (e.key === "Escape") setSelectionMode((prev) => {
+        if (prev) setSelectedIds(new Set());
+        return false;
+      });
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -194,7 +209,7 @@ export default function TradesPage() {
     targets.forEach((t) => {
       if (t.screenshot_url) deleteScreenshotByUrl(t.screenshot_url).catch(() => {});
     });
-    setSelectedIds(new Set());
+    exitSelectionMode();
     await load();
   }
 
@@ -236,23 +251,43 @@ export default function TradesPage() {
   );
 
   return (
-    <div className={`space-y-6 ${selectedIds.size > 0 ? "pb-20" : ""}`}>
+    <div className={`space-y-6 ${selectedIds.size > 0 ? "pb-28" : ""}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-medium tracking-tight">Trades</h1>
           <p className="text-ink-secondary text-sm mt-1">
-            {selectedAccount
+            {selectionMode
+              ? `${selectedIds.size} selected`
+              : selectedAccount
               ? `${trades.length} trade${trades.length === 1 ? "" : "s"} logged for ${selectedAccount.name}`
               : "Log and manage every trade."}
           </p>
         </div>
-        <button
-          onClick={openNew}
-          disabled={!selectedAccount}
-          className="shrink-0 text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
-        >
-          New trade
-        </button>
+        {selectionMode ? (
+          <button
+            onClick={exitSelectionMode}
+            className="shrink-0 text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border"
+          >
+            Cancel
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setSelectionMode(true)}
+              disabled={!selectedAccount || visibleTrades.length === 0}
+              className="text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border disabled:opacity-50"
+            >
+              Select
+            </button>
+            <button
+              onClick={openNew}
+              disabled={!selectedAccount}
+              className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
+            >
+              New trade
+            </button>
+          </div>
+        )}
       </div>
 
       {accountLoading || loading ? (
@@ -290,10 +325,12 @@ export default function TradesPage() {
             onDelete={handleDelete}
             sort={sort}
             onSortChange={setSort}
+            selectionMode={selectionMode}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onToggleSelectAll={toggleSelectAll}
             onSelectRange={selectRange}
+            onEnterSelectionMode={enterSelectionMode}
           />
         </>
       )}
@@ -317,7 +354,7 @@ export default function TradesPage() {
           onSetRules={handleBulkSetRules}
           onExport={handleBulkExport}
           onDelete={handleBulkDelete}
-          onClear={() => setSelectedIds(new Set())}
+          onClear={exitSelectionMode}
         />
       )}
     </div>
