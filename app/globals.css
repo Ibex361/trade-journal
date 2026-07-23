@@ -50,6 +50,12 @@ body {
   background: linear-gradient(180deg, var(--glow) 0%, var(--glow-2) 100%);
 }
 
+/* Header brand mark — the glow motif as a small orb instead of a bar. */
+.brand-orb {
+  background: radial-gradient(circle at 35% 30%, var(--glow), var(--glow-2) 70%);
+  box-shadow: 0 0 14px rgba(92, 230, 200, 0.5);
+}
+
 ::selection {
   background: var(--glow);
   color: #090a11;
