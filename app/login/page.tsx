@@ -7,7 +7,12 @@ import { supabase } from "@/lib/supabaseClient";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/";
+  const rawRedirect = searchParams.get("redirectTo");
+  // Only allow a same-app path: must start with a single "/" (not "//",
+  // which browsers treat as protocol-relative and would send the user off
+  // this domain after logging in). Anything else falls back to "/".
+  const redirectTo =
+    rawRedirect && /^\/(?!\/)/.test(rawRedirect) ? rawRedirect : "/";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

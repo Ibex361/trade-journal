@@ -29,6 +29,18 @@ function csvCell(value: unknown): string {
   else if (typeof value === "boolean") str = value ? "Yes" : "No";
   else str = String(value);
 
+  // Spreadsheet apps (Excel, Google Sheets) treat a cell starting with
+  // =, +, -, or @ as a formula. A leading apostrophe forces it to be read
+  // as plain text instead, so a note like "-50% today" can't trigger a
+  // "this file contains formulas" warning (or worse) when reopened.
+  // Only applied to actual text fields — numeric columns (P&L, prices,
+  // R-multiple) legitimately start with "-" for negative values, and
+  // prefixing those would turn real numbers into text in the spreadsheet.
+  const isTextValue = typeof value === "string" || Array.isArray(value);
+  if (isTextValue && /^[=+\-@]/.test(str)) {
+    str = `'${str}`;
+  }
+
   // Quote (and escape internal quotes) whenever the value could otherwise
   // break the CSV grid: commas, quotes, or newlines.
   if (/[",\n]/.test(str)) {

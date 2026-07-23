@@ -63,6 +63,7 @@ export default function TradesPage() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function load() {
     if (!selectedAccount) return;
@@ -111,7 +112,12 @@ export default function TradesPage() {
 
   async function handleDelete(id: string) {
     const trade = trades.find((t) => t.id === id);
-    await deleteTrade(id);
+    setDeleteError(null);
+    const { error } = await deleteTrade(id);
+    if (error) {
+      setDeleteError("Couldn't delete this trade. Please try again.");
+      return;
+    }
     if (trade?.screenshot_url) {
       deleteScreenshotByUrl(trade.screenshot_url).catch(() => {});
     }
@@ -150,6 +156,17 @@ export default function TradesPage() {
         <>
           <TradesSummaryStrip summary={summary} currency={selectedAccount.currency} />
           <TradesFilterBar filters={filters} onChange={setFilters} dropdowns={dropdowns} />
+          {deleteError && (
+            <div className="rounded-md border border-loss/30 bg-loss/10 px-4 py-3 flex items-center justify-between gap-4">
+              <p className="text-xs text-loss">{deleteError}</p>
+              <button
+                onClick={() => setDeleteError(null)}
+                className="text-xs text-ink-muted hover:text-ink-primary shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <TradesList
             trades={visibleTrades}
             onEdit={openEdit}

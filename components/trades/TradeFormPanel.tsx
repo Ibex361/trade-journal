@@ -295,6 +295,10 @@ export default function TradeFormPanel({
     if (!form.entry_date) missing.push(FIELD_LABELS.entry_date);
     if (!form.instrument.trim()) missing.push(FIELD_LABELS.instrument);
 
+    if (sizeNum != null && sizeNum <= 0) {
+      missing.push("Size must be greater than 0");
+    }
+
     // P&L is the one figure every trade needs. It's fine if it comes from
     // manual entry OR from entry price + exit price + size — but it can't
     // be missing entirely.

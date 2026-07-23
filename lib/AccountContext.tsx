@@ -61,6 +61,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    let initialFetchDone = false;
 
     async function init() {
       // The browser client loads the session from the cookie asynchronously.
@@ -69,13 +70,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       // which looked like "no accounts" right after logging in. Waiting for
       // getSession() first ensures the very first query is authenticated.
       await supabase.auth.getSession();
-      if (active) await refreshAccounts();
+      if (active) {
+        await refreshAccounts();
+        initialFetchDone = true;
+      }
     }
     init();
 
     // Also refetch on sign-in/sign-out elsewhere in the app, so state never
-    // goes stale relative to the actual session.
+    // goes stale relative to the actual session. Ignore the listener's own
+    // initial firing (it fires once immediately with whatever session is
+    // already known) — init() above already covers that first load, so
+    // acting on it too would just be a redundant duplicate fetch.
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      if (!initialFetchDone) return;
       refreshAccounts();
     });
 
