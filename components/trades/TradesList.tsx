@@ -155,6 +155,7 @@ export default function TradesList({
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
+  onSelectRange,
 }: {
   trades: Trade[];
   onEdit: (trade: Trade) => void;
@@ -165,9 +166,25 @@ export default function TradesList({
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
+  onSelectRange: (ids: string[]) => void;
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const allSelected = trades.length > 0 && trades.every((t) => selectedIds.has(t.id));
+
+  // Shift-click extends the selection to every row between the last checkbox
+  // clicked and this one (inclusive) — the standard file-manager convention,
+  // so selecting a long run of trades doesn't mean clicking each one.
+  function handleCheckboxClick(e: React.MouseEvent<HTMLInputElement>, id: string, index: number) {
+    if (e.shiftKey && lastClickedIndex !== null) {
+      e.preventDefault();
+      const [start, end] = index < lastClickedIndex ? [index, lastClickedIndex] : [lastClickedIndex, index];
+      onSelectRange(trades.slice(start, end + 1).map((t) => t.id));
+    } else {
+      onToggleSelect(id);
+    }
+    setLastClickedIndex(index);
+  }
 
   if (trades.length === 0) {
     return (
@@ -215,16 +232,19 @@ export default function TradesList({
             </tr>
           </thead>
           <tbody>
-            {trades.map((t) => (
+            {trades.map((t, index) => (
               <tr
                 key={t.id}
-                className="border-b border-surface-border last:border-0 hover:bg-surface-2/50 transition-colors"
+                className={`border-b border-surface-border last:border-0 transition-colors ${
+                  selectedIds.has(t.id) ? "bg-brass/10 hover:bg-brass/15" : "hover:bg-surface-2/50"
+                }`}
               >
                 <td className="px-4 py-3">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(t.id)}
-                    onChange={() => onToggleSelect(t.id)}
+                    onChange={() => {}}
+                    onClick={(e) => handleCheckboxClick(e, t.id, index)}
                     aria-label={`Select trade ${t.instrument}`}
                     className="accent-brass"
                   />
@@ -314,17 +334,22 @@ export default function TradesList({
           />
           <span className="text-[11px] text-ink-secondary">Select all</span>
         </div>
-        {trades.map((t) => (
+        {trades.map((t, index) => (
           <div
             key={t.id}
-            className="bg-surface-1 border border-surface-border rounded-card p-4"
+            className={`border rounded-card p-4 transition-colors ${
+              selectedIds.has(t.id)
+                ? "bg-brass/10 border-brass/40"
+                : "bg-surface-1 border-surface-border"
+            }`}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
                   checked={selectedIds.has(t.id)}
-                  onChange={() => onToggleSelect(t.id)}
+                  onChange={() => {}}
+                  onClick={(e) => handleCheckboxClick(e, t.id, index)}
                   aria-label={`Select trade ${t.instrument}`}
                   className="accent-brass mt-1"
                 />

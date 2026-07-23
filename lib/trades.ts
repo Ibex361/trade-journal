@@ -82,9 +82,16 @@ export async function deleteTrades(ids: string[]) {
   return result;
 }
 
-/** Narrow update used by the bulk "add tag" action — only touches the tags column. */
+/** Narrow update used by the bulk "add/remove tag" actions — only touches the tags column. */
 export async function updateTradeTags(id: string, tags: string[]) {
   const result = await supabase.from("trades").update({ tags }).eq("id", id);
   if (result.error) console.error("updateTradeTags failed:", result.error);
+  return result;
+}
+
+/** Narrow update used by the bulk "mark rules followed" action — only touches rules_followed. */
+export async function updateTradeRules(id: string, rules_followed: boolean | null) {
+  const result = await supabase.from("trades").update({ rules_followed }).eq("id", id);
+  if (result.error) console.error("updateTradeRules failed:", result.error);
   return result;
 }

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, Trade } from "@/lib/trades";
+import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { deleteScreenshotByUrl } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
+import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
 import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
 import TradesFilterBar, { TradeFilters, EMPTY_FILTERS } from "@/components/trades/TradesFilterBar";
@@ -91,6 +92,16 @@ export default function TradesPage() {
     setSelectedIds(new Set());
   }, [filters]);
 
+  // Lets a keyboard user dismiss the selection quickly without hunting for
+  // the "Clear" button, matching the convention used by the screenshot lightbox.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedIds((prev) => (prev.size > 0 ? new Set() : prev));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const visibleTrades = useMemo(
     () => applySort(applyFilters(trades, filters), sort),
     [trades, filters, sort]
@@ -167,6 +178,10 @@ export default function TradesPage() {
     });
   }
 
+  function selectRange(ids: string[]) {
+    setSelectedIds((prev) => new Set([...prev, ...ids]));
+  }
+
   async function handleBulkDelete() {
     const ids = Array.from(selectedIds);
     setDeleteError(null);
@@ -190,8 +205,38 @@ export default function TradesPage() {
     await load();
   }
 
+  async function handleBulkRemoveTag(tag: string) {
+    const ids = Array.from(selectedIds);
+    const targets = trades.filter((t) => ids.includes(t.id) && (t.tags ?? []).includes(tag));
+    await Promise.all(targets.map((t) => updateTradeTags(t.id, t.tags.filter((existing) => existing !== tag))));
+    await load();
+  }
+
+  async function handleBulkSetRules(value: boolean) {
+    const ids = Array.from(selectedIds);
+    await Promise.all(ids.map((id) => updateTradeRules(id, value)));
+    await load();
+  }
+
+  function handleBulkExport() {
+    const ids = Array.from(selectedIds);
+    const targets = trades.filter((t) => ids.includes(t.id));
+    const csv = tradesToCsv(targets);
+    const accountSlug = selectedAccount ? slugify(selectedAccount.name) : "account";
+    downloadCsv(csv, `${accountSlug}-selected-trades.csv`);
+  }
+
+  const selectedTrades = useMemo(
+    () => trades.filter((t) => selectedIds.has(t.id)),
+    [trades, selectedIds]
+  );
+  const removableTags = useMemo(
+    () => Array.from(new Set(selectedTrades.flatMap((t) => t.tags ?? []))).sort(),
+    [selectedTrades]
+  );
+
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${selectedIds.size > 0 ? "pb-20" : ""}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-medium tracking-tight">Trades</h1>
@@ -238,15 +283,6 @@ export default function TradesPage() {
               </button>
             </div>
           )}
-          {selectedIds.size > 0 && (
-            <BulkActionsBar
-              count={selectedIds.size}
-              tagOptions={dropdowns.filter((d) => d.category === "tag").sort((a, b) => a.sort_order - b.sort_order)}
-              onAddTag={handleBulkAddTag}
-              onDelete={handleBulkDelete}
-              onClear={() => setSelectedIds(new Set())}
-            />
-          )}
           <TradesList
             trades={visibleTrades}
             onEdit={openEdit}
@@ -257,6 +293,7 @@ export default function TradesPage() {
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onToggleSelectAll={toggleSelectAll}
+            onSelectRange={selectRange}
           />
         </>
       )}
@@ -267,6 +304,20 @@ export default function TradesPage() {
           duplicateFrom={duplicateSource}
           onClose={closePanel}
           onSaved={handleSaved}
+        />
+      )}
+
+      {selectedIds.size > 0 && (
+        <BulkActionsBar
+          count={selectedIds.size}
+          tagOptions={dropdowns.filter((d) => d.category === "tag").sort((a, b) => a.sort_order - b.sort_order)}
+          removableTags={removableTags}
+          onAddTag={handleBulkAddTag}
+          onRemoveTag={handleBulkRemoveTag}
+          onSetRules={handleBulkSetRules}
+          onExport={handleBulkExport}
+          onDelete={handleBulkDelete}
+          onClear={() => setSelectedIds(new Set())}
         />
       )}
     </div>
