@@ -14,6 +14,14 @@ const config: Config = {
           1: "rgba(255,255,255,0.045)", // primary glass panel fill
           2: "rgba(255,255,255,0.07)", // nested / hover glass fill
           border: "rgba(255,255,255,0.09)",
+          // Near-opaque dark fill for full-screen/slide-over surfaces that are
+          // the primary reading surface (forms), where the light 4.5-7% glass
+          // fills let too much of the busy background bleed through the text.
+          solid: "rgba(9,10,17,0.97)",
+          // Darker, more-opaque frosted fill for chart tooltips/popovers —
+          // still translucent (keeps the glass feel on hover/click) but dark
+          // and opaque enough that text stays legible over dense bar fills.
+          popover: "rgba(10,11,20,0.92)",
         },
         ink: {
           primary: "#EDEFF7",

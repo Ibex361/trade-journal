@@ -26,7 +26,7 @@ function CustomTooltip({
   const color = bucket.pnl >= 0 ? "text-gain" : "text-loss";
   const sign = bucket.pnl > 0 ? "+" : "";
   return (
-    <div className="bg-surface-2 backdrop-blur-md border border-surface-border rounded-md px-3 py-2 shadow-lg">
+    <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass">
       <p className="text-xs text-ink-secondary">{bucket.label}</p>
       <p className={`font-mono text-sm mt-0.5 ${color}`}>
         {sign}

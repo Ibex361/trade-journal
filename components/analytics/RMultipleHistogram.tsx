@@ -19,7 +19,7 @@ function CustomTooltip({
   const b = payload[0].payload;
   if (b.count === 0) {
     return (
-      <div className="bg-surface-2 backdrop-blur-md border border-surface-border rounded-md px-3 py-2 shadow-lg">
+      <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass">
         <p className="text-xs text-ink-secondary">{b.label}</p>
         <p className="text-xs text-ink-muted mt-0.5">No trades</p>
       </div>
@@ -28,7 +28,7 @@ function CustomTooltip({
   const color = b.totalPnl >= 0 ? "text-gain" : "text-loss";
   const sign = b.totalPnl > 0 ? "+" : "";
   return (
-    <div className="bg-surface-2 backdrop-blur-md border border-surface-border rounded-md px-3 py-2 shadow-lg">
+    <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass">
       <p className="text-xs text-ink-secondary">{b.label}</p>
       <p className="font-mono text-sm mt-0.5 text-ink-primary">
         {b.count} trade{b.count === 1 ? "" : "s"}
