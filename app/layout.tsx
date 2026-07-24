@@ -4,6 +4,7 @@ import "./globals.css";
 import AppHeader from "@/components/AppHeader";
 import { AccountProvider } from "@/lib/AccountContext";
 import { WinRateModeProvider } from "@/lib/WinRateModeContext";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -48,6 +49,7 @@ export default function RootLayout({
           </main>
           </WinRateModeProvider>
         </AccountProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
