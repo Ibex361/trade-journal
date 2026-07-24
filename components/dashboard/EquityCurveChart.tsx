@@ -10,6 +10,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { EquityPoint } from "@/lib/metrics";
+import Card from "@/components/shared/Card";
 
 function formatDateLabel(d: string) {
   if (d === "start") return "";
@@ -38,7 +39,7 @@ function CustomTooltip({ active, payload, currency }: CustomTooltipProps) {
         });
 
   return (
-    <div className="bg-surface-2 border border-surface-border rounded-md px-3 py-2 shadow-lg">
+    <div className="bg-surface-2 backdrop-blur-md border border-surface-border rounded-md px-3 py-2 shadow-lg">
       <p className="text-xs text-ink-secondary">{label}</p>
       <p className="font-mono text-sm text-ink-primary mt-0.5">
         {point.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currency}
@@ -58,20 +59,19 @@ export default function EquityCurveChart({
   const last = points[points.length - 1]?.balance ?? 0;
   const change = last - first;
   const positive = change >= 0;
-  const color = positive ? "#2BB673" : "#E5484D";
 
   return (
-    <div className="bg-surface-1 border border-surface-border rounded-card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-base font-medium">Equity curve</h2>
-        {points.length > 1 && (
+    <Card
+      title="Equity curve"
+      action={
+        points.length > 1 && (
           <span className={`font-mono text-sm ${positive ? "text-gain" : "text-loss"}`}>
             {positive ? "+" : ""}
             {change.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currency}
           </span>
-        )}
-      </div>
-
+        )
+      }
+    >
       {points.length <= 1 ? (
         <div className="h-64 flex items-center justify-center">
           <p className="text-ink-muted text-sm">Log a trade to start the equity curve.</p>
@@ -81,22 +81,29 @@ export default function EquityCurveChart({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={points} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
               <defs>
+                {/* Signature two-tone stroke, always teal-to-violet regardless of
+                    whether the account is up or down over the period — the glow
+                    itself is the brand, the +/- badge above carries the sentiment. */}
+                <linearGradient id="equityStroke" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#7C6FF0" />
+                  <stop offset="100%" stopColor="#5CE6C8" />
+                </linearGradient>
                 <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                  <stop offset="0%" stopColor="#5CE6C8" stopOpacity={0.38} />
+                  <stop offset="100%" stopColor="#5CE6C8" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#272C34" vertical={false} />
+              <CartesianGrid stroke="rgba(255,255,255,0.09)" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#5C636F", fontSize: 11 }}
-                axisLine={{ stroke: "#272C34" }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
                 tickFormatter={formatDateLabel}
                 minTickGap={40}
               />
               <YAxis
-                tick={{ fill: "#5C636F", fontSize: 11 }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={60}
@@ -106,14 +113,14 @@ export default function EquityCurveChart({
               <Area
                 type="monotone"
                 dataKey="balance"
-                stroke={color}
-                strokeWidth={2}
+                stroke="url(#equityStroke)"
+                strokeWidth={2.2}
                 fill="url(#equityFill)"
               />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

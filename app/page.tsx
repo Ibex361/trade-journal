@@ -18,6 +18,7 @@ import DashboardStats from "@/components/dashboard/DashboardStats";
 import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
 import RecentTradesFeed from "@/components/dashboard/RecentTradesFeed";
 import TargetProgress from "@/components/dashboard/TargetProgress";
+import Card from "@/components/shared/Card";
 
 export default function DashboardPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -71,13 +72,13 @@ export default function DashboardPage() {
       </div>
 
       {accountLoading || loading ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+        <Card padding="none" className="p-10 text-center">
           <p className="text-ink-muted text-sm">Loading dashboard…</p>
-        </div>
+        </Card>
       ) : !selectedAccount ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+        <Card padding="none" className="p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>
-        </div>
+        </Card>
       ) : (
         <>
           <DashboardStats

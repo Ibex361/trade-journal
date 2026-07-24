@@ -27,6 +27,7 @@ import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
 import RMultipleHistogram from "@/components/analytics/RMultipleHistogram";
 import RulesFollowedComparison from "@/components/analytics/RulesFollowedComparison";
 import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
+import Card from "@/components/shared/Card";
 
 const EMOTION_DIMENSIONS: { value: BreakdownDimension; label: string }[] = [{ value: "emotion", label: "Emotion" }];
 
@@ -146,13 +147,13 @@ export default function AnalyticsPage() {
       </div>
 
       {accountLoading || loading ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+        <Card padding="none" className="p-10 text-center">
           <p className="text-ink-muted text-sm">Loading analytics…</p>
-        </div>
+        </Card>
       ) : !selectedAccount ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+        <Card padding="none" className="p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>
-        </div>
+        </Card>
       ) : (
         <>
           <AnalyticsStats

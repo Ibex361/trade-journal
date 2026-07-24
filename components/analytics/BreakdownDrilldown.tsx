@@ -1,6 +1,7 @@
 "use client";
 
 import { Trade } from "@/lib/trades";
+import Card from "@/components/shared/Card";
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -33,7 +34,7 @@ export default function BreakdownDrilldown({
   onClose: () => void;
 }) {
   return (
-    <div className="bg-surface-1 border border-surface-border rounded-card p-5">
+    <Card>
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-display text-sm font-medium">
           {groupLabel} <span className="text-ink-muted font-body font-normal">· {trades.length} trade{trades.length === 1 ? "" : "s"}</span>
@@ -105,6 +106,6 @@ export default function BreakdownDrilldown({
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

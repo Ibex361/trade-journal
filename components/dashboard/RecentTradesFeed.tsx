@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Trade } from "@/lib/trades";
+import Card from "@/components/shared/Card";
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -26,14 +27,14 @@ export default function RecentTradesFeed({ trades }: { trades: Trade[] }) {
   const recent = trades.slice(0, 6);
 
   return (
-    <div className="bg-surface-1 border border-surface-border rounded-card p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-display text-base font-medium">Recent trades</h2>
-        <Link href="/trades" className="text-xs text-brass hover:underline">
+    <Card
+      title="Recent trades"
+      action={
+        <Link href="/trades" className="text-xs text-glow hover:underline">
           View all
         </Link>
-      </div>
-
+      }
+    >
       {recent.length === 0 ? (
         <p className="text-ink-muted text-sm">No trades logged yet.</p>
       ) : (
@@ -54,6 +55,6 @@ export default function RecentTradesFeed({ trades }: { trades: Trade[] }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

@@ -18,14 +18,14 @@ export default function DateRangeSelector({
   onChange: (range: DateRange) => void;
 }) {
   return (
-    <div className="inline-flex items-center bg-surface-2 border border-surface-border rounded-full p-1">
+    <div className="inline-flex items-center bg-surface-2 backdrop-blur-md border border-surface-border rounded-full p-1">
       {OPTIONS.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`px-3 py-1 text-xs font-mono rounded-full transition-colors ${
+          className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
             value === opt.value
-              ? "bg-brass text-surface-0 font-medium"
+              ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-glow"
               : "text-ink-secondary hover:text-ink-primary"
           }`}
         >
