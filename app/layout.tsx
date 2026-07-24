@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import AppHeader from "@/components/AppHeader";
+import MobileTabBar from "@/components/MobileTabBar";
 import { AccountProvider } from "@/lib/AccountContext";
 import { WinRateModeProvider } from "@/lib/WinRateModeContext";
 
@@ -32,6 +33,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#090a11",
+  // Lets env(safe-area-inset-*) resolve on notched/home-indicator devices —
+  // needed for MobileTabBar's bottom padding.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -45,9 +49,10 @@ export default function RootLayout({
         <AccountProvider>
           <WinRateModeProvider>
           <AppHeader />
-          <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 print:max-w-none print:px-0 print:py-0">
+          <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-24 md:pb-8 print:max-w-none print:px-0 print:py-0">
             {children}
           </main>
+          <MobileTabBar />
           </WinRateModeProvider>
         </AccountProvider>
       </body>

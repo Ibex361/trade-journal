@@ -10,7 +10,7 @@ export default function AppHeader() {
   if (pathname === "/login") return null;
 
   return (
-    <header className="print:hidden border-b border-surface-border bg-surface-1/70 backdrop-blur-lg sticky top-0 z-10">
+    <header className="print:hidden border-b border-surface-border bg-surface-0/75 backdrop-blur-xl sticky top-0 z-10">
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 md:py-4 flex items-center justify-between gap-3 md:gap-6">
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           <span className="brand-orb w-5 h-5 rounded-full shrink-0" />

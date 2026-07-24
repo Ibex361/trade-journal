@@ -13,9 +13,9 @@ import {
   getBalanceBeforeTrade,
   pickWinRate,
 } from "@/lib/metrics";
-import { useWinRateMode } from "@/lib/WinRateModeContext";
-import DashboardStats from "@/components/dashboard/DashboardStats";
-import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
+import { useWinRateMode, WIN_RATE_MODE_LABELS } from "@/lib/WinRateModeContext";
+import DashboardHero from "@/components/dashboard/DashboardHero";
+import StatChipRow from "@/components/dashboard/StatChipRow";
 import RecentTradesFeed from "@/components/dashboard/RecentTradesFeed";
 import TargetProgress from "@/components/dashboard/TargetProgress";
 import Card from "@/components/shared/Card";
@@ -62,6 +62,8 @@ export default function DashboardPage() {
     [monthTrades, balanceBeforeByTradeId]
   );
 
+  const winRate = pickWinRate(summary, winRateMode);
+
   return (
     <div className="space-y-6">
       <div>
@@ -81,13 +83,19 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <>
-          <DashboardStats
-            summary={summary}
-            currency={selectedAccount.currency}
+          <DashboardHero
             accountBalance={accountBalance}
+            totalPnl={summary.totalPnl}
+            currency={selectedAccount.currency}
+            points={equityCurve}
             streak={streak}
           />
-          <EquityCurveChart points={equityCurve} currency={selectedAccount.currency} />
+          <StatChipRow
+            winRate={winRate}
+            winRateHint={WIN_RATE_MODE_LABELS[winRateMode]}
+            avgR={summary.avgR}
+            tradesCount={summary.count}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <TargetProgress
