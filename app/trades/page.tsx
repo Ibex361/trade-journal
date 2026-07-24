@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
@@ -66,20 +66,25 @@ export default function TradesPage() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
+  // Typing in the filter bar updates `filters` (and the input) immediately;
+  // the deferred copy is what actually drives the filter/sort/row-render
+  // work below, so a fast typist doesn't block on re-filtering the full
+  // trades list after every keystroke.
+  const deferredFilters = useDeferredValue(filters);
   const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  function exitSelectionMode() {
+  const exitSelectionMode = useCallback(() => {
     setSelectionMode(false);
     setSelectedIds(new Set());
-  }
+  }, []);
 
-  function enterSelectionMode(id: string) {
+  const enterSelectionMode = useCallback((id: string) => {
     setSelectionMode(true);
     setSelectedIds(new Set([id]));
-  }
+  }, []);
 
   async function load() {
     if (!selectedAccount) return;
@@ -118,8 +123,8 @@ export default function TradesPage() {
   }, []);
 
   const visibleTrades = useMemo(
-    () => applySort(applyFilters(trades, filters), sort),
-    [trades, filters, sort]
+    () => applySort(applyFilters(trades, deferredFilters), sort),
+    [trades, deferredFilters, sort]
   );
 
   const summary = useMemo(() => summarizeTrades(visibleTrades), [visibleTrades]);
@@ -139,17 +144,17 @@ export default function TradesPage() {
     setPanelOpen(true);
   }
 
-  function openEdit(trade: Trade) {
+  const openEdit = useCallback((trade: Trade) => {
     setEditingTrade(trade);
     setDuplicateSource(null);
     setPanelOpen(true);
-  }
+  }, []);
 
-  function openDuplicate(trade: Trade) {
+  const openDuplicate = useCallback((trade: Trade) => {
     setEditingTrade(null);
     setDuplicateSource(trade);
     setPanelOpen(true);
-  }
+  }, []);
 
   function closePanel() {
     setPanelOpen(false);
@@ -162,7 +167,7 @@ export default function TradesPage() {
     await load();
   }
 
-  async function handleDelete(id: string) {
+  const handleDelete = useCallback(async (id: string) => {
     const trade = trades.find((t) => t.id === id);
     setDeleteError(null);
     const { error } = await deleteTrade(id);
@@ -174,28 +179,29 @@ export default function TradesPage() {
       deleteScreenshotByUrl(trade.screenshot_url).catch(() => {});
     }
     await load();
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trades]);
 
-  function toggleSelect(id: string) {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
 
-  function toggleSelectAll() {
+  const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
       const allCurrentlySelected =
         visibleTrades.length > 0 && visibleTrades.every((t) => prev.has(t.id));
       return allCurrentlySelected ? new Set() : new Set(visibleTrades.map((t) => t.id));
     });
-  }
+  }, [visibleTrades]);
 
-  function selectRange(ids: string[]) {
+  const selectRange = useCallback((ids: string[]) => {
     setSelectedIds((prev) => new Set([...prev, ...ids]));
-  }
+  }, []);
 
   async function handleBulkDelete() {
     const ids = Array.from(selectedIds);

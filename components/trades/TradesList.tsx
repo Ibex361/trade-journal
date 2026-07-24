@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
 
 export type SortColumn = "entry_date" | "instrument" | "pnl" | "r_multiple";
@@ -153,6 +153,277 @@ function SortHeader({
   );
 }
 
+// Shared row-level props for the memoized Desktop/Mobile row components.
+// Every callback here is expected to have a STABLE identity from the parent
+// (via useCallback) — that's what lets React.memo actually skip re-rendering
+// rows untouched by whatever triggered the parent re-render (typing in the
+// filter bar, selecting a different row, opening the screenshot lightbox).
+type RowCallbacks = {
+  onEdit: (trade: Trade) => void;
+  onDuplicate: (trade: Trade) => void;
+  onDelete: (id: string) => void;
+  onOpenScreenshot: (url: string) => void;
+  onRowClick: (e: React.MouseEvent, id: string) => void;
+  onCheckboxClick: (e: React.MouseEvent<HTMLInputElement>, id: string, index: number) => void;
+  onPointerDown: (id: string, target: EventTarget) => void;
+  onPointerUp: () => void;
+  onPointerLeave: () => void;
+  onPointerCancel: () => void;
+  onContextMenuGuard: (e: React.MouseEvent) => void;
+};
+
+type RowProps = RowCallbacks & {
+  trade: Trade;
+  index: number;
+  selectionMode: boolean;
+  isSelected: boolean;
+  isBest: boolean;
+  isWorst: boolean;
+  maxAbsPnl: number;
+};
+
+const DesktopRow = memo(function DesktopRow({
+  trade: t,
+  index,
+  selectionMode,
+  isSelected,
+  isBest,
+  isWorst,
+  maxAbsPnl,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onOpenScreenshot,
+  onRowClick,
+  onCheckboxClick,
+  onPointerDown,
+  onPointerUp,
+  onPointerLeave,
+  onPointerCancel,
+  onContextMenuGuard,
+}: RowProps) {
+  return (
+    <tr
+      onPointerDown={(e) => onPointerDown(t.id, e.target)}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      onPointerCancel={onPointerCancel}
+      onContextMenu={onContextMenuGuard}
+      onClick={(e) => onRowClick(e, t.id)}
+      className={`border-b border-surface-border last:border-0 transition-colors select-none ${
+        isSelected ? "bg-brass/10 hover:bg-brass/15" : "hover:bg-surface-2/50"
+      } ${selectionMode ? "cursor-pointer" : ""} ${
+        isBest ? "border-l-2 border-l-gain" : isWorst ? "border-l-2 border-l-loss" : ""
+      }`}
+      style={{ touchAction: "manipulation" }}
+    >
+      {selectionMode && (
+        <td className="px-4 py-3">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => {}}
+            onClick={(e) => onCheckboxClick(e, t.id, index)}
+            aria-label={`Select trade ${t.instrument}`}
+            className="accent-brass"
+          />
+        </td>
+      )}
+      <td className="px-4 py-3 font-mono text-ink-secondary whitespace-nowrap">
+        {formatDate(t.entry_date)}
+      </td>
+      <td className="px-4 py-3 font-medium">
+        <span className="flex items-center gap-2">
+          {t.instrument}
+          {isBest && (
+            <span className="text-[10px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
+              Best
+            </span>
+          )}
+          {isWorst && (
+            <span className="text-[10px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
+              Worst
+            </span>
+          )}
+        </span>
+      </td>
+      <td className="px-4 py-3 capitalize text-ink-secondary">{t.direction ?? "—"}</td>
+      <td className="px-4 py-3 text-ink-secondary">{t.asset_class ?? "—"}</td>
+      <td className="px-4 py-3 text-ink-secondary">{t.strategy ?? "—"}</td>
+      <td className="px-4 py-3 text-ink-secondary">{t.session ?? "—"}</td>
+      <td className="px-4 py-3 text-right">
+        <div className="inline-flex flex-col items-end gap-1">
+          <PnlText value={t.pnl} />
+          <div className="w-14 h-1 rounded-full bg-surface-2 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${
+                t.pnl > 0 ? "bg-gain" : t.pnl < 0 ? "bg-loss" : "bg-ink-muted"
+              }`}
+              style={{
+                width: `${maxAbsPnl > 0 ? Math.max(4, (Math.abs(t.pnl) / maxAbsPnl) * 100) : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-right font-mono text-ink-secondary">
+        {t.r_multiple !== null ? t.r_multiple.toFixed(1) : "—"}
+      </td>
+      <td className="px-4 py-3">
+        <RulesBadge value={t.rules_followed} />
+      </td>
+      <td className="px-4 py-3">
+        <ScreenshotThumb
+          url={t.screenshot_url}
+          onOpen={() => t.screenshot_url && onOpenScreenshot(t.screenshot_url)}
+        />
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-3">
+          <button onClick={() => onEdit(t)} className="text-xs text-ink-secondary hover:text-brass">
+            Edit
+          </button>
+          <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-brass">
+            Duplicate
+          </button>
+          <DeleteButton onConfirm={() => onDelete(t.id)} />
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+const MobileCard = memo(function MobileCard({
+  trade: t,
+  index,
+  selectionMode,
+  isSelected,
+  isBest,
+  isWorst,
+  maxAbsPnl,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onOpenScreenshot,
+  onRowClick,
+  onCheckboxClick,
+  onPointerDown,
+  onPointerUp,
+  onPointerLeave,
+  onPointerCancel,
+  onContextMenuGuard,
+}: RowProps) {
+  return (
+    <div
+      onPointerDown={(e) => onPointerDown(t.id, e.target)}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      onPointerCancel={onPointerCancel}
+      onContextMenu={onContextMenuGuard}
+      onClick={(e) => onRowClick(e, t.id)}
+      className={`border rounded-card p-4 transition-colors select-none ${
+        isSelected
+          ? "bg-brass/10 border-brass/40"
+          : isBest
+          ? "bg-surface-1 border-gain/40"
+          : isWorst
+          ? "bg-surface-1 border-loss/40"
+          : "bg-surface-1 border-surface-border"
+      }`}
+      style={{ touchAction: "manipulation" }}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          {selectionMode && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => {}}
+              onClick={(e) => onCheckboxClick(e, t.id, index)}
+              aria-label={`Select trade ${t.instrument}`}
+              className="accent-brass mt-1"
+            />
+          )}
+          <span
+            className="w-1 h-8 rounded-full shrink-0"
+            style={{ background: t.pnl > 0 ? "var(--glow)" : t.pnl < 0 ? "var(--loss)" : "var(--ink-3)" }}
+          />
+          <div>
+            <p className="font-medium flex items-center gap-2">
+              {t.instrument}
+              {isBest && (
+                <span className="text-[10px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
+                  Best
+                </span>
+              )}
+              {isWorst && (
+                <span className="text-[10px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
+                  Worst
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-ink-secondary font-mono">
+              {formatDate(t.entry_date)} · <span className="capitalize">{t.direction ?? "—"}</span>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <ScreenshotThumb
+            url={t.screenshot_url}
+            onOpen={() => t.screenshot_url && onOpenScreenshot(t.screenshot_url)}
+          />
+          <div className="flex flex-col items-end gap-1">
+            <PnlText value={t.pnl} className="text-base" />
+            <div className="w-12 h-1 rounded-full bg-surface-2 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${
+                  t.pnl > 0 ? "bg-gain" : t.pnl < 0 ? "bg-loss" : "bg-ink-muted"
+                }`}
+                style={{
+                  width: `${maxAbsPnl > 0 ? Math.max(4, (Math.abs(t.pnl) / maxAbsPnl) * 100) : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-ink-secondary">
+        {t.asset_class && <span>{t.asset_class}</span>}
+        {t.strategy && <span>{t.strategy}</span>}
+        {t.session && <span>{t.session}</span>}
+        {t.r_multiple !== null && <span className="font-mono">{t.r_multiple.toFixed(1)}R</span>}
+        <span className="flex items-center gap-1">
+          Rules: <RulesBadge value={t.rules_followed} />
+        </span>
+      </div>
+
+      {t.tags && t.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {t.tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-[11px] text-brass bg-brass/10 border border-brass/25 rounded-full px-2 py-0.5"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-surface-border">
+        <button onClick={() => onEdit(t)} className="text-xs text-ink-secondary hover:text-brass">
+          Edit
+        </button>
+        <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-brass">
+          Duplicate
+        </button>
+        <DeleteButton onConfirm={() => onDelete(t.id)} />
+      </div>
+    </div>
+  );
+});
+
 export default function TradesList({
   trades,
   onEdit,
@@ -200,6 +471,8 @@ export default function TradesList({
       worstTrade = null;
     }
   }
+  const bestId = bestTrade?.id ?? null;
+  const worstId = worstTrade?.id ?? null;
 
   // Long-press (or mouse-hold) support so selection mode can be entered by
   // pressing a trade directly, the way most mobile apps handle multi-select,
@@ -207,50 +480,79 @@ export default function TradesList({
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
 
-  function clearPressTimer() {
+  const clearPressTimer = useCallback(() => {
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
-  }
+  }, []);
 
-  function startPress(id: string, target: EventTarget) {
-    if ((target as HTMLElement).closest("button, a, input")) return;
-    longPressFired.current = false;
-    clearPressTimer();
-    pressTimer.current = setTimeout(() => {
-      longPressFired.current = true;
-      onEnterSelectionMode(id);
-    }, LONG_PRESS_MS);
-  }
+  const startPress = useCallback(
+    (id: string, target: EventTarget) => {
+      if ((target as HTMLElement).closest("button, a, input")) return;
+      longPressFired.current = false;
+      clearPressTimer();
+      pressTimer.current = setTimeout(() => {
+        longPressFired.current = true;
+        onEnterSelectionMode(id);
+      }, LONG_PRESS_MS);
+    },
+    [clearPressTimer, onEnterSelectionMode]
+  );
+
+  const onContextMenuGuard = useCallback((e: React.MouseEvent) => {
+    if (longPressFired.current) e.preventDefault();
+  }, []);
 
   // In selection mode, tapping anywhere on the row (outside its buttons)
   // toggles that row, not just the checkbox — matching how mail/file apps
   // behave once you're already in a multi-select state.
-  function handleRowClick(e: React.MouseEvent, id: string) {
-    if (longPressFired.current) {
-      longPressFired.current = false;
-      return;
-    }
-    if (!selectionMode) return;
-    if ((e.target as HTMLElement).closest("button, a")) return;
-    onToggleSelect(id);
-  }
+  const handleRowClick = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      if (longPressFired.current) {
+        longPressFired.current = false;
+        return;
+      }
+      if (!selectionMode) return;
+      if ((e.target as HTMLElement).closest("button, a")) return;
+      onToggleSelect(id);
+    },
+    [selectionMode, onToggleSelect]
+  );
 
   // Shift-click extends the selection to every row between the last checkbox
   // clicked and this one (inclusive) — the standard file-manager convention,
   // so selecting a long run of trades doesn't mean clicking each one.
-  function handleCheckboxClick(e: React.MouseEvent<HTMLInputElement>, id: string, index: number) {
-    e.stopPropagation();
-    if (e.shiftKey && lastClickedIndex !== null) {
-      e.preventDefault();
-      const [start, end] = index < lastClickedIndex ? [index, lastClickedIndex] : [lastClickedIndex, index];
-      onSelectRange(trades.slice(start, end + 1).map((t) => t.id));
-    } else {
-      onToggleSelect(id);
-    }
-    setLastClickedIndex(index);
-  }
+  const handleCheckboxClick = useCallback(
+    (e: React.MouseEvent<HTMLInputElement>, id: string, index: number) => {
+      e.stopPropagation();
+      if (e.shiftKey && lastClickedIndex !== null) {
+        e.preventDefault();
+        const [start, end] = index < lastClickedIndex ? [index, lastClickedIndex] : [lastClickedIndex, index];
+        onSelectRange(trades.slice(start, end + 1).map((t) => t.id));
+      } else {
+        onToggleSelect(id);
+      }
+      setLastClickedIndex(index);
+    },
+    [lastClickedIndex, trades, onSelectRange, onToggleSelect]
+  );
+
+  const openScreenshot = useCallback((url: string) => setLightboxUrl(url), []);
+
+  const rowCallbacks: RowCallbacks = {
+    onEdit,
+    onDuplicate,
+    onDelete,
+    onOpenScreenshot: openScreenshot,
+    onRowClick: handleRowClick,
+    onCheckboxClick: handleCheckboxClick,
+    onPointerDown: startPress,
+    onPointerUp: clearPressTimer,
+    onPointerLeave: clearPressTimer,
+    onPointerCancel: clearPressTimer,
+    onContextMenuGuard,
+  };
 
   if (trades.length === 0) {
     return (
@@ -301,105 +603,17 @@ export default function TradesList({
           </thead>
           <tbody>
             {trades.map((t, index) => (
-              <tr
+              <DesktopRow
                 key={t.id}
-                onPointerDown={(e) => startPress(t.id, e.target)}
-                onPointerUp={clearPressTimer}
-                onPointerLeave={clearPressTimer}
-                onPointerCancel={clearPressTimer}
-                onContextMenu={(e) => {
-                  if (longPressFired.current) e.preventDefault();
-                }}
-                onClick={(e) => handleRowClick(e, t.id)}
-                className={`border-b border-surface-border last:border-0 transition-colors select-none ${
-                  selectedIds.has(t.id) ? "bg-brass/10 hover:bg-brass/15" : "hover:bg-surface-2/50"
-                } ${selectionMode ? "cursor-pointer" : ""} ${
-                  bestTrade?.id === t.id
-                    ? "border-l-2 border-l-gain"
-                    : worstTrade?.id === t.id
-                    ? "border-l-2 border-l-loss"
-                    : ""
-                }`}
-                style={{ touchAction: "manipulation" }}
-              >
-                {selectionMode && (
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(t.id)}
-                      onChange={() => {}}
-                      onClick={(e) => handleCheckboxClick(e, t.id, index)}
-                      aria-label={`Select trade ${t.instrument}`}
-                      className="accent-brass"
-                    />
-                  </td>
-                )}
-                <td className="px-4 py-3 font-mono text-ink-secondary whitespace-nowrap">
-                  {formatDate(t.entry_date)}
-                </td>
-                <td className="px-4 py-3 font-medium">
-                  <span className="flex items-center gap-2">
-                    {t.instrument}
-                    {bestTrade?.id === t.id && (
-                      <span className="text-[10px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
-                        Best
-                      </span>
-                    )}
-                    {worstTrade?.id === t.id && (
-                      <span className="text-[10px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
-                        Worst
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td className="px-4 py-3 capitalize text-ink-secondary">
-                  {t.direction ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-ink-secondary">{t.asset_class ?? "—"}</td>
-                <td className="px-4 py-3 text-ink-secondary">{t.strategy ?? "—"}</td>
-                <td className="px-4 py-3 text-ink-secondary">{t.session ?? "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="inline-flex flex-col items-end gap-1">
-                    <PnlText value={t.pnl} />
-                    <div className="w-14 h-1 rounded-full bg-surface-2 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${
-                          t.pnl > 0 ? "bg-gain" : t.pnl < 0 ? "bg-loss" : "bg-ink-muted"
-                        }`}
-                        style={{
-                          width: `${maxAbsPnl > 0 ? Math.max(4, (Math.abs(t.pnl) / maxAbsPnl) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-right font-mono text-ink-secondary">
-                  {t.r_multiple !== null ? t.r_multiple.toFixed(1) : "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <RulesBadge value={t.rules_followed} />
-                </td>
-                <td className="px-4 py-3">
-                  <ScreenshotThumb url={t.screenshot_url} onOpen={() => setLightboxUrl(t.screenshot_url)} />
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      onClick={() => onEdit(t)}
-                      className="text-xs text-ink-secondary hover:text-brass"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => onDuplicate(t)}
-                      className="text-xs text-ink-secondary hover:text-brass"
-                    >
-                      Duplicate
-                    </button>
-                    <DeleteButton onConfirm={() => onDelete(t.id)} />
-                  </div>
-                </td>
-              </tr>
+                trade={t}
+                index={index}
+                selectionMode={selectionMode}
+                isSelected={selectedIds.has(t.id)}
+                isBest={bestId === t.id}
+                isWorst={worstId === t.id}
+                maxAbsPnl={maxAbsPnl}
+                {...rowCallbacks}
+              />
             ))}
           </tbody>
         </table>
@@ -448,119 +662,17 @@ export default function TradesList({
           </div>
         )}
         {trades.map((t, index) => (
-          <div
+          <MobileCard
             key={t.id}
-            onPointerDown={(e) => startPress(t.id, e.target)}
-            onPointerUp={clearPressTimer}
-            onPointerLeave={clearPressTimer}
-            onPointerCancel={clearPressTimer}
-            onContextMenu={(e) => {
-              if (longPressFired.current) e.preventDefault();
-            }}
-            onClick={(e) => handleRowClick(e, t.id)}
-            className={`border rounded-card p-4 transition-colors select-none ${
-              selectedIds.has(t.id)
-                ? "bg-brass/10 border-brass/40"
-                : bestTrade?.id === t.id
-                ? "bg-surface-1 border-gain/40"
-                : worstTrade?.id === t.id
-                ? "bg-surface-1 border-loss/40"
-                : "bg-surface-1 border-surface-border"
-            }`}
-            style={{ touchAction: "manipulation" }}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                {selectionMode && (
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(t.id)}
-                    onChange={() => {}}
-                    onClick={(e) => handleCheckboxClick(e, t.id, index)}
-                    aria-label={`Select trade ${t.instrument}`}
-                    className="accent-brass mt-1"
-                  />
-                )}
-                <span
-                  className="w-1 h-8 rounded-full shrink-0"
-                  style={{ background: t.pnl > 0 ? "var(--glow)" : t.pnl < 0 ? "var(--loss)" : "var(--ink-3)" }}
-                />
-                <div>
-                  <p className="font-medium flex items-center gap-2">
-                    {t.instrument}
-                    {bestTrade?.id === t.id && (
-                      <span className="text-[10px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
-                        Best
-                      </span>
-                    )}
-                    {worstTrade?.id === t.id && (
-                      <span className="text-[10px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
-                        Worst
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-ink-secondary font-mono">
-                    {formatDate(t.entry_date)} · <span className="capitalize">{t.direction ?? "—"}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <ScreenshotThumb url={t.screenshot_url} onOpen={() => setLightboxUrl(t.screenshot_url)} />
-                <div className="flex flex-col items-end gap-1">
-                  <PnlText value={t.pnl} className="text-base" />
-                  <div className="w-12 h-1 rounded-full bg-surface-2 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        t.pnl > 0 ? "bg-gain" : t.pnl < 0 ? "bg-loss" : "bg-ink-muted"
-                      }`}
-                      style={{
-                        width: `${maxAbsPnl > 0 ? Math.max(4, (Math.abs(t.pnl) / maxAbsPnl) * 100) : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-ink-secondary">
-              {t.asset_class && <span>{t.asset_class}</span>}
-              {t.strategy && <span>{t.strategy}</span>}
-              {t.session && <span>{t.session}</span>}
-              {t.r_multiple !== null && <span className="font-mono">{t.r_multiple.toFixed(1)}R</span>}
-              <span className="flex items-center gap-1">
-                Rules: <RulesBadge value={t.rules_followed} />
-              </span>
-            </div>
-
-            {t.tags && t.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {t.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-[11px] text-brass bg-brass/10 border border-brass/25 rounded-full px-2 py-0.5"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-surface-border">
-              <button
-                onClick={() => onEdit(t)}
-                className="text-xs text-ink-secondary hover:text-brass"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => onDuplicate(t)}
-                className="text-xs text-ink-secondary hover:text-brass"
-              >
-                Duplicate
-              </button>
-              <DeleteButton onConfirm={() => onDelete(t.id)} />
-            </div>
-          </div>
+            trade={t}
+            index={index}
+            selectionMode={selectionMode}
+            isSelected={selectedIds.has(t.id)}
+            isBest={bestId === t.id}
+            isWorst={worstId === t.id}
+            maxAbsPnl={maxAbsPnl}
+            {...rowCallbacks}
+          />
         ))}
       </div>
 
