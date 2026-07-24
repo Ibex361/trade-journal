@@ -61,10 +61,16 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
 
 function RulesBadge({ value }: { value: boolean | null }) {
   if (value === null) return <span className="text-ink-muted text-xs">—</span>;
-  return value ? (
-    <span className="text-gain text-xs">Yes</span>
-  ) : (
-    <span className="text-loss text-xs">No</span>
+  return (
+    <span
+      className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold leading-none ${
+        value ? "bg-gain/15 text-gain" : "bg-loss/15 text-loss"
+      }`}
+      title={value ? "Rules followed" : "Rules not followed"}
+      aria-label={value ? "Rules followed" : "Rules not followed"}
+    >
+      {value ? "✓" : "✕"}
+    </span>
   );
 }
 
@@ -178,6 +184,23 @@ export default function TradesList({
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const allSelected = trades.length > 0 && trades.every((t) => selectedIds.has(t.id));
 
+  // Content-aware: scale each row's P&L bar to the largest mover currently
+  // in view, and flag the single best/worst visible trade — mirrors the
+  // same treatment on Dashboard's Recent trades feed and Trades'
+  // performance ribbon, so the eye lands on what actually matters instead
+  // of every row reading with equal weight.
+  const maxAbsPnl = trades.reduce((max, t) => Math.max(max, Math.abs(t.pnl)), 0);
+  let bestTrade: Trade | null = null;
+  let worstTrade: Trade | null = null;
+  if (trades.length > 1) {
+    bestTrade = trades.reduce((b, t) => (t.pnl > b.pnl ? t : b), trades[0]);
+    worstTrade = trades.reduce((w, t) => (t.pnl < w.pnl ? t : w), trades[0]);
+    if (bestTrade.id === worstTrade.id) {
+      bestTrade = null;
+      worstTrade = null;
+    }
+  }
+
   // Long-press (or mouse-hold) support so selection mode can be entered by
   // pressing a trade directly, the way most mobile apps handle multi-select,
   // rather than checkboxes sitting on screen permanently.
@@ -290,7 +313,13 @@ export default function TradesList({
                 onClick={(e) => handleRowClick(e, t.id)}
                 className={`border-b border-surface-border last:border-0 transition-colors select-none ${
                   selectedIds.has(t.id) ? "bg-brass/10 hover:bg-brass/15" : "hover:bg-surface-2/50"
-                } ${selectionMode ? "cursor-pointer" : ""}`}
+                } ${selectionMode ? "cursor-pointer" : ""} ${
+                  bestTrade?.id === t.id
+                    ? "border-l-2 border-l-gain"
+                    : worstTrade?.id === t.id
+                    ? "border-l-2 border-l-loss"
+                    : ""
+                }`}
                 style={{ touchAction: "manipulation" }}
               >
                 {selectionMode && (
@@ -308,7 +337,21 @@ export default function TradesList({
                 <td className="px-4 py-3 font-mono text-ink-secondary whitespace-nowrap">
                   {formatDate(t.entry_date)}
                 </td>
-                <td className="px-4 py-3 font-medium">{t.instrument}</td>
+                <td className="px-4 py-3 font-medium">
+                  <span className="flex items-center gap-2">
+                    {t.instrument}
+                    {bestTrade?.id === t.id && (
+                      <span className="text-[10px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
+                        Best
+                      </span>
+                    )}
+                    {worstTrade?.id === t.id && (
+                      <span className="text-[10px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
+                        Worst
+                      </span>
+                    )}
+                  </span>
+                </td>
                 <td className="px-4 py-3 capitalize text-ink-secondary">
                   {t.direction ?? "—"}
                 </td>
@@ -316,7 +359,19 @@ export default function TradesList({
                 <td className="px-4 py-3 text-ink-secondary">{t.strategy ?? "—"}</td>
                 <td className="px-4 py-3 text-ink-secondary">{t.session ?? "—"}</td>
                 <td className="px-4 py-3 text-right">
-                  <PnlText value={t.pnl} />
+                  <div className="inline-flex flex-col items-end gap-1">
+                    <PnlText value={t.pnl} />
+                    <div className="w-14 h-1 rounded-full bg-surface-2 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          t.pnl > 0 ? "bg-gain" : t.pnl < 0 ? "bg-loss" : "bg-ink-muted"
+                        }`}
+                        style={{
+                          width: `${maxAbsPnl > 0 ? Math.max(4, (Math.abs(t.pnl) / maxAbsPnl) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-ink-secondary">
                   {t.r_multiple !== null ? t.r_multiple.toFixed(1) : "—"}
@@ -406,6 +461,10 @@ export default function TradesList({
             className={`border rounded-card p-4 transition-colors select-none ${
               selectedIds.has(t.id)
                 ? "bg-brass/10 border-brass/40"
+                : bestTrade?.id === t.id
+                ? "bg-surface-1 border-gain/40"
+                : worstTrade?.id === t.id
+                ? "bg-surface-1 border-loss/40"
                 : "bg-surface-1 border-surface-border"
             }`}
             style={{ touchAction: "manipulation" }}
@@ -422,9 +481,24 @@ export default function TradesList({
                     className="accent-brass mt-1"
                   />
                 )}
-                <span className="signal-bar h-8" />
+                <span
+                  className="w-1 h-8 rounded-full shrink-0"
+                  style={{ background: t.pnl > 0 ? "var(--glow)" : t.pnl < 0 ? "var(--loss)" : "var(--ink-3)" }}
+                />
                 <div>
-                  <p className="font-medium">{t.instrument}</p>
+                  <p className="font-medium flex items-center gap-2">
+                    {t.instrument}
+                    {bestTrade?.id === t.id && (
+                      <span className="text-[10px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
+                        Best
+                      </span>
+                    )}
+                    {worstTrade?.id === t.id && (
+                      <span className="text-[10px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
+                        Worst
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-ink-secondary font-mono">
                     {formatDate(t.entry_date)} · <span className="capitalize">{t.direction ?? "—"}</span>
                   </p>
@@ -432,7 +506,19 @@ export default function TradesList({
               </div>
               <div className="flex items-center gap-2">
                 <ScreenshotThumb url={t.screenshot_url} onOpen={() => setLightboxUrl(t.screenshot_url)} />
-                <PnlText value={t.pnl} className="text-base" />
+                <div className="flex flex-col items-end gap-1">
+                  <PnlText value={t.pnl} className="text-base" />
+                  <div className="w-12 h-1 rounded-full bg-surface-2 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        t.pnl > 0 ? "bg-gain" : t.pnl < 0 ? "bg-loss" : "bg-ink-muted"
+                      }`}
+                      style={{
+                        width: `${maxAbsPnl > 0 ? Math.max(4, (Math.abs(t.pnl) / maxAbsPnl) * 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

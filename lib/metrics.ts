@@ -635,21 +635,29 @@ export function getBestWorstTrade(trades: Trade[]): BestWorstTrade {
 export type TagCount = {
   tag: string;
   count: number;
+  netPnl: number;
 };
 
 /**
  * Counts how often each tag appears across a set of trades, sorted by
  * frequency descending (ties broken alphabetically for a stable order).
- * Used for the Reports "tag frequency" view.
+ * Also sums each tag's net P&L, so the Reports "tag frequency" view can
+ * show which setups are actually working, not just which get logged most.
  */
 export function getTagFrequency(trades: Trade[]): TagCount[] {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { count: number; netPnl: number }>();
   for (const t of trades) {
     for (const tag of t.tags) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      const existing = counts.get(tag);
+      if (existing) {
+        existing.count += 1;
+        existing.netPnl += t.pnl;
+      } else {
+        counts.set(tag, { count: 1, netPnl: t.pnl });
+      }
     }
   }
   return Array.from(counts.entries())
-    .map(([tag, count]) => ({ tag, count }))
+    .map(([tag, { count, netPnl }]) => ({ tag, count, netPnl }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }

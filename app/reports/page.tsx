@@ -6,7 +6,7 @@ import { fetchTrades, Trade } from "@/lib/trades";
 import { getTradesInMonth, getDailyPnlForMonth, getBestWorstDay, getBestWorstTrade, getTagFrequency, summarizeTrades } from "@/lib/metrics";
 import MonthSelector from "@/components/reports/MonthSelector";
 import CalendarHeatmap from "@/components/reports/CalendarHeatmap";
-import ReportsSummaryStats from "@/components/reports/ReportsSummaryStats";
+import ReportsHero from "@/components/reports/ReportsHero";
 import MonthlyTradesTable from "@/components/reports/MonthlyTradesTable";
 import ReportsToolbar from "@/components/reports/ReportsToolbar";
 import TradeSpotlight from "@/components/reports/TradeSpotlight";
@@ -80,13 +80,15 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
-          <ReportsSummaryStats
-            summary={summary}
-            bestDay={best}
-            worstDay={worst}
+          <ReportsHero summary={summary} dailyPnls={dailyPnls} currency={selectedAccount.currency} />
+          <CalendarHeatmap
+            year={year}
+            month={month}
+            days={dailyPnls}
             currency={selectedAccount.currency}
+            bestDate={best?.date}
+            worstDate={worst?.date}
           />
-          <CalendarHeatmap year={year} month={month} days={dailyPnls} currency={selectedAccount.currency} />
           <TradeSpotlight best={bestTrade} worst={worstTrade} />
           <TagFrequency tags={tagFrequency} />
           <div>
