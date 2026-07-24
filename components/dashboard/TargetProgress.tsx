@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Drawdown } from "@/lib/metrics";
 import Card from "@/components/shared/Card";
+import Badge from "@/components/shared/Badge";
 
 function ProgressBar({ pct, colorClass }: { pct: number; colorClass: string }) {
   const clamped = Math.max(0, Math.min(100, pct));
@@ -22,15 +23,17 @@ function TargetRow({
   targetLabel,
   pct,
   colorClass,
+  flagged = false,
 }: {
   label: string;
   valueLabel: string;
   targetLabel: string;
   pct: number;
   colorClass: string;
+  flagged?: boolean;
 }) {
   return (
-    <div>
+    <div className={flagged ? "bg-loss/[0.06] border border-loss/20 rounded-md p-2.5 -mx-2.5" : ""}>
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs text-ink-secondary">{label}</span>
         <span className="text-xs font-mono">
@@ -69,13 +72,23 @@ export default function TargetProgress({
   const hasAnyTarget = targetMonthlyPnl != null || targetMonthlyWinrate != null || targetRiskPct != null;
   const inDrawdown = drawdown.currentAmount > 0;
 
+  // Content-aware flags: which row (if any) is the actual reason this
+  // panel deserves a second look, rather than treating every row as
+  // equally noteworthy regardless of whether it's fine or a real problem.
+  const riskBreached = targetRiskPct != null && avgRiskPct != null && avgRiskPct > targetRiskPct;
+  const drawdownDeep = drawdown.maxAmount > 0 && drawdown.currentAmount / drawdown.maxAmount > 0.6;
+  const needsAttention = riskBreached || drawdownDeep;
+
   return (
     <Card
       title="Targets & risk"
       action={
-        <Link href="/settings" className="text-xs text-glow hover:underline">
-          Edit targets
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          {needsAttention && <Badge tone="loss">Needs attention</Badge>}
+          <Link href="/settings" className="text-xs text-glow hover:underline whitespace-nowrap">
+            Edit targets
+          </Link>
+        </div>
       }
     >
       <div className="space-y-4">
@@ -111,7 +124,8 @@ export default function TargetProgress({
                 valueLabel={avgRiskPct != null ? `${avgRiskPct.toFixed(1)}%` : "—"}
                 targetLabel={`${targetRiskPct}% max`}
                 pct={avgRiskPct != null ? (avgRiskPct / targetRiskPct) * 100 : 0}
-                colorClass={avgRiskPct != null && avgRiskPct > targetRiskPct ? "bg-loss" : GLOW_GRADIENT}
+                colorClass={riskBreached ? "bg-loss" : GLOW_GRADIENT}
+                flagged={riskBreached}
               />
             )}
           </>
@@ -128,6 +142,7 @@ export default function TargetProgress({
             targetLabel={`max ${drawdown.maxAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency}`}
             pct={drawdown.maxAmount > 0 ? (drawdown.currentAmount / drawdown.maxAmount) * 100 : 0}
             colorClass="bg-loss"
+            flagged={drawdownDeep}
           />
         </div>
       </div>

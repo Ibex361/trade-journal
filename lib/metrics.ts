@@ -430,6 +430,7 @@ export const BREAKDOWN_DIMENSIONS: { value: BreakdownDimension; label: string }[
   { value: "strategy", label: "Strategy" },
   { value: "session", label: "Session" },
   { value: "direction", label: "Direction" },
+  { value: "emotion", label: "Emotion" },
 ];
 
 export type BreakdownGroup = {

@@ -64,6 +64,15 @@ export default function DashboardPage() {
 
   const winRate = pickWinRate(summary, winRateMode);
 
+  // Mirrors the flag TargetProgress uses internally to decide whether to
+  // badge itself — duplicated here (cheap booleans, not worth a callback)
+  // so the grid can give it more room when there's something to look at,
+  // instead of two fixed-width cards regardless of what's in them.
+  const riskBreached =
+    selectedAccount?.target_risk_pct != null && avgRiskPct != null && avgRiskPct > selectedAccount.target_risk_pct;
+  const drawdownDeep = drawdown.maxAmount > 0 && drawdown.currentAmount / drawdown.maxAmount > 0.6;
+  const targetsNeedAttention = riskBreached || drawdownDeep;
+
   return (
     <div className="space-y-6">
       <div>
@@ -97,18 +106,22 @@ export default function DashboardPage() {
             tradesCount={summary.count}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <TargetProgress
-              targetMonthlyPnl={selectedAccount.target_monthly_pnl}
-              targetMonthlyWinrate={selectedAccount.target_monthly_winrate}
-              targetRiskPct={selectedAccount.target_risk_pct}
-              monthlyPnl={monthSummary.totalPnl}
-              monthlyWinRate={pickWinRate(monthSummary, winRateMode)}
-              avgRiskPct={avgRiskPct}
-              currency={selectedAccount.currency}
-              drawdown={drawdown}
-            />
-            <RecentTradesFeed trades={trades} />
+          <div className={`grid grid-cols-1 gap-4 ${targetsNeedAttention ? "lg:grid-cols-5" : "lg:grid-cols-2"}`}>
+            <div className={targetsNeedAttention ? "lg:col-span-3" : ""}>
+              <TargetProgress
+                targetMonthlyPnl={selectedAccount.target_monthly_pnl}
+                targetMonthlyWinrate={selectedAccount.target_monthly_winrate}
+                targetRiskPct={selectedAccount.target_risk_pct}
+                monthlyPnl={monthSummary.totalPnl}
+                monthlyWinRate={pickWinRate(monthSummary, winRateMode)}
+                avgRiskPct={avgRiskPct}
+                currency={selectedAccount.currency}
+                drawdown={drawdown}
+              />
+            </div>
+            <div className={targetsNeedAttention ? "lg:col-span-2" : ""}>
+              <RecentTradesFeed trades={trades} />
+            </div>
           </div>
         </>
       )}

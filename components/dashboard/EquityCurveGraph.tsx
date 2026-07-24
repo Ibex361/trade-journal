@@ -49,11 +49,10 @@ function CustomTooltip({ active, payload, currency }: CustomTooltipProps) {
 
 /**
  * The bare chart, with no Card/title wrapper — just the gradient stroke,
- * axes, grid, and tooltip. Used directly by `EquityCurveChart` (the
- * Card-wrapped version on Analytics) and by `DashboardHero` (which needs
- * the chart sitting inside its own custom header instead of a second
- * title bar). Keeping this one implementation means the two pages can
- * never visually drift apart.
+ * axes, grid, and tooltip. Used directly by both hero panels (DashboardHero
+ * and AnalyticsHero), each of which folds it into its own custom header
+ * instead of giving it a second title bar. Keeping this one implementation
+ * means the two pages can never visually drift apart.
  */
 export default function EquityCurveGraph({
   points,
