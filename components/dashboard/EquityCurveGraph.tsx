@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, memo } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -25,7 +26,9 @@ type CustomTooltipProps = {
   currency: string;
 };
 
-function CustomTooltip({ active, payload, currency }: CustomTooltipProps) {
+// Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
+// fresh render when the active point hasn't actually changed.
+const CustomTooltip = memo(function CustomTooltip({ active, payload, currency }: CustomTooltipProps) {
   if (!active || !payload || !payload.length) return null;
   const point = payload[0].payload as EquityPoint;
   const label =
@@ -45,7 +48,7 @@ function CustomTooltip({ active, payload, currency }: CustomTooltipProps) {
       </p>
     </div>
   );
-}
+});
 
 /**
  * The bare chart, with no Card/title wrapper — just the gradient stroke,
@@ -63,6 +66,11 @@ export default function EquityCurveGraph({
   currency: string;
   height?: string;
 }) {
+  const renderTooltip = useCallback(
+    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    [currency]
+  );
+
   if (points.length <= 1) {
     return (
       <div className={`${height} flex items-center justify-center`}>
@@ -104,13 +112,14 @@ export default function EquityCurveGraph({
             width={60}
             tickFormatter={(v: number) => v.toLocaleString(undefined, { notation: "compact" })}
           />
-          <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+          <Tooltip content={renderTooltip} />
           <Area
             type="monotone"
             dataKey="balance"
             stroke="url(#equityStroke)"
             strokeWidth={2.2}
             fill="url(#equityFill)"
+            isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>

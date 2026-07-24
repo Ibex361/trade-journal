@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, memo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { BREAKDOWN_DIMENSIONS, BreakdownDimension, BreakdownGroup, pickWinRate } from "@/lib/metrics";
 import { useWinRateMode } from "@/lib/WinRateModeContext";
@@ -7,7 +8,9 @@ import Card from "@/components/shared/Card";
 
 type TooltipPayloadItem = { payload: BreakdownGroup };
 
-function CustomTooltip({
+// Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
+// fresh render (and a fresh context read) when the active bar hasn't changed.
+const CustomTooltip = memo(function CustomTooltip({
   active,
   payload,
   currency,
@@ -37,7 +40,7 @@ function CustomTooltip({
       <p className="text-[11px] text-glow mt-1">Click to view trades</p>
     </div>
   );
-}
+});
 
 export default function PerformanceBreakdown({
   groups,
@@ -60,6 +63,19 @@ export default function PerformanceBreakdown({
   title?: string;
   subtitle?: string;
 }) {
+  const renderTooltip = useCallback(
+    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    [currency]
+  );
+
+  const handleBarClick = useCallback(
+    (data: any) => {
+      const key = data?.payload?.key ?? data?.key;
+      if (key) onSelectGroup(selectedKey === key ? null : key);
+    },
+    [onSelectGroup, selectedKey]
+  );
+
   return (
     <Card
       title={title}
@@ -125,16 +141,14 @@ export default function PerformanceBreakdown({
               />
               <Tooltip
                 cursor={{ fill: "rgba(255,255,255,0.06)" }}
-                content={(props: any) => <CustomTooltip {...props} currency={currency} />}
+                content={renderTooltip}
               />
               <Bar
                 dataKey="totalPnl"
                 radius={[3, 3, 0, 0]}
                 style={{ cursor: "pointer" }}
-                onClick={(data: any) => {
-                  const key = data?.payload?.key ?? data?.key;
-                  if (key) onSelectGroup(selectedKey === key ? null : key);
-                }}
+                onClick={handleBarClick}
+                isAnimationActive={false}
               >
                 {groups.map((g) => (
                   <Cell

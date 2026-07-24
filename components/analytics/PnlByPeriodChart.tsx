@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, memo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { PeriodBucket, PeriodGranularity } from "@/lib/metrics";
 import Card from "@/components/shared/Card";
@@ -12,7 +13,9 @@ const GRANULARITIES: { value: PeriodGranularity; label: string }[] = [
 
 type TooltipPayloadItem = { payload: PeriodBucket };
 
-function CustomTooltip({
+// Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
+// fresh render when the active bucket hasn't actually changed.
+const CustomTooltip = memo(function CustomTooltip({
   active,
   payload,
   currency,
@@ -37,7 +40,7 @@ function CustomTooltip({
       </p>
     </div>
   );
-}
+});
 
 export default function PnlByPeriodChart({
   buckets,
@@ -50,6 +53,11 @@ export default function PnlByPeriodChart({
   granularity: PeriodGranularity;
   onGranularityChange: (g: PeriodGranularity) => void;
 }) {
+  const renderTooltip = useCallback(
+    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    [currency]
+  );
+
   return (
     <Card
       title="P&L by period"
@@ -106,9 +114,9 @@ export default function PnlByPeriodChart({
               />
               <Tooltip
                 cursor={{ fill: "rgba(255,255,255,0.06)" }}
-                content={(props: any) => <CustomTooltip {...props} currency={currency} />}
+                content={renderTooltip}
               />
-              <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
+              <Bar dataKey="pnl" radius={[3, 3, 0, 0]} isAnimationActive={false}>
                 {buckets.map((b, i) => (
                   <Cell key={i} fill={b.pnl >= 0 ? "url(#barUp)" : "url(#barDown)"} />
                 ))}

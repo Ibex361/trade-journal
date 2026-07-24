@@ -1,12 +1,15 @@
 "use client";
 
+import { useCallback, memo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { RMultipleBucket } from "@/lib/metrics";
 import Card from "@/components/shared/Card";
 
 type TooltipPayloadItem = { payload: RMultipleBucket };
 
-function CustomTooltip({
+// Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
+// fresh render when the active bucket hasn't actually changed.
+const CustomTooltip = memo(function CustomTooltip({
   active,
   payload,
   currency,
@@ -40,7 +43,7 @@ function CustomTooltip({
       <p className="text-[11px] text-glow mt-1">Click to view trades</p>
     </div>
   );
-}
+});
 
 export default function RMultipleHistogram({
   buckets,
@@ -54,6 +57,20 @@ export default function RMultipleHistogram({
   onSelectBucket: (key: string | null) => void;
 }) {
   const hasTrades = buckets.some((b) => b.count > 0);
+
+  const renderTooltip = useCallback(
+    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    [currency]
+  );
+
+  const handleBarClick = useCallback(
+    (data: any) => {
+      const key = data?.payload?.key ?? data?.key;
+      const count = data?.payload?.count ?? data?.count;
+      if (key && count > 0) onSelectBucket(selectedKey === key ? null : key);
+    },
+    [onSelectBucket, selectedKey]
+  );
 
   return (
     <Card
@@ -98,17 +115,14 @@ export default function RMultipleHistogram({
               />
               <Tooltip
                 cursor={{ fill: "rgba(255,255,255,0.06)" }}
-                content={(props: any) => <CustomTooltip {...props} currency={currency} />}
+                content={renderTooltip}
               />
               <Bar
                 dataKey="count"
                 radius={[3, 3, 0, 0]}
                 style={{ cursor: "pointer" }}
-                onClick={(data: any) => {
-                  const key = data?.payload?.key ?? data?.key;
-                  const count = data?.payload?.count ?? data?.count;
-                  if (key && count > 0) onSelectBucket(selectedKey === key ? null : key);
-                }}
+                onClick={handleBarClick}
+                isAnimationActive={false}
               >
                 {buckets.map((b) => (
                   <Cell
