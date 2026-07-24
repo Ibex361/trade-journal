@@ -10,7 +10,7 @@ import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
 import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
 import TradesFilterBar, { TradeFilters, EMPTY_FILTERS } from "@/components/trades/TradesFilterBar";
-import TradesSummaryStrip from "@/components/trades/TradesSummaryStrip";
+import TradesPerformanceRibbon from "@/components/trades/TradesPerformanceRibbon";
 import BulkActionsBar from "@/components/trades/BulkActionsBar";
 
 function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
@@ -314,7 +314,7 @@ export default function TradesPage() {
         </div>
       ) : (
         <>
-          <TradesSummaryStrip summary={summary} currency={selectedAccount.currency} />
+          <TradesPerformanceRibbon summary={summary} currency={selectedAccount.currency} trades={visibleTrades} />
           <TradesFilterBar
             filters={filters}
             onChange={setFilters}
