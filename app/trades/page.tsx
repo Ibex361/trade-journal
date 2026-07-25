@@ -321,12 +321,14 @@ export default function TradesPage() {
       ) : (
         <>
           <TradesPerformanceRibbon summary={summary} currency={selectedAccount.currency} trades={visibleTrades} />
-          <TradesFilterBar
-            filters={filters}
-            onChange={setFilters}
-            dropdowns={dropdowns}
-            availableTags={availableTags}
-          />
+          <div className="motion-safe:animate-fade-in [animation-delay:60ms]">
+            <TradesFilterBar
+              filters={filters}
+              onChange={setFilters}
+              dropdowns={dropdowns}
+              availableTags={availableTags}
+            />
+          </div>
           {deleteError && (
             <div className="rounded-md border border-loss/30 bg-loss/10 px-4 py-3 flex items-center justify-between gap-4">
               <p className="text-xs text-loss">{deleteError}</p>
@@ -338,20 +340,22 @@ export default function TradesPage() {
               </button>
             </div>
           )}
-          <TradesList
-            trades={visibleTrades}
-            onEdit={openEdit}
-            onDuplicate={openDuplicate}
-            onDelete={handleDelete}
-            sort={sort}
-            onSortChange={setSort}
-            selectionMode={selectionMode}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-            onToggleSelectAll={toggleSelectAll}
-            onSelectRange={selectRange}
-            onEnterSelectionMode={enterSelectionMode}
-          />
+          <div className="motion-safe:animate-fade-rise [animation-delay:120ms]">
+            <TradesList
+              trades={visibleTrades}
+              onEdit={openEdit}
+              onDuplicate={openDuplicate}
+              onDelete={handleDelete}
+              sort={sort}
+              onSortChange={setSort}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
+              onSelectRange={selectRange}
+              onEnterSelectionMode={enterSelectionMode}
+            />
+          </div>
         </>
       )}
 
