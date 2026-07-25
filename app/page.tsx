@@ -18,6 +18,7 @@ import DashboardHero from "@/components/dashboard/DashboardHero";
 import StatChipRow from "@/components/dashboard/StatChipRow";
 import RecentTradesFeed from "@/components/dashboard/RecentTradesFeed";
 import TargetProgress from "@/components/dashboard/TargetProgress";
+import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
 import Card from "@/components/shared/Card";
 
 export default function DashboardPage() {
@@ -83,9 +84,7 @@ export default function DashboardPage() {
       </div>
 
       {accountLoading || loading ? (
-        <Card padding="none" className="p-10 text-center">
-          <p className="text-ink-muted text-sm">Loading dashboard…</p>
-        </Card>
+        <DashboardSkeleton />
       ) : !selectedAccount ? (
         <Card padding="none" className="p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>

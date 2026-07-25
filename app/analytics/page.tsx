@@ -26,6 +26,7 @@ import PerformanceBreakdown from "@/components/analytics/PerformanceBreakdown";
 import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
 import RMultipleHistogram from "@/components/analytics/RMultipleHistogram";
 import RulesFollowedComparison from "@/components/analytics/RulesFollowedComparison";
+import AnalyticsSkeleton from "@/components/analytics/AnalyticsSkeleton";
 import Card from "@/components/shared/Card";
 
 export default function AnalyticsPage() {
@@ -132,9 +133,7 @@ export default function AnalyticsPage() {
       </div>
 
       {accountLoading || loading ? (
-        <Card padding="none" className="p-10 text-center">
-          <p className="text-ink-muted text-sm">Loading analytics…</p>
-        </Card>
+        <AnalyticsSkeleton />
       ) : !selectedAccount ? (
         <Card padding="none" className="p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>

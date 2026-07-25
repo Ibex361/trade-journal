@@ -11,6 +11,7 @@ import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
 import TradesFilterBar, { TradeFilters, EMPTY_FILTERS } from "@/components/trades/TradesFilterBar";
 import TradesPerformanceRibbon from "@/components/trades/TradesPerformanceRibbon";
+import TradesSkeleton from "@/components/trades/TradesSkeleton";
 import BulkActionsBar from "@/components/trades/BulkActionsBar";
 
 function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
@@ -311,9 +312,7 @@ export default function TradesPage() {
       )}
 
       {accountLoading || loading ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
-          <p className="text-ink-muted text-sm">Loading trades…</p>
-        </div>
+        <TradesSkeleton />
       ) : !selectedAccount ? (
         <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>

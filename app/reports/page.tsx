@@ -11,6 +11,7 @@ import MonthlyTradesTable from "@/components/reports/MonthlyTradesTable";
 import ReportsToolbar from "@/components/reports/ReportsToolbar";
 import TradeSpotlight from "@/components/reports/TradeSpotlight";
 import TagFrequency from "@/components/reports/TagFrequency";
+import ReportsSkeleton from "@/components/reports/ReportsSkeleton";
 
 const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
@@ -71,9 +72,7 @@ export default function ReportsPage() {
       )}
 
       {accountLoading || loading ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
-          <p className="text-ink-muted text-sm">Loading report…</p>
-        </div>
+        <ReportsSkeleton />
       ) : !selectedAccount ? (
         <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>
