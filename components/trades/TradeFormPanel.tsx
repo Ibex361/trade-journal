@@ -425,8 +425,8 @@ export default function TradeFormPanel({
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative w-full sm:max-w-lg h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto">
         <div className="sticky top-0 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="signal-bar h-6" />

@@ -99,18 +99,14 @@ export default function DashboardPage() {
             points={equityCurve}
             streak={streak}
           />
-          <div className="motion-safe:animate-fade-rise [animation-delay:80ms]">
-            <StatChipRow
-              winRate={winRate}
-              winRateHint={WIN_RATE_MODE_LABELS[winRateMode]}
-              avgR={summary.avgR}
-              tradesCount={summary.count}
-            />
-          </div>
+          <StatChipRow
+            winRate={winRate}
+            winRateHint={WIN_RATE_MODE_LABELS[winRateMode]}
+            avgR={summary.avgR}
+            tradesCount={summary.count}
+          />
 
-          <div
-            className={`grid grid-cols-1 gap-4 motion-safe:animate-fade-rise [animation-delay:140ms] ${targetsNeedAttention ? "lg:grid-cols-5" : "lg:grid-cols-2"}`}
-          >
+          <div className={`grid grid-cols-1 gap-4 ${targetsNeedAttention ? "lg:grid-cols-5" : "lg:grid-cols-2"}`}>
             <div className={targetsNeedAttention ? "lg:col-span-3" : ""}>
               <TargetProgress
                 targetMonthlyPnl={selectedAccount.target_monthly_pnl}

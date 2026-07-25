@@ -22,11 +22,11 @@ function ScreenshotLightbox({ url, onClose }: { url: string; onClose: () => void
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 print:hidden">
-      <div className="absolute inset-0 bg-black/80 motion-safe:animate-fade-in" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
       <img
         src={url}
         alt="Trade chart screenshot"
-        className="relative max-w-full max-h-full rounded-lg border border-surface-border motion-safe:animate-scale-in"
+        className="relative max-w-full max-h-full rounded-lg border border-surface-border"
       />
       <button
         onClick={onClose}

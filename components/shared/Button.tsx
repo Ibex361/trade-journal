@@ -12,7 +12,7 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 font-medium rounded-full transition-all duration-fast ease-out motion-safe:active:scale-95 disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex items-center justify-center gap-1.5 font-medium rounded-full transition-all duration-fast ease-out disabled:opacity-50 disabled:pointer-events-none";
 
 const sizes: Record<Size, string> = {
   sm: "text-xs px-3 py-1.5",

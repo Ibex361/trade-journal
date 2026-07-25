@@ -41,10 +41,10 @@ export default function MobileTabBar() {
               className="relative flex flex-col items-center justify-center gap-1 py-2.5"
             >
               {active && (
-                <span className="absolute top-0 h-0.5 w-8 rounded-full bg-gradient-to-r from-glow to-glow-violet motion-safe:animate-fade-in" />
+                <span className="absolute top-0 h-0.5 w-8 rounded-full bg-gradient-to-r from-glow to-glow-violet" />
               )}
-              <Icon className={`w-5 h-5 transition-colors duration-fast ${active ? "text-glow" : "text-ink-muted"}`} />
-              <span className={`text-[10px] leading-none transition-colors duration-fast ${active ? "text-ink-primary font-medium" : "text-ink-muted"}`}>
+              <Icon className={`w-5 h-5 ${active ? "text-glow" : "text-ink-muted"}`} />
+              <span className={`text-[10px] leading-none ${active ? "text-ink-primary font-medium" : "text-ink-muted"}`}>
                 {tab.label}
               </span>
             </Link>

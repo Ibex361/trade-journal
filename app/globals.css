@@ -75,24 +75,6 @@ body {
 }
 
 /*
- * Step 5 motion pass. Individual entrance animations use Tailwind's
- * `motion-reduce:` variant to opt out cleanly, but this is the safety net —
- * anything added later that forgets the variant still gets neutralized for
- * anyone with prefers-reduced-motion set, rather than shipping unwanted
- * motion by default.
- */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/*
  * Foundation-level glass effect. Every existing panel already uses the
  * `bg-surface-1`/`bg-surface-2` + `rounded-card` recipe (StatCard,
  * SettingsCard, every page section, etc.), so giving that shape a blur +
