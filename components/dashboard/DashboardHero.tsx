@@ -55,7 +55,7 @@ export default function DashboardHero({
   const streakClass = streak.type === "win" ? "text-gain" : streak.type === "loss" ? "text-loss" : "text-ink-muted";
 
   return (
-    <Card padding="tight" className="overflow-hidden">
+    <Card padding="tight" className="overflow-hidden motion-safe:animate-fade-rise">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-1 pt-1 pb-4">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-ink-secondary">Account balance</p>
