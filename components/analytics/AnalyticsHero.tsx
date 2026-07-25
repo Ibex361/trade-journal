@@ -47,7 +47,7 @@ export default function AnalyticsHero({
   const expectancySign = expectancy.perTrade != null && expectancy.perTrade > 0 ? "+" : "";
 
   return (
-    <Card padding="tight" className="overflow-hidden">
+    <Card padding="tight" className="overflow-hidden motion-safe:animate-fade-rise">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 px-1 pt-1 pb-4">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-ink-secondary">Total return, this range</p>
