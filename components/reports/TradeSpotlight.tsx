@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Trade } from "@/lib/trades";
 
 function formatDate(d: string) {
@@ -104,7 +104,7 @@ function SpotlightCard({
  * and biggest-losing trade of the month, each with its screenshot (if any)
  * and notes. Part of Phase 5 Part 3.
  */
-export default function TradeSpotlight({ best, worst }: { best: Trade | null; worst: Trade | null }) {
+function TradeSpotlight({ best, worst }: { best: Trade | null; worst: Trade | null }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   return (
@@ -118,3 +118,7 @@ export default function TradeSpotlight({ best, worst }: { best: Trade | null; wo
     </div>
   );
 }
+
+// Memoized so other Reports state (calendar, tag list) re-rendering
+// doesn't force this panel to re-render along with it.
+export default memo(TradeSpotlight);

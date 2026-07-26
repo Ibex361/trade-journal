@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { EquityPoint, Expectancy } from "@/lib/metrics";
 import Card from "@/components/shared/Card";
 import Chip from "@/components/shared/Chip";
@@ -15,7 +16,7 @@ import EquityCurveGraph from "@/components/dashboard/EquityCurveGraph";
  * but ones you'd check second, not first. Replaces the old AnalyticsStats
  * (four equal-weight cards) + a separately titled "Equity curve" card.
  */
-export default function AnalyticsHero({
+function AnalyticsHero({
   totalReturnPct,
   profitFactor,
   expectancy,
@@ -80,3 +81,9 @@ export default function AnalyticsHero({
     </Card>
   );
 }
+
+// Memoized so a click elsewhere on the Analytics page (a drilldown
+// selection, a different chart's dimension toggle) doesn't force the hero
+// and its equity curve to re-render too — only an actual change to its own
+// props should.
+export default memo(AnalyticsHero);

@@ -42,7 +42,7 @@ const CustomTooltip = memo(function CustomTooltip({
   );
 });
 
-export default function PerformanceBreakdown({
+function PerformanceBreakdown({
   groups,
   currency,
   dimension,
@@ -165,3 +165,6 @@ export default function PerformanceBreakdown({
     </Card>
   );
 }
+
+// Memoized for the same reason as the tooltip above.
+export default memo(PerformanceBreakdown);

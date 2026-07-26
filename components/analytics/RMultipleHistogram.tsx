@@ -45,7 +45,7 @@ const CustomTooltip = memo(function CustomTooltip({
   );
 });
 
-export default function RMultipleHistogram({
+function RMultipleHistogram({
   buckets,
   currency,
   selectedKey,
@@ -139,3 +139,6 @@ export default function RMultipleHistogram({
     </Card>
   );
 }
+
+// Memoized for the same reason as the tooltip above.
+export default memo(RMultipleHistogram);

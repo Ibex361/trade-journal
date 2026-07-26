@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { TradeSummary, MonthlyDayPnl, pickWinRate } from "@/lib/metrics";
 import { useWinRateMode, WIN_RATE_MODE_LABELS } from "@/lib/WinRateModeContext";
 import Sparkline from "@/components/shared/Sparkline";
@@ -15,7 +15,7 @@ import Chip from "@/components/shared/Chip";
  * now live as a highlighted cell directly on the calendar heatmap below,
  * so the same fact isn't shown twice in two different shapes.
  */
-export default function ReportsHero({
+function ReportsHero({
   summary,
   dailyPnls,
   currency,
@@ -67,3 +67,7 @@ export default function ReportsHero({
     </div>
   );
 }
+
+// Memoized so other Reports state (spotlight, tag list) re-rendering
+// doesn't force the hero and its sparkline to re-render along with it.
+export default memo(ReportsHero);

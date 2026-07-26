@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Trade } from "@/lib/trades";
 import Card from "@/components/shared/Card";
 
@@ -22,7 +23,7 @@ function PnlText({ value }: { value: number }) {
   );
 }
 
-export default function BreakdownDrilldown({
+function BreakdownDrilldown({
   groupLabel,
   trades,
   currency,
@@ -109,3 +110,8 @@ export default function BreakdownDrilldown({
     </Card>
   );
 }
+
+// Memoized so unrelated Analytics state changes (a different chart's
+// selection, a range/dimension toggle) don't re-render this drilldown panel
+// when its own props haven't changed.
+export default memo(BreakdownDrilldown);

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { Trade } from "@/lib/trades";
+import { getTradeRowEmphasis } from "@/lib/metrics";
 import Card from "@/components/shared/Card";
 
 function formatDate(d: string) {
@@ -24,8 +26,13 @@ function PnlText({ value }: { value: number }) {
 
 // Assumes `trades` is already ordered most-recent-first (fetchTrades does this).
 export default function RecentTradesFeed({ trades }: { trades: Trade[] }) {
-  const recent = trades.slice(0, 6);
-  const maxAbsPnl = recent.reduce((max, t) => Math.max(max, Math.abs(t.pnl)), 0);
+  // Slice and compute emphasis together, keyed on `trades` itself — slicing
+  // fresh on every render would otherwise give useMemo a new array identity
+  // each time and never actually skip the recompute.
+  const { recent, maxAbsPnl } = useMemo(() => {
+    const recent = trades.slice(0, 6);
+    return { recent, ...getTradeRowEmphasis(recent) };
+  }, [trades]);
 
   return (
     <Card

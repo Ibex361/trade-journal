@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Trade } from "@/lib/trades";
 import { getTradeRowEmphasis } from "@/lib/metrics";
 
@@ -43,7 +43,7 @@ function RulesBadge({ value }: { value: boolean | null }) {
  * Reports page itself and, unchanged, in the printed report — this is why
  * it has no edit/delete actions or screenshot column.
  */
-export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
+function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
   const sorted = useMemo(
     () =>
       [...trades].sort(
@@ -142,3 +142,7 @@ export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
     </>
   );
 }
+
+// Memoized so other Reports state (calendar, spotlight, tag list)
+// re-rendering doesn't force this table to re-render along with it.
+export default memo(MonthlyTradesTable);

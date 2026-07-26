@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchTrades, Trade } from "@/lib/trades";
 import { getTradesInMonth, getDailyPnlForMonth, getBestWorstDay, getBestWorstTrade, getTagFrequency, summarizeTrades } from "@/lib/metrics";
@@ -26,6 +26,14 @@ export default function ReportsPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
+  // Same pattern as Trades/Analytics: MonthSelector reads the raw state so
+  // it switches instantly, everything else reads the deferred copy.
+  const deferredYear = useDeferredValue(year);
+  const deferredMonth = useDeferredValue(month);
+  const handleMonthChange = useCallback((y: number, m: number) => {
+    setYear(y);
+    setMonth(m);
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -38,8 +46,14 @@ export default function ReportsPage() {
     load();
   }, [selectedAccount?.id]);
 
-  const monthTrades = useMemo(() => getTradesInMonth(trades, year, month), [trades, year, month]);
-  const dailyPnls = useMemo(() => getDailyPnlForMonth(trades, year, month), [trades, year, month]);
+  const monthTrades = useMemo(
+    () => getTradesInMonth(trades, deferredYear, deferredMonth),
+    [trades, deferredYear, deferredMonth]
+  );
+  const dailyPnls = useMemo(
+    () => getDailyPnlForMonth(trades, deferredYear, deferredMonth),
+    [trades, deferredYear, deferredMonth]
+  );
   const summary = useMemo(() => summarizeTrades(monthTrades), [monthTrades]);
   const { best, worst } = useMemo(() => getBestWorstDay(dailyPnls), [dailyPnls]);
   const { best: bestTrade, worst: worstTrade } = useMemo(() => getBestWorstTrade(monthTrades), [monthTrades]);
@@ -55,8 +69,8 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <MonthSelector year={year} month={month} onChange={(y, m) => { setYear(y); setMonth(m); }} />
-          {selectedAccount && <ReportsToolbar trades={monthTrades} accountName={selectedAccount.name} year={year} month={month} />}
+          <MonthSelector year={year} month={month} onChange={handleMonthChange} />
+          {selectedAccount && <ReportsToolbar trades={monthTrades} accountName={selectedAccount.name} year={deferredYear} month={deferredMonth} />}
         </div>
       </div>
 
@@ -81,8 +95,8 @@ export default function ReportsPage() {
         <>
           <ReportsHero summary={summary} dailyPnls={dailyPnls} currency={selectedAccount.currency} />
           <CalendarHeatmap
-            year={year}
-            month={month}
+            year={deferredYear}
+            month={deferredMonth}
             days={dailyPnls}
             currency={selectedAccount.currency}
             bestDate={best?.date}

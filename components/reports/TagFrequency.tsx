@@ -1,12 +1,13 @@
 "use client";
 
+import { memo } from "react";
 import { TagCount } from "@/lib/metrics";
 
 /**
  * Horizontal bar list of how often each tag appeared this month, sorted by
  * frequency. Part of Phase 5 Part 3 ("Highlights").
  */
-export default function TagFrequency({ tags }: { tags: TagCount[] }) {
+function TagFrequency({ tags }: { tags: TagCount[] }) {
   if (tags.length === 0) {
     return (
       <div className="bg-surface-1 border border-surface-border rounded-card p-5 print:break-inside-avoid">
@@ -54,3 +55,7 @@ export default function TagFrequency({ tags }: { tags: TagCount[] }) {
     </div>
   );
 }
+
+// Memoized so other Reports state (calendar, spotlight) re-rendering
+// doesn't force this list to re-render along with it.
+export default memo(TagFrequency);

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { MonthlyDayPnl } from "@/lib/metrics";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -12,7 +13,7 @@ function cellStyle(pnl: number, count: number, maxAbsPnl: number): React.CSSProp
   return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${alpha})` };
 }
 
-export default function CalendarHeatmap({
+function CalendarHeatmap({
   year,
   month,
   days,
@@ -93,3 +94,7 @@ export default function CalendarHeatmap({
     </div>
   );
 }
+
+// Memoized so other Reports state (spotlight, tag list) re-rendering
+// doesn't force the calendar grid to re-render along with it.
+export default memo(CalendarHeatmap);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchTrades, Trade } from "@/lib/trades";
 import {
@@ -40,6 +40,17 @@ export default function AnalyticsPage() {
   const [selectedRBucketKey, setSelectedRBucketKey] = useState<string | null>(null);
   const [selectedRulesKey, setSelectedRulesKey] = useState<string | null>(null);
 
+  // The controls themselves (DateRangeSelector, granularity toggle,
+  // breakdown-dimension tabs) read the raw state below so they respond to a
+  // tap instantly. Everything downstream — the equity curve, every chart,
+  // every derived stat — reads the deferred copies instead, so React can
+  // interrupt/deprioritize that (much heavier) recompute rather than
+  // blocking the click that triggered it. This is the same pattern already
+  // used for the Trades page's filters/sort.
+  const deferredRange = useDeferredValue(range);
+  const deferredGranularity = useDeferredValue(granularity);
+  const deferredBreakdownDimension = useDeferredValue(breakdownDimension);
+
   useEffect(() => {
     async function load() {
       if (!selectedAccount) return;
@@ -51,12 +62,14 @@ export default function AnalyticsPage() {
     load();
   }, [selectedAccount?.id]);
 
-  const rangeTrades = useMemo(() => filterTradesByRange(trades, range), [trades, range]);
+  const rangeTrades = useMemo(() => filterTradesByRange(trades, deferredRange), [trades, deferredRange]);
 
   const equityCurve = useMemo(
     () =>
-      selectedAccount ? buildEquityCurveForRange(trades, selectedAccount.starting_balance, range) : [],
-    [trades, selectedAccount?.starting_balance, range]
+      selectedAccount
+        ? buildEquityCurveForRange(trades, selectedAccount.starting_balance, deferredRange)
+        : [],
+    [trades, selectedAccount?.starting_balance, deferredRange]
   );
 
   const drawdown = useMemo(() => getDrawdown(equityCurve), [equityCurve]);
@@ -67,20 +80,20 @@ export default function AnalyticsPage() {
     [rangeTrades, equityCurve]
   );
   const pnlBuckets = useMemo(
-    () => getPnlByPeriod(rangeTrades, granularity),
-    [rangeTrades, granularity]
+    () => getPnlByPeriod(rangeTrades, deferredGranularity),
+    [rangeTrades, deferredGranularity]
   );
 
   const breakdownGroups = useMemo(
-    () => getBreakdownByDimension(rangeTrades, breakdownDimension),
-    [rangeTrades, breakdownDimension]
+    () => getBreakdownByDimension(rangeTrades, deferredBreakdownDimension),
+    [rangeTrades, deferredBreakdownDimension]
   );
 
   // Clear the drill-down selection whenever the underlying trade set changes
   // shape (range or dimension), so a stale key never lingers on screen.
   useEffect(() => {
     setSelectedGroupKey(null);
-  }, [range, breakdownDimension]);
+  }, [deferredRange, deferredBreakdownDimension]);
 
   const selectedGroup = useMemo(
     () => breakdownGroups.find((g) => g.key === selectedGroupKey) ?? null,
@@ -89,8 +102,10 @@ export default function AnalyticsPage() {
 
   const drilldownTrades = useMemo(
     () =>
-      selectedGroupKey ? getTradesInBreakdownGroup(rangeTrades, breakdownDimension, selectedGroupKey) : [],
-    [rangeTrades, breakdownDimension, selectedGroupKey]
+      selectedGroupKey
+        ? getTradesInBreakdownGroup(rangeTrades, deferredBreakdownDimension, selectedGroupKey)
+        : [],
+    [rangeTrades, deferredBreakdownDimension, selectedGroupKey]
   );
 
   const rBuckets = useMemo(() => getRMultipleDistribution(rangeTrades), [rangeTrades]);
@@ -118,7 +133,11 @@ export default function AnalyticsPage() {
   useEffect(() => {
     setSelectedRBucketKey(null);
     setSelectedRulesKey(null);
-  }, [range]);
+  }, [deferredRange]);
+
+  const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
+  const closeRBucketDrilldown = useCallback(() => setSelectedRBucketKey(null), []);
+  const closeRulesDrilldown = useCallback(() => setSelectedRulesKey(null), []);
 
   return (
     <div className="space-y-6">
@@ -167,7 +186,7 @@ export default function AnalyticsPage() {
               groupLabel={selectedGroup.label}
               trades={drilldownTrades}
               currency={selectedAccount.currency}
-              onClose={() => setSelectedGroupKey(null)}
+              onClose={closeGroupDrilldown}
             />
           )}
 
@@ -194,7 +213,7 @@ export default function AnalyticsPage() {
               groupLabel={selectedRBucket.label}
               trades={rDrilldownTrades}
               currency={selectedAccount.currency}
-              onClose={() => setSelectedRBucketKey(null)}
+              onClose={closeRBucketDrilldown}
             />
           )}
           {selectedRulesGroup && (
@@ -202,7 +221,7 @@ export default function AnalyticsPage() {
               groupLabel={selectedRulesGroup.label}
               trades={rulesDrilldownTrades}
               currency={selectedAccount.currency}
-              onClose={() => setSelectedRulesKey(null)}
+              onClose={closeRulesDrilldown}
             />
           )}
         </>

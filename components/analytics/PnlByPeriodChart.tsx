@@ -42,7 +42,7 @@ const CustomTooltip = memo(function CustomTooltip({
   );
 });
 
-export default function PnlByPeriodChart({
+function PnlByPeriodChart({
   buckets,
   currency,
   granularity,
@@ -128,3 +128,8 @@ export default function PnlByPeriodChart({
     </Card>
   );
 }
+
+// Memoized for the same reason as the tooltip above: a drilldown selection
+// or a different chart's dimension toggle elsewhere on the page shouldn't
+// force this whole bar chart to re-render.
+export default memo(PnlByPeriodChart);

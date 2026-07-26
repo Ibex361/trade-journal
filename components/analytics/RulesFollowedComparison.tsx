@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { BreakdownGroup, pickWinRate } from "@/lib/metrics";
 import { useWinRateMode } from "@/lib/WinRateModeContext";
 import Card from "@/components/shared/Card";
@@ -76,7 +77,7 @@ function ComparisonColumn({
   );
 }
 
-export default function RulesFollowedComparison({
+function RulesFollowedComparison({
   groups,
   currency,
   selectedKey,
@@ -130,3 +131,6 @@ export default function RulesFollowedComparison({
     </Card>
   );
 }
+
+// Memoized for the same reason as the other Analytics panels.
+export default memo(RulesFollowedComparison);
