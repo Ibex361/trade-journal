@@ -67,12 +67,16 @@ export default function TradesPage() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
-  // Typing in the filter bar updates `filters` (and the input) immediately;
-  // the deferred copy is what actually drives the filter/sort/row-render
-  // work below, so a fast typist doesn't block on re-filtering the full
-  // trades list after every keystroke.
-  const deferredFilters = useDeferredValue(filters);
   const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
+  // Typing in the filter bar or changing sort updates `filters`/`sort` (and
+  // their controls) immediately; this combined, deferred copy is what
+  // actually drives the filter+sort+row-render pipeline below, so neither
+  // one can block on re-processing the full trades list. Bundling both into
+  // one object — rather than deferring each state variable separately — means
+  // any future filter/sort field added here is automatically covered too;
+  // deferring `filters` alone but not `sort` is exactly what caused the
+  // 736ms INP warning on the mobile sort dropdown.
+  const deferredView = useDeferredValue({ filters, sort });
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -124,8 +128,8 @@ export default function TradesPage() {
   }, []);
 
   const visibleTrades = useMemo(
-    () => applySort(applyFilters(trades, deferredFilters), sort),
-    [trades, deferredFilters, sort]
+    () => applySort(applyFilters(trades, deferredView.filters), deferredView.sort),
+    [trades, deferredView]
   );
 
   const summary = useMemo(() => summarizeTrades(visibleTrades), [visibleTrades]);

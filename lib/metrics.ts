@@ -632,6 +632,35 @@ export function getBestWorstTrade(trades: Trade[]): BestWorstTrade {
   return { best, worst };
 }
 
+export type TradeRowEmphasis = {
+  maxAbsPnl: number;
+  bestId: string | null;
+  worstId: string | null;
+};
+
+/**
+ * Single source of truth for the "content-aware" row treatment used on the
+ * Trades list and Reports' monthly table: how far each row's P&L magnitude
+ * bar should fill (scaled to the largest mover in the set the caller
+ * passes in), and which single trade — if any — gets the Best/Worst
+ * highlight. Reuses getBestWorstTrade above so the two views can never
+ * disagree on which trade is "best". Only highlights when best and worst
+ * are different trades, so a single-trade set (or an all-tied set)
+ * highlights nothing.
+ *
+ * Always call this through useMemo keyed on the trades array it's given —
+ * it does a few full passes over the list, which is fine once per actual
+ * data change but adds up if it reruns on every unrelated re-render
+ * (typing in an unrelated filter, selecting a row, opening a modal).
+ */
+export function getTradeRowEmphasis(trades: Trade[]): TradeRowEmphasis {
+  const maxAbsPnl = trades.reduce((max, t) => Math.max(max, Math.abs(t.pnl)), 0);
+  if (trades.length <= 1) return { maxAbsPnl, bestId: null, worstId: null };
+  const { best, worst } = getBestWorstTrade(trades);
+  if (!best || !worst || best.id === worst.id) return { maxAbsPnl, bestId: null, worstId: null };
+  return { maxAbsPnl, bestId: best.id, worstId: worst.id };
+}
+
 export type TagCount = {
   tag: string;
   count: number;

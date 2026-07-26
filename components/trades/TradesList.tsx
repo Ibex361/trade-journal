@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
+import { getTradeRowEmphasis } from "@/lib/metrics";
 
 export type SortColumn = "entry_date" | "instrument" | "pnl" | "r_multiple";
 export type SortState = { column: SortColumn; direction: "asc" | "desc" };
@@ -424,7 +425,7 @@ const MobileCard = memo(function MobileCard({
   );
 });
 
-export default function TradesList({
+function TradesList({
   trades,
   onEdit,
   onDuplicate,
@@ -457,22 +458,13 @@ export default function TradesList({
 
   // Content-aware: scale each row's P&L bar to the largest mover currently
   // in view, and flag the single best/worst visible trade — mirrors the
-  // same treatment on Dashboard's Recent trades feed and Trades'
-  // performance ribbon, so the eye lands on what actually matters instead
-  // of every row reading with equal weight.
-  const maxAbsPnl = trades.reduce((max, t) => Math.max(max, Math.abs(t.pnl)), 0);
-  let bestTrade: Trade | null = null;
-  let worstTrade: Trade | null = null;
-  if (trades.length > 1) {
-    bestTrade = trades.reduce((b, t) => (t.pnl > b.pnl ? t : b), trades[0]);
-    worstTrade = trades.reduce((w, t) => (t.pnl < w.pnl ? t : w), trades[0]);
-    if (bestTrade.id === worstTrade.id) {
-      bestTrade = null;
-      worstTrade = null;
-    }
-  }
-  const bestId = bestTrade?.id ?? null;
-  const worstId = worstTrade?.id ?? null;
+  // same treatment on Dashboard's Recent trades feed and Reports' monthly
+  // table (both go through the same getTradeRowEmphasis helper so the
+  // three views can never disagree). Memoized on `trades` specifically —
+  // this used to re-scan the whole list on every render, including every
+  // row selection, which is exactly what showed up as a 520ms INP warning
+  // on tap.
+  const { maxAbsPnl, bestId, worstId } = useMemo(() => getTradeRowEmphasis(trades), [trades]);
 
   // Long-press (or mouse-hold) support so selection mode can be entered by
   // pressing a trade directly, the way most mobile apps handle multi-select,
@@ -682,3 +674,8 @@ export default function TradesList({
     </>
   );
 }
+
+// Defense-in-depth: bails out entirely if TradesList's own props haven't
+// changed (e.g. an unrelated bit of Trades-page state like a modal open/
+// close), on top of the per-row memoization on DesktopRow/MobileCard.
+export default memo(TradesList);

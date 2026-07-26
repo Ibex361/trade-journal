@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import { Trade } from "@/lib/trades";
+import { getTradeRowEmphasis } from "@/lib/metrics";
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -42,9 +44,14 @@ function RulesBadge({ value }: { value: boolean | null }) {
  * it has no edit/delete actions or screenshot column.
  */
 export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
-  const sorted = [...trades].sort(
-    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+  const sorted = useMemo(
+    () =>
+      [...trades].sort(
+        (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+      ),
+    [trades]
   );
+  const { maxAbsPnl } = useMemo(() => getTradeRowEmphasis(sorted), [sorted]);
 
   if (sorted.length === 0) {
     return (
@@ -53,8 +60,6 @@ export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
       </div>
     );
   }
-
-  const maxAbsPnl = sorted.reduce((max, t) => Math.max(max, Math.abs(t.pnl)), 0);
 
   return (
     <>
