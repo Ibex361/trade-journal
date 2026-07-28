@@ -127,6 +127,11 @@ export default function TradeFormPanel({
     if (duplicateFrom) return { ...tradeToForm(duplicateFrom), entry_date: localDateString() };
     return emptyForm;
   });
+  // Snapshot of the form exactly as it was when the panel opened. Compared
+  // against the live form to decide whether closing needs a confirmation —
+  // this can't drift out of sync the way a hand-maintained "dirty" flag
+  // could as fields get added later.
+  const initialFormRef = useRef(form);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -160,7 +165,7 @@ export default function TradeFormPanel({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && confirmDiscardRef.current()) onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -181,6 +186,15 @@ export default function TradeFormPanel({
     let closedByPopState = false;
 
     function handlePopState() {
+      if (!confirmDiscardRef.current()) {
+        // The back button already consumed our placeholder entry by the
+        // time this fires, so cancelling means pushing it right back on —
+        // otherwise the panel would stay open but the very next back-button
+        // press would navigate away from Trades entirely instead of
+        // closing the panel like it's supposed to.
+        window.history.pushState({ tradeFormPanel: stateId }, "");
+        return;
+      }
       closedByPopState = true;
       onClose();
     }
@@ -194,6 +208,49 @@ export default function TradeFormPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Warn on closing the browser tab / refreshing too, not just in-app
+  // navigation — the same accidental-loss risk, just via a different exit.
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      if (!saving && hasUnsavedChanges()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  });
+
+  // Whether anything has actually changed since the panel opened. A
+  // straight comparison against the open-time snapshot rather than a
+  // hand-maintained "dirty" flag on each field, so it can't silently stop
+  // covering a field added later.
+  function hasUnsavedChanges() {
+    return (
+      JSON.stringify(form) !== JSON.stringify(initialFormRef.current) ||
+      screenshotFile !== null ||
+      screenshotRemoved
+    );
+  }
+
+  function confirmDiscard() {
+    if (saving) return false;
+    if (!hasUnsavedChanges()) return true;
+    return window.confirm("Discard your unsaved changes to this trade?");
+  }
+
+  function requestClose() {
+    if (confirmDiscard()) onClose();
+  }
+
+  // The Escape-key and browser-back-button handlers below are set up once,
+  // in effects with empty dependency arrays (so a keystroke doesn't tear
+  // down and re-attach a window-level listener on every render) — so they
+  // reach the *current* form/screenshot state through this ref instead of
+  // closing over a single, stale render.
+  const confirmDiscardRef = useRef(confirmDiscard);
+  confirmDiscardRef.current = confirmDiscard;
 
   const optionsFor = (category: string) =>
     dropdowns
@@ -425,7 +482,7 @@ export default function TradeFormPanel({
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={requestClose} />
       <div className="relative w-full sm:max-w-lg h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
         <div className="sticky top-0 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -435,7 +492,7 @@ export default function TradeFormPanel({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="text-ink-muted hover:text-ink-primary text-sm px-2 py-1"
             aria-label="Close"
           >
@@ -789,7 +846,7 @@ export default function TradeFormPanel({
               {saving ? "Saving…" : trade ? "Save changes" : "Add trade"}
             </button>
             <button
-              onClick={onClose}
+              onClick={requestClose}
               className="text-sm text-ink-secondary hover:text-ink-primary px-4 py-1.5"
             >
               Cancel

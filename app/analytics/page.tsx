@@ -193,37 +193,45 @@ export default function AnalyticsPage() {
           {/* R-multiple distribution and rules-followed both read as compact
               comparison panels rather than dense time series, so they share
               a row on wide screens instead of each claiming the full width
-              a chart like PnlByPeriodChart actually needs. */}
+              a chart like PnlByPeriodChart actually needs. Each chart's
+              drilldown lives inside its own column, directly beneath the
+              chart it belongs to — rather than after the row — so clicking
+              a bar always shows its trades right under the chart you
+              clicked, not under whichever chart happens to render second. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <RMultipleHistogram
-              buckets={rBuckets}
-              currency={selectedAccount.currency}
-              selectedKey={selectedRBucketKey}
-              onSelectBucket={setSelectedRBucketKey}
-            />
-            <RulesFollowedComparison
-              groups={rulesGroups}
-              currency={selectedAccount.currency}
-              selectedKey={selectedRulesKey}
-              onSelectGroup={setSelectedRulesKey}
-            />
+            <div className="space-y-4">
+              <RMultipleHistogram
+                buckets={rBuckets}
+                currency={selectedAccount.currency}
+                selectedKey={selectedRBucketKey}
+                onSelectBucket={setSelectedRBucketKey}
+              />
+              {selectedRBucket && (
+                <BreakdownDrilldown
+                  groupLabel={selectedRBucket.label}
+                  trades={rDrilldownTrades}
+                  currency={selectedAccount.currency}
+                  onClose={closeRBucketDrilldown}
+                />
+              )}
+            </div>
+            <div className="space-y-4">
+              <RulesFollowedComparison
+                groups={rulesGroups}
+                currency={selectedAccount.currency}
+                selectedKey={selectedRulesKey}
+                onSelectGroup={setSelectedRulesKey}
+              />
+              {selectedRulesGroup && (
+                <BreakdownDrilldown
+                  groupLabel={selectedRulesGroup.label}
+                  trades={rulesDrilldownTrades}
+                  currency={selectedAccount.currency}
+                  onClose={closeRulesDrilldown}
+                />
+              )}
+            </div>
           </div>
-          {selectedRBucket && (
-            <BreakdownDrilldown
-              groupLabel={selectedRBucket.label}
-              trades={rDrilldownTrades}
-              currency={selectedAccount.currency}
-              onClose={closeRBucketDrilldown}
-            />
-          )}
-          {selectedRulesGroup && (
-            <BreakdownDrilldown
-              groupLabel={selectedRulesGroup.label}
-              trades={rulesDrilldownTrades}
-              currency={selectedAccount.currency}
-              onClose={closeRulesDrilldown}
-            />
-          )}
         </>
       )}
     </div>
