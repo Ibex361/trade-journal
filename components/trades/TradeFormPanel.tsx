@@ -7,6 +7,7 @@ import { createTrade, updateTrade, Trade, TradeInput, Direction } from "@/lib/tr
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
 import { uploadScreenshot, deleteScreenshotByUrl, validateScreenshotFile } from "@/lib/screenshots";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 const emptyForm = {
   entry_date: localDateString(),
@@ -132,6 +133,8 @@ export default function TradeFormPanel({
   // this can't drift out of sync the way a hand-maintained "dirty" flag
   // could as fields get added later.
   const initialFormRef = useRef(form);
+  // Drives the custom ConfirmDialog (replaces window.confirm — see below).
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -156,6 +159,44 @@ export default function TradeFormPanel({
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Whether anything has actually changed since the panel opened. A
+  // straight comparison against the open-time snapshot rather than a
+  // hand-maintained "dirty" flag on each field, so it can't silently stop
+  // covering a field added later.
+  function hasUnsavedChanges() {
+    return (
+      JSON.stringify(form) !== JSON.stringify(initialFormRef.current) ||
+      screenshotFile !== null ||
+      screenshotRemoved
+    );
+  }
+
+  // Every close trigger (X, Cancel, overlay click, Escape) routes through
+  // this — no confirmation needed if nothing changed, otherwise the styled
+  // ConfirmDialog opens and the actual close happens from its buttons.
+  function requestClose() {
+    if (saving) return;
+    if (!hasUnsavedChanges()) {
+      onClose();
+      return;
+    }
+    setShowDiscardConfirm(true);
+  }
+
+  // The Escape-key and browser-back-button handlers below are set up once,
+  // in effects with empty dependency arrays (so a keystroke doesn't tear
+  // down and re-attach a window-level listener on every render) — so they
+  // reach *current* state through these refs instead of closing over a
+  // single, stale render.
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  hasUnsavedChangesRef.current = hasUnsavedChanges;
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+  const showDiscardConfirmRef = useRef(showDiscardConfirm);
+  showDiscardConfirmRef.current = showDiscardConfirm;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!selectedAccount) return;
     fetchDropdownItems(selectedAccount.id).then(({ data }) => {
@@ -165,38 +206,49 @@ export default function TradeFormPanel({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && confirmDiscardRef.current()) onClose();
+      if (e.key !== "Escape") return;
+      if (showDiscardConfirmRef.current) {
+        // A second Escape while the confirm dialog is already open backs
+        // out of *that*, returning to the form — it shouldn't be treated
+        // as yet another close attempt.
+        setShowDiscardConfirm(false);
+      } else {
+        requestCloseRef.current();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   // Make the browser/hardware back button close this panel instead of
   // navigating away from the Trades page underneath it. We push a
   // placeholder history entry when the panel opens; a back-button press
-  // pops it and fires popstate, which we treat as "close the panel".
-  // For every other way of closing (Cancel, X, overlay, Escape, a
-  // successful save), we pop that same placeholder ourselves on unmount —
-  // but only if it's still the current top-of-stack entry, so we don't
-  // accidentally undo a real navigation (e.g. the user clicking a nav
-  // link while the panel happened to be open).
+  // pops it and fires popstate.
+  //
+  // When there are no unsaved changes, that's simply treated as "close".
+  // When there ARE unsaved changes, we can't wait for an async confirmation
+  // before deciding whether to let the navigation through — by the time the
+  // user answers, the back button has already fired — so instead we
+  // immediately re-push the placeholder (undoing the navigation right away,
+  // every time) and only *then* show the confirm dialog. If the user
+  // confirms, closing proceeds exactly like every other close path (Cancel,
+  // X, overlay, Escape): the placeholder we just re-pushed gets popped once
+  // by the ordinary unmount cleanup below. This doesn't depend on
+  // window.confirm's synchronous blocking behavior, which is what made the
+  // previous version of this fragile on mobile back-gesture handling.
   useEffect(() => {
     const stateId = Math.random().toString(36).slice(2);
     window.history.pushState({ tradeFormPanel: stateId }, "");
     let closedByPopState = false;
 
     function handlePopState() {
-      if (!confirmDiscardRef.current()) {
-        // The back button already consumed our placeholder entry by the
-        // time this fires, so cancelling means pushing it right back on —
-        // otherwise the panel would stay open but the very next back-button
-        // press would navigate away from Trades entirely instead of
-        // closing the panel like it's supposed to.
-        window.history.pushState({ tradeFormPanel: stateId }, "");
+      if (!hasUnsavedChangesRef.current()) {
+        closedByPopState = true;
+        onCloseRef.current();
         return;
       }
-      closedByPopState = true;
-      onClose();
+      window.history.pushState({ tradeFormPanel: stateId }, "");
+      setShowDiscardConfirm(true);
     }
     window.addEventListener("popstate", handlePopState);
 
@@ -211,6 +263,9 @@ export default function TradeFormPanel({
 
   // Warn on closing the browser tab / refreshing too, not just in-app
   // navigation — the same accidental-loss risk, just via a different exit.
+  // Browsers ignore any custom message here and show their own fixed,
+  // native-looking text — there's no way to swap this one for our own
+  // styled dialog, unlike every in-app close path above.
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
       if (!saving && hasUnsavedChanges()) {
@@ -221,36 +276,6 @@ export default function TradeFormPanel({
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   });
-
-  // Whether anything has actually changed since the panel opened. A
-  // straight comparison against the open-time snapshot rather than a
-  // hand-maintained "dirty" flag on each field, so it can't silently stop
-  // covering a field added later.
-  function hasUnsavedChanges() {
-    return (
-      JSON.stringify(form) !== JSON.stringify(initialFormRef.current) ||
-      screenshotFile !== null ||
-      screenshotRemoved
-    );
-  }
-
-  function confirmDiscard() {
-    if (saving) return false;
-    if (!hasUnsavedChanges()) return true;
-    return window.confirm("Discard your unsaved changes to this trade?");
-  }
-
-  function requestClose() {
-    if (confirmDiscard()) onClose();
-  }
-
-  // The Escape-key and browser-back-button handlers below are set up once,
-  // in effects with empty dependency arrays (so a keystroke doesn't tear
-  // down and re-attach a window-level listener on every render) — so they
-  // reach the *current* form/screenshot state through this ref instead of
-  // closing over a single, stale render.
-  const confirmDiscardRef = useRef(confirmDiscard);
-  confirmDiscardRef.current = confirmDiscard;
 
   const optionsFor = (category: string) =>
     dropdowns
@@ -481,10 +506,11 @@ export default function TradeFormPanel({
   const labelClass = "text-xs text-ink-secondary";
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={requestClose} />
-      <div className="relative w-full sm:max-w-lg h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
-        <div className="sticky top-0 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
+    <>
+      <div className="fixed inset-0 z-40 flex justify-end">
+        <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={requestClose} />
+        <div className="relative w-full sm:max-w-lg h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
+          <div className="sticky top-0 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="signal-bar h-6" />
             <h2 className="font-display text-lg font-medium">
@@ -854,6 +880,19 @@ export default function TradeFormPanel({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      <ConfirmDialog
+        open={showDiscardConfirm}
+        title="Discard changes?"
+        description="You have unsaved changes to this trade. If you leave now, they'll be lost."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={() => {
+          setShowDiscardConfirm(false);
+          onClose();
+        }}
+      />
+    </>
   );
 }
