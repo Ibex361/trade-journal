@@ -5,6 +5,7 @@ import { Trade } from "./trades";
 // id/account_id/screenshot_url/created_at are left out.
 const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
   { key: "entry_date", label: "Date" },
+  { key: "entry_time", label: "Time" },
   { key: "instrument", label: "Instrument" },
   { key: "asset_class", label: "Asset class" },
   { key: "strategy", label: "Strategy" },

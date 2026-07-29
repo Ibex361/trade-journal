@@ -17,6 +17,17 @@ function formatDate(d: string) {
   });
 }
 
+// entry_time comes back from Postgres as "HH:MM:SS" (or "HH:MM" for a
+// freshly-saved value) — routed through a Date only so toLocaleTimeString
+// can localize it (12h vs 24h) the same way formatDate does for dates.
+function formatTime(t: string) {
+  const [h, m] = t.split(":");
+  return new Date(2000, 0, 1, Number(h), Number(m)).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function PnlText({ value, className = "" }: { value: number; className?: string }) {
   const color = value > 0 ? "text-gain" : value < 0 ? "text-loss" : "text-ink-secondary";
   const sign = value > 0 ? "+" : "";
@@ -231,7 +242,8 @@ const DesktopRow = memo(function DesktopRow({
         </td>
       )}
       <td className="px-4 py-3 font-mono text-ink-secondary whitespace-nowrap">
-        {formatDate(t.entry_date)}
+        <div>{formatDate(t.entry_date)}</div>
+        {t.entry_time && <div className="text-[11px] text-ink-muted">{formatTime(t.entry_time)}</div>}
       </td>
       <td className="px-4 py-3 font-medium">
         <span className="flex items-center gap-2">
@@ -364,7 +376,9 @@ const MobileCard = memo(function MobileCard({
               )}
             </p>
             <p className="text-xs text-ink-secondary font-mono">
-              {formatDate(t.entry_date)} · <span className="capitalize">{t.direction ?? "—"}</span>
+              {formatDate(t.entry_date)}
+              {t.entry_time && ` · ${formatTime(t.entry_time)}`} ·{" "}
+              <span className="capitalize">{t.direction ?? "—"}</span>
             </p>
           </div>
         </div>

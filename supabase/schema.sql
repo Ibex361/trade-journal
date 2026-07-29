@@ -35,6 +35,7 @@ create table trades (
   id uuid primary key default uuid_generate_v4(),
   account_id uuid not null references accounts(id) on delete cascade,
   entry_date date not null,
+  entry_time time,
   instrument text not null,
   asset_class text,
   strategy text,

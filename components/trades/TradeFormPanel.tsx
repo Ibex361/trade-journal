@@ -11,6 +11,7 @@ import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 const emptyForm = {
   entry_date: localDateString(),
+  entry_time: "",
   instrument: "",
   asset_class: "",
   strategy: "",
@@ -93,6 +94,10 @@ const FIELD_LABELS: Record<string, string> = {
 function tradeToForm(trade: Trade): FormState {
   return {
     entry_date: trade.entry_date,
+    // Trades saved before this field existed (or ones without a time
+    // entered) come back as null — an empty string leaves the <input
+    // type="time"> blank rather than showing a placeholder "00:00".
+    entry_time: trade.entry_time?.slice(0, 5) ?? "",
     instrument: trade.instrument,
     asset_class: trade.asset_class ?? "",
     strategy: trade.strategy ?? "",
@@ -463,6 +468,7 @@ export default function TradeFormPanel({
 
     const input: TradeInput = {
       entry_date: form.entry_date,
+      entry_time: form.entry_time || null,
       instrument: form.instrument.trim(),
       asset_class: form.asset_class || null,
       strategy: form.strategy || null,
@@ -538,15 +544,26 @@ export default function TradeFormPanel({
               />
             </label>
             <label className="block">
-              <span className={labelClass}>Instrument</span>
+              <span className={labelClass}>Time</span>
               <input
-                value={form.instrument}
-                onChange={(e) => set("instrument", e.target.value)}
-                placeholder="e.g. EUR/USD"
-                className={selectClass}
+                type="time"
+                value={form.entry_time}
+                onChange={(e) => set("entry_time", e.target.value)}
+                placeholder="Optional"
+                className={`${selectClass} font-mono`}
               />
             </label>
           </div>
+
+          <label className="block">
+            <span className={labelClass}>Instrument</span>
+            <input
+              value={form.instrument}
+              onChange={(e) => set("instrument", e.target.value)}
+              placeholder="e.g. EUR/USD"
+              className={selectClass}
+            />
+          </label>
 
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
