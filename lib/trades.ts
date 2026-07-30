@@ -23,6 +23,7 @@ export type Trade = {
   notes: string | null;
   screenshot_url: string | null;
   tags: string[];
+  broker_ticket: string | null;
   created_at: string;
 };
 
@@ -45,6 +46,10 @@ export type TradeInput = {
   notes: string | null;
   screenshot_url: string | null;
   tags: string[];
+  // The broker's own trade ID, when this trade came from a broker CSV
+  // import (e.g. Exness' "ticket"). Null for manually-entered trades.
+  // Used to skip a trade that's already been imported on re-import.
+  broker_ticket: string | null;
 };
 
 export async function fetchTrades(accountId: string) {
@@ -54,6 +59,24 @@ export async function fetchTrades(accountId: string) {
     .eq("account_id", accountId)
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false });
+}
+
+/**
+ * Returns the set of broker_ticket values already stored for this account,
+ * so a broker CSV import (e.g. Exness) can skip trades it's already
+ * imported instead of creating duplicates when the export ranges overlap.
+ */
+export async function getExistingBrokerTickets(accountId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("trades")
+    .select("broker_ticket")
+    .eq("account_id", accountId)
+    .not("broker_ticket", "is", null);
+  if (error) {
+    console.error("getExistingBrokerTickets failed:", error);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r) => r.broker_ticket as string).filter(Boolean));
 }
 
 export async function createTrade(accountId: string, input: TradeInput) {

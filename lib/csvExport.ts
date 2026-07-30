@@ -21,6 +21,7 @@ export const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
   { key: "emotion", label: "Emotion" },
   { key: "tags", label: "Tags" },
   { key: "notes", label: "Notes" },
+  { key: "broker_ticket", label: "Broker Ticket" },
 ];
 
 function csvCell(value: unknown): string {

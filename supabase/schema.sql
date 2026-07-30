@@ -51,11 +51,13 @@ create table trades (
   notes text,
   screenshot_url text,
   tags text[] default '{}',
+  broker_ticket text,
   created_at timestamptz not null default now()
 );
 
 create index trades_account_idx on trades(account_id);
 create index trades_date_idx on trades(entry_date);
+create index trades_broker_ticket_idx on trades(account_id, broker_ticket);
 
 -- Open access for a personal, single-user app (no login system).
 -- Safe because only you have the project URL and anon key.

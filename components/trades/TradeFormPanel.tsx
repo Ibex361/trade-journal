@@ -485,6 +485,7 @@ export default function TradeFormPanel({
       notes: form.notes.trim() || null,
       screenshot_url: finalScreenshotUrl,
       tags: form.tags,
+      broker_ticket: trade?.broker_ticket ?? null,
     };
 
     const { error: dbError } = trade

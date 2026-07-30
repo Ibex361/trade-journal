@@ -1,67 +1,8 @@
 import { TradeInput, Direction } from "./trades";
 import { CSV_COLUMNS } from "./csvExport";
+import { parseCsvRows, parseNumber, ImportRowIssue, ParsedImport } from "./csvUtils";
 
-export type ImportRowIssue = { row: number; message: string };
-
-export type ParsedImport = {
-  trades: TradeInput[];
-  issues: ImportRowIssue[];
-};
-
-/**
- * Splits raw CSV text into rows of cells, honoring RFC-4180 quoting —
- * a field wrapped in "..." can contain commas, newlines, and "" for an
- * escaped quote. A naive split("\n") + split(",") breaks on exactly the
- * kind of multi-line Notes field this app's own export produces, so this
- * walks the text character by character instead.
- */
-function parseCsvRows(text: string): string[][] {
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // strip BOM
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let inQuotes = false;
-  let touchedRow = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (inQuotes) {
-      if (char === '"' && text[i + 1] === '"') {
-        field += '"';
-        i++;
-      } else if (char === '"') {
-        inQuotes = false;
-      } else {
-        field += char;
-      }
-      continue;
-    }
-    if (char === '"') {
-      inQuotes = true;
-      touchedRow = true;
-    } else if (char === ",") {
-      row.push(field);
-      field = "";
-      touchedRow = true;
-    } else if (char === "\r") {
-      // handled via \n
-    } else if (char === "\n") {
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = "";
-      touchedRow = false;
-    } else {
-      field += char;
-      touchedRow = true;
-    }
-  }
-  if (touchedRow || field !== "" || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-  return rows;
-}
+export type { ImportRowIssue, ParsedImport } from "./csvUtils";
 
 // The export prefixes a cell with "'" when it starts with =, +, -, or @, so
 // spreadsheet apps don't misread it as a formula. Undo that on the way back
@@ -73,13 +14,6 @@ function stripFormulaGuard(value: string): string {
 function text(value: string): string | null {
   const v = stripFormulaGuard(value.trim());
   return v === "" ? null : v;
-}
-
-function num(value: string): number | null {
-  const v = value.trim();
-  if (v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
 }
 
 function bool(value: string): boolean | null {
@@ -98,8 +32,9 @@ const LABEL_TO_KEY = new Map(CSV_COLUMNS.map((c) => [c.label.toLowerCase(), c.ke
  * Parses CSV text produced by this app's own "Export all trades" / "Export
  * this month" into TradeInput rows ready to insert. Matches columns by
  * header label rather than position, so it tolerates reordered columns and
- * files exported before a column (e.g. Time) existed. Rows missing a valid
- * date, instrument, or P&L are skipped and reported rather than guessed at.
+ * files exported before a column (e.g. Time, Broker Ticket) existed. Rows
+ * missing a valid date, instrument, or P&L are skipped and reported rather
+ * than guessed at.
  */
 export function parseTradesCsv(csvText: string): ParsedImport {
   const rows = parseCsvRows(csvText).filter((r) => !(r.length === 1 && r[0].trim() === ""));
@@ -140,7 +75,7 @@ export function parseTradesCsv(csvText: string): ParsedImport {
 
     const entry_date = cell(cells, "entry_date").trim();
     const instrument = text(cell(cells, "instrument"));
-    const pnl = num(cell(cells, "pnl"));
+    const pnl = parseNumber(cell(cells, "pnl"));
 
     if (!DATE_RE.test(entry_date)) {
       issues.push({ row: rowNum, message: `Skipped — invalid or missing date ("${entry_date || "empty"}").` });
@@ -168,16 +103,17 @@ export function parseTradesCsv(csvText: string): ParsedImport {
       session: text(cell(cells, "session")),
       emotion: text(cell(cells, "emotion")),
       direction: directionRaw === "long" || directionRaw === "short" ? (directionRaw as Direction) : null,
-      entry_price: num(cell(cells, "entry_price")),
-      exit_price: num(cell(cells, "exit_price")),
-      stop_loss_price: num(cell(cells, "stop_loss_price")),
-      size: num(cell(cells, "size")),
+      entry_price: parseNumber(cell(cells, "entry_price")),
+      exit_price: parseNumber(cell(cells, "exit_price")),
+      stop_loss_price: parseNumber(cell(cells, "stop_loss_price")),
+      size: parseNumber(cell(cells, "size")),
       pnl,
-      r_multiple: num(cell(cells, "r_multiple")),
+      r_multiple: parseNumber(cell(cells, "r_multiple")),
       rules_followed: bool(cell(cells, "rules_followed")),
       notes: text(cell(cells, "notes")),
       screenshot_url: null,
       tags: tagsRaw ? tagsRaw.split(";").map((t) => stripFormulaGuard(t.trim())).filter(Boolean) : [],
+      broker_ticket: text(cell(cells, "broker_ticket")),
     });
   }
 
