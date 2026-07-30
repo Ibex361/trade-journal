@@ -1,5 +1,44 @@
 import { TradeInput } from "./trades";
 import { parseCsvRows, parseNumber, ImportRowIssue, ParsedImport } from "./csvUtils";
+import { calculateRMultiple } from "./metrics";
+
+// Exness exports opening_time_utc in UTC. This journal logs everything in
+// East Africa Time (UTC+3), the user's local time, so imported timestamps
+// are shifted forward by this many hours before being split back into a
+// calendar date + clock time. A row near UTC midnight can therefore land
+// on the following local calendar date.
+const EXNESS_TO_LOCAL_OFFSET_HOURS = 3;
+
+/**
+ * Converts an Exness opening_time_utc date/time pair (already split on "T")
+ * into the app's local (UTC+3) date + time. Falls back to the original,
+ * unshifted date (and no time) if the timestamp can't be parsed or has no
+ * clock time to shift.
+ */
+function toLocalDateTime(
+  datePart: string,
+  timePart: string | undefined
+): { date: string; time: string | null } {
+  const rawTime = timePart && /^\d{2}:\d{2}(:\d{2})?/.test(timePart) ? timePart.slice(0, 8) : null;
+  if (!rawTime) {
+    return { date: datePart, time: null };
+  }
+
+  const isoTime = rawTime.length === 5 ? `${rawTime}:00` : rawTime;
+  const utcDate = new Date(`${datePart}T${isoTime}Z`);
+  if (Number.isNaN(utcDate.getTime())) {
+    return { date: datePart, time: rawTime };
+  }
+
+  const shifted = new Date(utcDate.getTime() + EXNESS_TO_LOCAL_OFFSET_HOURS * 60 * 60 * 1000);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(shifted.getUTCDate()).padStart(2, "0");
+  const hh = String(shifted.getUTCHours()).padStart(2, "0");
+  const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
+  const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
+  return { date: `${y}-${m}-${d}`, time: `${hh}:${mm}:${ss}` };
+}
 
 export type { ImportRowIssue, ParsedImport } from "./csvUtils";
 
@@ -51,8 +90,12 @@ function closeReasonNote(reason: string): string | null {
  *   a journal entry needs the actual net result).
  * - Times come in as opening_time_utc / closing_time_utc — only the
  *   opening time is kept, since that's what the app's "time of day" field
- *   tracks. It's stored exactly as exported, in UTC, not converted to a
- *   local timezone.
+ *   tracks. Exness reports it in UTC; it's shifted to East Africa Time
+ *   (UTC+3) before being split into entry_date / entry_time, since that's
+ *   the timezone this journal logs in everywhere else.
+ * - r_multiple is auto-calculated the same way the manual trade form does
+ *   (reward ÷ risk, from entry/exit/stop-loss), so imported trades get an
+ *   R multiple whenever a stop_loss value is present in the export.
  * - Each row's broker "ticket" is kept as broker_ticket, so a re-import of
  *   an overlapping date range can be de-duplicated by the caller instead
  *   of creating repeat trades.
@@ -123,22 +166,27 @@ export function parseExnessCsv(csvText: string): ParsedImport {
     const commission = parseNumber(cell(cells, "commission")) ?? 0;
     const swap = parseNumber(cell(cells, "swap")) ?? 0;
     const symbol = cleanSymbol(symbolRaw);
+    const direction = typeRaw === "buy" ? "long" : "short";
+    const entryPrice = parseNumber(cell(cells, "opening_price"));
+    const exitPrice = parseNumber(cell(cells, "closing_price"));
+    const stopLossPrice = parseNumber(cell(cells, "stop_loss"));
+    const local = toLocalDateTime(datePart, timePart);
 
     trades.push({
-      entry_date: datePart,
-      entry_time: timePart && /^\d{2}:\d{2}(:\d{2})?/.test(timePart) ? timePart.slice(0, 8) : null,
+      entry_date: local.date,
+      entry_time: local.time,
       instrument: symbol,
       asset_class: guessAssetClass(symbol),
       strategy: null,
       session: null,
       emotion: null,
-      direction: typeRaw === "buy" ? "long" : "short",
-      entry_price: parseNumber(cell(cells, "opening_price")),
-      exit_price: parseNumber(cell(cells, "closing_price")),
-      stop_loss_price: parseNumber(cell(cells, "stop_loss")),
+      direction,
+      entry_price: entryPrice,
+      exit_price: exitPrice,
+      stop_loss_price: stopLossPrice,
       size: parseNumber(cell(cells, "lots")),
       pnl: Math.round((profit + commission + swap) * 100) / 100,
-      r_multiple: null,
+      r_multiple: calculateRMultiple(direction, entryPrice, exitPrice, stopLossPrice),
       rules_followed: null,
       notes: closeReasonNote(cell(cells, "close_reason")),
       screenshot_url: null,
