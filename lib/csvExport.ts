@@ -3,7 +3,7 @@ import { Trade } from "./trades";
 // Column order/labels for the exported CSV. Kept explicit (rather than
 // Object.keys(trade)) so column order is stable and internal fields like
 // id/account_id/screenshot_url/created_at are left out.
-const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
+export const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
   { key: "entry_date", label: "Date" },
   { key: "entry_time", label: "Time" },
   { key: "instrument", label: "Instrument" },

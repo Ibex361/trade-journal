@@ -65,6 +65,27 @@ export async function createTrade(accountId: string, input: TradeInput) {
   return result;
 }
 
+/**
+ * Bulk insert used by CSV import. Sent in chunks rather than one request —
+ * a large journal (thousands of rows) can exceed a single request's payload
+ * limits, and chunking also means a failure partway through reports how
+ * many rows actually made it in rather than an all-or-nothing error.
+ */
+export async function createTrades(accountId: string, inputs: TradeInput[]) {
+  const CHUNK_SIZE = 200;
+  let inserted = 0;
+  for (let i = 0; i < inputs.length; i += CHUNK_SIZE) {
+    const chunk = inputs.slice(i, i + CHUNK_SIZE).map((input) => ({ account_id: accountId, ...input }));
+    const result = await supabase.from("trades").insert(chunk);
+    if (result.error) {
+      console.error("createTrades failed:", result.error);
+      return { inserted, error: result.error };
+    }
+    inserted += chunk.length;
+  }
+  return { inserted, error: null };
+}
+
 export async function updateTrade(id: string, input: TradeInput) {
   const result = await supabase.from("trades").update(input).eq("id", id);
   if (result.error) console.error("updateTrade failed:", result.error);
