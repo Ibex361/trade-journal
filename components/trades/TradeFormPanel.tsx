@@ -12,6 +12,8 @@ import ConfirmDialog from "@/components/shared/ConfirmDialog";
 const emptyForm = {
   entry_date: localDateString(),
   entry_time: "",
+  exit_date: "",
+  exit_time: "",
   instrument: "",
   asset_class: "",
   strategy: "",
@@ -83,7 +85,7 @@ type FormState = typeof emptyForm;
 
 // Human-readable labels for validation messages.
 const FIELD_LABELS: Record<string, string> = {
-  entry_date: "Date",
+  entry_date: "Entry date",
   instrument: "Instrument",
   entry_price: "Entry price",
   exit_price: "Exit price",
@@ -98,6 +100,11 @@ function tradeToForm(trade: Trade): FormState {
     // entered) come back as null — an empty string leaves the <input
     // type="time"> blank rather than showing a placeholder "00:00".
     entry_time: trade.entry_time?.slice(0, 5) ?? "",
+    // Same null-vs-empty-string handling as entry_date/entry_time — a
+    // trade with no exit logged yet leaves these blank rather than showing
+    // a placeholder date/time.
+    exit_date: trade.exit_date ?? "",
+    exit_time: trade.exit_time?.slice(0, 5) ?? "",
     instrument: trade.instrument,
     asset_class: trade.asset_class ?? "",
     strategy: trade.strategy ?? "",
@@ -130,7 +137,9 @@ export default function TradeFormPanel({
   const { selectedAccount } = useAccount();
   const [form, setForm] = useState<FormState>(() => {
     if (trade) return tradeToForm(trade);
-    if (duplicateFrom) return { ...tradeToForm(duplicateFrom), entry_date: localDateString() };
+    if (duplicateFrom) {
+      return { ...tradeToForm(duplicateFrom), entry_date: localDateString(), exit_date: "", exit_time: "" };
+    }
     return emptyForm;
   });
   // Snapshot of the form exactly as it was when the panel opened. Compared
@@ -469,6 +478,8 @@ export default function TradeFormPanel({
     const input: TradeInput = {
       entry_date: form.entry_date,
       entry_time: form.entry_time || null,
+      exit_date: form.exit_date || null,
+      exit_time: form.exit_time || null,
       instrument: form.instrument.trim(),
       asset_class: form.asset_class || null,
       strategy: form.strategy || null,
@@ -536,7 +547,7 @@ export default function TradeFormPanel({
         <div className="p-6 space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
-              <span className={labelClass}>Date</span>
+              <span className={labelClass}>Entry date</span>
               <input
                 type="date"
                 value={form.entry_date}
@@ -545,11 +556,34 @@ export default function TradeFormPanel({
               />
             </label>
             <label className="block">
-              <span className={labelClass}>Time</span>
+              <span className={labelClass}>Entry time</span>
               <input
                 type="time"
                 value={form.entry_time}
                 onChange={(e) => set("entry_time", e.target.value)}
+                placeholder="Optional"
+                className={`${selectClass} font-mono`}
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className={labelClass}>Exit date</span>
+              <input
+                type="date"
+                value={form.exit_date}
+                onChange={(e) => set("exit_date", e.target.value)}
+                placeholder="Optional"
+                className={`${selectClass} font-mono`}
+              />
+            </label>
+            <label className="block">
+              <span className={labelClass}>Exit time</span>
+              <input
+                type="time"
+                value={form.exit_time}
+                onChange={(e) => set("exit_time", e.target.value)}
                 placeholder="Optional"
                 className={`${selectClass} font-mono`}
               />

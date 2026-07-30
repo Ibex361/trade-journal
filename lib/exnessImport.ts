@@ -18,7 +18,7 @@ const EXNESS_TO_LOCAL_OFFSET_HOURS = 3;
 function toLocalDateTime(
   datePart: string,
   timePart: string | undefined
-): { date: string; time: string | null } {
+): { date: string | null; time: string | null } {
   const rawTime = timePart && /^\d{2}:\d{2}(:\d{2})?/.test(timePart) ? timePart.slice(0, 8) : null;
   if (!rawTime) {
     return { date: datePart, time: null };
@@ -88,11 +88,11 @@ function closeReasonNote(reason: string): string | null {
  * A few things this deliberately does that a straight column copy wouldn't:
  * - P&L is profit + commission + swap (Exness reports these separately;
  *   a journal entry needs the actual net result).
- * - Times come in as opening_time_utc / closing_time_utc — only the
- *   opening time is kept, since that's what the app's "time of day" field
- *   tracks. Exness reports it in UTC; it's shifted to East Africa Time
- *   (UTC+3) before being split into entry_date / entry_time, since that's
- *   the timezone this journal logs in everywhere else.
+ * - Times come in as opening_time_utc / closing_time_utc — both are kept,
+ *   as entry_date/entry_time and exit_date/exit_time respectively. Exness
+ *   reports them in UTC; both are shifted to East Africa Time (UTC+3)
+ *   before being split into date/time, since that's the timezone this
+ *   journal logs in everywhere else.
  * - r_multiple is auto-calculated the same way the manual trade form does
  *   (reward ÷ risk, from entry/exit/stop-loss), so imported trades get an
  *   R multiple whenever a stop_loss value is present in the export.
@@ -172,9 +172,18 @@ export function parseExnessCsv(csvText: string): ParsedImport {
     const stopLossPrice = parseNumber(cell(cells, "stop_loss"));
     const local = toLocalDateTime(datePart, timePart);
 
+    const closingRaw = cell(cells, "closing_time_utc").trim();
+    const [closingDatePart, closingTimePart] = closingRaw.split("T");
+    const localExit =
+      closingDatePart && DATE_RE.test(closingDatePart)
+        ? toLocalDateTime(closingDatePart, closingTimePart)
+        : { date: null, time: null };
+
     trades.push({
-      entry_date: local.date,
+      entry_date: local.date ?? datePart,
       entry_time: local.time,
+      exit_date: localExit.date,
+      exit_time: localExit.time,
       instrument: symbol,
       asset_class: guessAssetClass(symbol),
       strategy: null,

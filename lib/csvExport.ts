@@ -4,8 +4,10 @@ import { Trade } from "./trades";
 // Object.keys(trade)) so column order is stable and internal fields like
 // id/account_id/screenshot_url/created_at are left out.
 export const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
-  { key: "entry_date", label: "Date" },
-  { key: "entry_time", label: "Time" },
+  { key: "entry_date", label: "Entry date" },
+  { key: "entry_time", label: "Entry time" },
+  { key: "exit_date", label: "Exit date" },
+  { key: "exit_time", label: "Exit time" },
   { key: "instrument", label: "Instrument" },
   { key: "asset_class", label: "Asset class" },
   { key: "strategy", label: "Strategy" },

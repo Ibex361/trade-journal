@@ -28,6 +28,15 @@ const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
 
 const LABEL_TO_KEY = new Map(CSV_COLUMNS.map((c) => [c.label.toLowerCase(), c.key]));
 
+// "Date" / "Time" were this app's original column labels, before entry vs.
+// exit was a distinction worth making. Files exported before that rename
+// still use them — keep matching them to entry_date/entry_time so those
+// older exports still import cleanly.
+const LEGACY_LABEL_TO_KEY = new Map<string, keyof TradeInput>([
+  ["date", "entry_date"],
+  ["time", "entry_time"],
+]);
+
 /**
  * Parses CSV text produced by this app's own "Export all trades" / "Export
  * this month" into TradeInput rows ready to insert. Matches columns by
@@ -47,7 +56,8 @@ export function parseTradesCsv(csvText: string): ParsedImport {
 
   const colIndex = new Map<keyof TradeInput, number>();
   rows[0].forEach((label, i) => {
-    const key = LABEL_TO_KEY.get(label.trim().toLowerCase());
+    const normalized = label.trim().toLowerCase();
+    const key = LABEL_TO_KEY.get(normalized) ?? LEGACY_LABEL_TO_KEY.get(normalized);
     if (key) colIndex.set(key as keyof TradeInput, i);
   });
 
@@ -58,7 +68,7 @@ export function parseTradesCsv(csvText: string): ParsedImport {
         {
           row: 0,
           message:
-            'This doesn\'t look like a trade export — missing "Date", "Instrument", or "P&L" columns.',
+            'This doesn\'t look like a trade export — missing "Entry date", "Instrument", or "P&L" columns.',
         },
       ],
     };
@@ -91,12 +101,16 @@ export function parseTradesCsv(csvText: string): ParsedImport {
     }
 
     const timeRaw = cell(cells, "entry_time").trim();
+    const exitDateRaw = cell(cells, "exit_date").trim();
+    const exitTimeRaw = cell(cells, "exit_time").trim();
     const directionRaw = cell(cells, "direction").trim().toLowerCase();
     const tagsRaw = cell(cells, "tags").trim();
 
     trades.push({
       entry_date,
       entry_time: TIME_RE.test(timeRaw) ? timeRaw : null,
+      exit_date: DATE_RE.test(exitDateRaw) ? exitDateRaw : null,
+      exit_time: TIME_RE.test(exitTimeRaw) ? exitTimeRaw : null,
       instrument,
       asset_class: text(cell(cells, "asset_class")),
       strategy: text(cell(cells, "strategy")),

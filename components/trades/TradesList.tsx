@@ -587,7 +587,7 @@ function TradesList({
                 </th>
               )}
               <th className="px-4 py-3">
-                <SortHeader label="Date" column="entry_date" sort={sort} onSortChange={onSortChange} />
+                <SortHeader label="Entry" column="entry_date" sort={sort} onSortChange={onSortChange} />
               </th>
               <th className="px-4 py-3">
                 <SortHeader label="Instrument" column="instrument" sort={sort} onSortChange={onSortChange} />
@@ -638,7 +638,7 @@ function TradesList({
           }}
           className="bg-surface-2 border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary"
         >
-          <option value="entry_date">Date</option>
+          <option value="entry_date">Entry date</option>
           <option value="instrument">Instrument</option>
           <option value="pnl">P&amp;L</option>
           <option value="r_multiple">R</option>

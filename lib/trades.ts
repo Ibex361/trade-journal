@@ -7,6 +7,8 @@ export type Trade = {
   account_id: string;
   entry_date: string;
   entry_time: string | null;
+  exit_date: string | null;
+  exit_time: string | null;
   instrument: string;
   asset_class: string | null;
   strategy: string | null;
@@ -30,6 +32,8 @@ export type Trade = {
 export type TradeInput = {
   entry_date: string;
   entry_time: string | null;
+  exit_date: string | null;
+  exit_time: string | null;
   instrument: string;
   asset_class: string | null;
   strategy: string | null;
