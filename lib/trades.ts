@@ -1,6 +1,8 @@
 import { supabase } from "./supabaseClient";
 
 export type Direction = "long" | "short";
+export type ExitReason = "stop_loss" | "take_profit" | "manual" | "other";
+export type StopMovement = "held" | "tightened" | "widened";
 
 export type Trade = {
   id: string;
@@ -23,6 +25,9 @@ export type Trade = {
   pnl: number;
   r_multiple: number | null;
   rules_followed: boolean | null;
+  exit_reason: ExitReason | null;
+  sl_movement: StopMovement | null;
+  tp_movement: StopMovement | null;
   notes: string | null;
   screenshot_url: string | null;
   tags: string[];
@@ -49,6 +54,9 @@ export type TradeInput = {
   pnl: number;
   r_multiple: number | null;
   rules_followed: boolean | null;
+  exit_reason: ExitReason | null;
+  sl_movement: StopMovement | null;
+  tp_movement: StopMovement | null;
   notes: string | null;
   screenshot_url: string | null;
   tags: string[];

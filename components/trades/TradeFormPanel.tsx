@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
-import { createTrade, updateTrade, Trade, TradeInput, Direction } from "@/lib/trades";
+import { createTrade, updateTrade, Trade, TradeInput, Direction, ExitReason, StopMovement } from "@/lib/trades";
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
 import { uploadScreenshot, deleteScreenshotByUrl, validateScreenshotFile } from "@/lib/screenshots";
@@ -28,6 +28,9 @@ const emptyForm = {
   pnl: "",
   r_multiple: "",
   rules_followed: null as boolean | null,
+  exit_reason: "" as ExitReason | "",
+  sl_movement: null as StopMovement | null,
+  tp_movement: null as StopMovement | null,
   notes: "",
   tags: [] as string[],
 };
@@ -94,6 +97,19 @@ const FIELD_LABELS: Record<string, string> = {
   pnl: "P&L (or fill in entry price, exit price, and size so it can be calculated)",
 };
 
+const EXIT_REASON_OPTIONS: { value: ExitReason; label: string }[] = [
+  { value: "stop_loss", label: "Stop loss hit" },
+  { value: "take_profit", label: "Take profit hit" },
+  { value: "manual", label: "Manual close" },
+  { value: "other", label: "Other" },
+];
+
+const MOVEMENT_OPTIONS: { value: StopMovement; label: string }[] = [
+  { value: "held", label: "Held" },
+  { value: "tightened", label: "Tightened" },
+  { value: "widened", label: "Widened" },
+];
+
 function tradeToForm(trade: Trade): FormState {
   return {
     entry_date: trade.entry_date,
@@ -120,6 +136,9 @@ function tradeToForm(trade: Trade): FormState {
     pnl: trade.pnl?.toString() ?? "",
     r_multiple: trade.r_multiple?.toString() ?? "",
     rules_followed: trade.rules_followed,
+    exit_reason: trade.exit_reason ?? "",
+    sl_movement: trade.sl_movement,
+    tp_movement: trade.tp_movement,
     notes: trade.notes ?? "",
     tags: trade.tags ?? [],
   };
@@ -497,6 +516,9 @@ export default function TradeFormPanel({
       pnl: finalPnl,
       r_multiple: finalR,
       rules_followed: form.rules_followed,
+      exit_reason: (form.exit_reason || null) as ExitReason | null,
+      sl_movement: form.sl_movement,
+      tp_movement: form.tp_movement,
       notes: form.notes.trim() || null,
       screenshot_url: finalScreenshotUrl,
       tags: form.tags,
@@ -725,6 +747,63 @@ export default function TradeFormPanel({
                 placeholder="Optional"
                 className={`${selectClass} font-mono`}
               />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className={labelClass}>Exit reason</span>
+            <select
+              value={form.exit_reason}
+              onChange={(e) => set("exit_reason", e.target.value as ExitReason | "")}
+              className={selectClass}
+            >
+              <option value="">—</option>
+              {EXIT_REASON_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className={labelClass}>SL mov&apos;t</span>
+              <div className="mt-1 flex gap-1 bg-surface-2 rounded-full p-1 border border-surface-border">
+                {MOVEMENT_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => set("sl_movement", form.sl_movement === o.value ? null : o.value)}
+                    className={`flex-1 py-1.5 rounded-full text-[11px] transition-colors ${
+                      form.sl_movement === o.value
+                        ? "bg-brass text-surface-0 font-medium"
+                        : "text-ink-secondary hover:text-ink-primary"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </label>
+            <label className="block">
+              <span className={labelClass}>TP mov&apos;t</span>
+              <div className="mt-1 flex gap-1 bg-surface-2 rounded-full p-1 border border-surface-border">
+                {MOVEMENT_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => set("tp_movement", form.tp_movement === o.value ? null : o.value)}
+                    className={`flex-1 py-1.5 rounded-full text-[11px] transition-colors ${
+                      form.tp_movement === o.value
+                        ? "bg-brass text-surface-0 font-medium"
+                        : "text-ink-secondary hover:text-ink-primary"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
             </label>
           </div>
 

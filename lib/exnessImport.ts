@@ -1,4 +1,4 @@
-import { TradeInput } from "./trades";
+import { TradeInput, ExitReason } from "./trades";
 import { parseCsvRows, parseNumber, ImportRowIssue, ParsedImport } from "./csvUtils";
 import { calculateRMultiple } from "./metrics";
 
@@ -69,14 +69,14 @@ function guessAssetClass(symbol: string): string | null {
   return null;
 }
 
-function closeReasonNote(reason: string): string | null {
+function closeReasonToExitReason(reason: string): ExitReason | null {
   switch (reason.trim().toLowerCase()) {
     case "sl":
-      return "Closed by stop loss.";
+      return "stop_loss";
     case "tp":
-      return "Closed by take profit.";
+      return "take_profit";
     case "user":
-      return "Closed manually.";
+      return "manual";
     default:
       return null;
   }
@@ -102,6 +102,10 @@ function closeReasonNote(reason: string): string | null {
  * - take_profit is kept as take_profit_price. equity and margin_level
  *   still have no matching field in this app and are dropped rather than
  *   stuffed somewhere they don't belong.
+ * - close_reason maps to the structured exit_reason field (sl → stop_loss,
+ *   tp → take_profit, user → manual) rather than being written into notes
+ *   as prose. sl_movement/tp_movement are left unset — Exness doesn't
+ *   report whether a stop or target was moved during the trade.
  */
 export function parseExnessCsv(csvText: string): ParsedImport {
   const rows = parseCsvRows(csvText).filter((r) => !(r.length === 1 && r[0].trim() === ""));
@@ -200,7 +204,10 @@ export function parseExnessCsv(csvText: string): ParsedImport {
       pnl: Math.round((profit + commission + swap) * 100) / 100,
       r_multiple: calculateRMultiple(direction, entryPrice, exitPrice, stopLossPrice),
       rules_followed: null,
-      notes: closeReasonNote(cell(cells, "close_reason")),
+      exit_reason: closeReasonToExitReason(cell(cells, "close_reason")),
+      sl_movement: null,
+      tp_movement: null,
+      notes: null,
       screenshot_url: null,
       tags: [],
       broker_ticket: ticket || null,

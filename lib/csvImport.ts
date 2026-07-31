@@ -1,4 +1,4 @@
-import { TradeInput, Direction } from "./trades";
+import { TradeInput, Direction, ExitReason, StopMovement } from "./trades";
 import { CSV_COLUMNS } from "./csvExport";
 import { parseCsvRows, parseNumber, ImportRowIssue, ParsedImport } from "./csvUtils";
 
@@ -21,6 +21,18 @@ function bool(value: string): boolean | null {
   if (v === "yes" || v === "true") return true;
   if (v === "no" || v === "false") return false;
   return null;
+}
+
+const EXIT_REASONS: ExitReason[] = ["stop_loss", "take_profit", "manual", "other"];
+function exitReason(value: string): ExitReason | null {
+  const v = value.trim().toLowerCase();
+  return (EXIT_REASONS as string[]).includes(v) ? (v as ExitReason) : null;
+}
+
+const STOP_MOVEMENTS: StopMovement[] = ["held", "tightened", "widened"];
+function stopMovement(value: string): StopMovement | null {
+  const v = value.trim().toLowerCase();
+  return (STOP_MOVEMENTS as string[]).includes(v) ? (v as StopMovement) : null;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -125,6 +137,9 @@ export function parseTradesCsv(csvText: string): ParsedImport {
       pnl,
       r_multiple: parseNumber(cell(cells, "r_multiple")),
       rules_followed: bool(cell(cells, "rules_followed")),
+      exit_reason: exitReason(cell(cells, "exit_reason")),
+      sl_movement: stopMovement(cell(cells, "sl_movement")),
+      tp_movement: stopMovement(cell(cells, "tp_movement")),
       notes: text(cell(cells, "notes")),
       screenshot_url: null,
       tags: tagsRaw ? tagsRaw.split(";").map((t) => stripFormulaGuard(t.trim())).filter(Boolean) : [],
