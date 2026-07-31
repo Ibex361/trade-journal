@@ -578,6 +578,74 @@ export function getTradesInStrategyExitGroup(trades: Trade[], strategyKey: strin
   return trades.filter((t) => (t.strategy ?? "unspecified") === strategyKey && t.exit_reason === exitReason);
 }
 
+export type SlTrailImpact = {
+  /** Raw strategy value used to match trades back for drill-down; "unspecified" if null. */
+  key: string;
+  label: string;
+  /** Trades whose stop loss was moved during the trade (sl_movement is "tightened" or "widened"). */
+  trailedCount: number;
+  /** Trades whose stop loss was left alone (sl_movement === "held"). The comparison baseline. */
+  heldCount: number;
+  trailedWinRateStrict: number | null;
+  trailedWinRateDecided: number | null;
+  heldWinRateStrict: number | null;
+  heldWinRateDecided: number | null;
+};
+
+function isTrailedSl(trade: Trade): boolean {
+  return trade.sl_movement === "tightened" || trade.sl_movement === "widened";
+}
+
+/**
+ * For each strategy, compares the win rate of trades where the stop loss
+ * was trailed (tightened or widened mid-trade) against trades where it was
+ * left alone (sl_movement === "held") — the data behind the Analytics
+ * "Does trailing the stop help?" chart. Trades with no sl_movement recorded
+ * at all land in neither bucket, since there's nothing to compare. Both win
+ * rate conventions (strict/decided) are carried for each side so the chart
+ * can react to the user's WinRateModeContext choice without recomputing.
+ * Only strategies with at least one trailed-SL trade are returned — a
+ * strategy that never trails its stop has nothing for this chart to show.
+ */
+export function getSlTrailImpactByStrategy(trades: Trade[]): SlTrailImpact[] {
+  const groups = new Map<string, Trade[]>();
+  for (const t of trades) {
+    const key = t.strategy ?? "unspecified";
+    const existing = groups.get(key);
+    if (existing) existing.push(t);
+    else groups.set(key, [t]);
+  }
+
+  const result: SlTrailImpact[] = [];
+  for (const [key, groupTrades] of groups.entries()) {
+    const trailedTrades = groupTrades.filter(isTrailedSl);
+    if (trailedTrades.length === 0) continue;
+    const heldTrades = groupTrades.filter((t) => t.sl_movement === "held");
+    const trailedSummary = summarizeTrades(trailedTrades);
+    const heldSummary = summarizeTrades(heldTrades);
+    result.push({
+      key,
+      label: key === "unspecified" ? "Unspecified" : key,
+      trailedCount: trailedTrades.length,
+      heldCount: heldTrades.length,
+      trailedWinRateStrict: trailedSummary.winRateStrict,
+      trailedWinRateDecided: trailedSummary.winRateDecided,
+      heldWinRateStrict: heldSummary.winRateStrict,
+      heldWinRateDecided: heldSummary.winRateDecided,
+    });
+  }
+
+  return result.sort((a, b) => b.trailedCount - a.trailedCount);
+}
+
+/** Trades for a specific strategy's trailed (or held) SL group — used for drill-down. */
+export function getTradesInSlTrailGroup(trades: Trade[], strategyKey: string, trailed: boolean): Trade[] {
+  return trades.filter((t) => {
+    if ((t.strategy ?? "unspecified") !== strategyKey) return false;
+    return trailed ? isTrailedSl(t) : t.sl_movement === "held";
+  });
+}
+
 /** Fixed R-multiple bucket edges: bucket i covers [edges[i], edges[i+1]). */
 const R_BUCKET_EDGES = [-Infinity, -2, -1, 0, 1, 2, 3, Infinity];
 const R_BUCKET_LABELS = ["< -2R", "-2R to -1R", "-1R to 0R", "0R to 1R", "1R to 2R", "2R to 3R", "> 3R"];

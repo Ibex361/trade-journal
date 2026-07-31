@@ -28,6 +28,8 @@ import {
   getExitReasonByStrategy,
   getTradesInStrategyExitGroup,
   EXIT_REASON_META,
+  getSlTrailImpactByStrategy,
+  getTradesInSlTrailGroup,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
 import AnalyticsHero from "@/components/analytics/AnalyticsHero";
@@ -41,6 +43,7 @@ import RulesFollowedComparison from "@/components/analytics/RulesFollowedCompari
 import ExitReasonByStrategyChart, {
   exitStrategySelectionKey,
 } from "@/components/analytics/ExitReasonByStrategyChart";
+import SlTrailImpactChart from "@/components/analytics/SlTrailImpactChart";
 import AnalyticsSkeleton from "@/components/analytics/AnalyticsSkeleton";
 import Card from "@/components/shared/Card";
 
@@ -60,6 +63,7 @@ export default function AnalyticsPage() {
   const [selectedExitStrategy, setSelectedExitStrategy] = useState<{ strategyKey: string; reason: ExitReason } | null>(
     null
   );
+  const [selectedSlTrailKey, setSelectedSlTrailKey] = useState<string | null>(null);
 
   // The controls themselves (DateRangeSelector, granularity toggle,
   // breakdown-dimension tabs) read the raw state below so they respond to a
@@ -214,12 +218,28 @@ export default function AnalyticsPage() {
     );
   }, []);
 
+  const slTrailRows = useMemo(() => getSlTrailImpactByStrategy(rangeTrades), [rangeTrades]);
+  const selectedSlTrailRow = useMemo(
+    () => (selectedSlTrailKey ? slTrailRows.find((r) => r.key === selectedSlTrailKey) ?? null : null),
+    [slTrailRows, selectedSlTrailKey]
+  );
+  const slTrailTrailedTrades = useMemo(
+    () => (selectedSlTrailKey ? getTradesInSlTrailGroup(rangeTrades, selectedSlTrailKey, true) : []),
+    [rangeTrades, selectedSlTrailKey]
+  );
+  const slTrailHeldTrades = useMemo(
+    () => (selectedSlTrailKey ? getTradesInSlTrailGroup(rangeTrades, selectedSlTrailKey, false) : []),
+    [rangeTrades, selectedSlTrailKey]
+  );
+  const closeSlTrailDrilldown = useCallback(() => setSelectedSlTrailKey(null), []);
+
   // Clear every drill-down selection whenever the date range changes, so a
   // stale key never lingers on screen.
   useEffect(() => {
     setSelectedRBucketKey(null);
     setSelectedRulesKey(null);
     setSelectedExitStrategy(null);
+    setSelectedSlTrailKey(null);
   }, [deferredRange]);
 
   const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
@@ -371,6 +391,28 @@ export default function AnalyticsPage() {
               currency={selectedAccount.currency}
               onClose={closeExitStrategyDrilldown}
             />
+          )}
+
+          <SlTrailImpactChart
+            rows={slTrailRows}
+            selectedKey={selectedSlTrailKey}
+            onSelectStrategy={setSelectedSlTrailKey}
+          />
+          {selectedSlTrailRow && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <BreakdownDrilldown
+                groupLabel={`${selectedSlTrailRow.label} · Trailed SL`}
+                trades={slTrailTrailedTrades}
+                currency={selectedAccount.currency}
+                onClose={closeSlTrailDrilldown}
+              />
+              <BreakdownDrilldown
+                groupLabel={`${selectedSlTrailRow.label} · Held SL`}
+                trades={slTrailHeldTrades}
+                currency={selectedAccount.currency}
+                onClose={closeSlTrailDrilldown}
+              />
+            </div>
           )}
         </>
       )}
