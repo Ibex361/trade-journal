@@ -120,6 +120,7 @@ export function parseTradesCsv(csvText: string): ParsedImport {
       entry_price: parseNumber(cell(cells, "entry_price")),
       exit_price: parseNumber(cell(cells, "exit_price")),
       stop_loss_price: parseNumber(cell(cells, "stop_loss_price")),
+      take_profit_price: parseNumber(cell(cells, "take_profit_price")),
       size: parseNumber(cell(cells, "size")),
       pnl,
       r_multiple: parseNumber(cell(cells, "r_multiple")),

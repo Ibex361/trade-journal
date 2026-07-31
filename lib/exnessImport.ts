@@ -44,8 +44,8 @@ export type { ImportRowIssue, ParsedImport } from "./csvUtils";
 
 // Columns this parser actually needs to recognize the file and build a
 // trade. Exness' export has more columns than this (original_position_size,
-// take_profit, equity, margin_level) that this app has no field for, so
-// they're read from the row when useful and otherwise left alone.
+// equity, margin_level) that this app has no field for, so they're read
+// from the row when useful and otherwise left alone.
 const REQUIRED_HEADERS = ["ticket", "opening_time_utc", "symbol", "type", "profit"];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -99,8 +99,9 @@ function closeReasonNote(reason: string): string | null {
  * - Each row's broker "ticket" is kept as broker_ticket, so a re-import of
  *   an overlapping date range can be de-duplicated by the caller instead
  *   of creating repeat trades.
- * - take_profit, equity, and margin_level have no matching field in this
- *   app and are dropped rather than stuffed somewhere they don't belong.
+ * - take_profit is kept as take_profit_price. equity and margin_level
+ *   still have no matching field in this app and are dropped rather than
+ *   stuffed somewhere they don't belong.
  */
 export function parseExnessCsv(csvText: string): ParsedImport {
   const rows = parseCsvRows(csvText).filter((r) => !(r.length === 1 && r[0].trim() === ""));
@@ -170,6 +171,7 @@ export function parseExnessCsv(csvText: string): ParsedImport {
     const entryPrice = parseNumber(cell(cells, "opening_price"));
     const exitPrice = parseNumber(cell(cells, "closing_price"));
     const stopLossPrice = parseNumber(cell(cells, "stop_loss"));
+    const takeProfitPrice = parseNumber(cell(cells, "take_profit"));
     const local = toLocalDateTime(datePart, timePart);
 
     const closingRaw = cell(cells, "closing_time_utc").trim();
@@ -193,6 +195,7 @@ export function parseExnessCsv(csvText: string): ParsedImport {
       entry_price: entryPrice,
       exit_price: exitPrice,
       stop_loss_price: stopLossPrice,
+      take_profit_price: takeProfitPrice,
       size: parseNumber(cell(cells, "lots")),
       pnl: Math.round((profit + commission + swap) * 100) / 100,
       r_multiple: calculateRMultiple(direction, entryPrice, exitPrice, stopLossPrice),

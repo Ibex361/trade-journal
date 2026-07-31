@@ -18,6 +18,7 @@ export type Trade = {
   entry_price: number | null;
   exit_price: number | null;
   stop_loss_price: number | null;
+  take_profit_price: number | null;
   size: number | null;
   pnl: number;
   r_multiple: number | null;
@@ -43,6 +44,7 @@ export type TradeInput = {
   entry_price: number | null;
   exit_price: number | null;
   stop_loss_price: number | null;
+  take_profit_price: number | null;
   size: number | null;
   pnl: number;
   r_multiple: number | null;

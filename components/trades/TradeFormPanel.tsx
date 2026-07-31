@@ -23,6 +23,7 @@ const emptyForm = {
   entry_price: "",
   exit_price: "",
   stop_loss_price: "",
+  take_profit_price: "",
   size: "",
   pnl: "",
   r_multiple: "",
@@ -114,6 +115,7 @@ function tradeToForm(trade: Trade): FormState {
     entry_price: trade.entry_price?.toString() ?? "",
     exit_price: trade.exit_price?.toString() ?? "",
     stop_loss_price: trade.stop_loss_price?.toString() ?? "",
+    take_profit_price: trade.take_profit_price?.toString() ?? "",
     size: trade.size?.toString() ?? "",
     pnl: trade.pnl?.toString() ?? "",
     r_multiple: trade.r_multiple?.toString() ?? "",
@@ -327,6 +329,7 @@ export default function TradeFormPanel({
   const entryNum = form.entry_price ? parseFloat(form.entry_price) : null;
   const exitNum = form.exit_price ? parseFloat(form.exit_price) : null;
   const stopNum = form.stop_loss_price ? parseFloat(form.stop_loss_price) : null;
+  const tpNum = form.take_profit_price ? parseFloat(form.take_profit_price) : null;
   const sizeNum = form.size ? parseFloat(form.size) : null;
 
   const computedPnl = useMemo(
@@ -489,6 +492,7 @@ export default function TradeFormPanel({
       entry_price: entryNum,
       exit_price: exitNum,
       stop_loss_price: stopNum,
+      take_profit_price: tpNum,
       size: sizeNum,
       pnl: finalPnl,
       r_multiple: finalR,
@@ -699,17 +703,30 @@ export default function TradeFormPanel({
             </label>
           </div>
 
-          <label className="block">
-            <span className={labelClass}>Stop loss price</span>
-            <input
-              type="number"
-              step="any"
-              value={form.stop_loss_price}
-              onChange={(e) => set("stop_loss_price", e.target.value)}
-              placeholder="Optional — enables R-multiple"
-              className={`${selectClass} font-mono`}
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className={labelClass}>Stop loss price</span>
+              <input
+                type="number"
+                step="any"
+                value={form.stop_loss_price}
+                onChange={(e) => set("stop_loss_price", e.target.value)}
+                placeholder="Optional — enables R-multiple"
+                className={`${selectClass} font-mono`}
+              />
+            </label>
+            <label className="block">
+              <span className={labelClass}>Take profit price</span>
+              <input
+                type="number"
+                step="any"
+                value={form.take_profit_price}
+                onChange={(e) => set("take_profit_price", e.target.value)}
+                placeholder="Optional"
+                className={`${selectClass} font-mono`}
+              />
+            </label>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <label className="block">

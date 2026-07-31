@@ -16,6 +16,7 @@ export const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
   { key: "entry_price", label: "Entry price" },
   { key: "exit_price", label: "Exit price" },
   { key: "stop_loss_price", label: "Stop loss price" },
+  { key: "take_profit_price", label: "Take profit price" },
   { key: "size", label: "Size" },
   { key: "pnl", label: "P&L" },
   { key: "r_multiple", label: "R multiple" },
