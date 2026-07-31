@@ -10,10 +10,16 @@ type Row = SlTrailImpact & {
   /** Win rate under the current WinRateMode for each side, picked once per row so the tooltip and sort don't recompute it. */
   trailedWinRatePicked: number | null;
   heldWinRatePicked: number | null;
-  /** trailedWinRatePicked - heldWinRatePicked; null if either side has no rate to compare. */
-  diff: number | null;
-  /** What actually gets plotted — 0 when diff is null, so the bar reads as "nothing to show" rather than disappearing. */
-  plotValue: number;
+  /** Each side's share of the compared sample (trailedCount + heldCount) — 0-1. */
+  trailedShare: number;
+  heldShare: number;
+  /** Win rate × share — a side with a great win rate but a tiny share of the
+   * sample can't swing the result the way it would in a raw win-rate
+   * subtraction. A null win rate (no trades on that side) contributes 0. */
+  weightedTrailed: number;
+  weightedHeld: number;
+  /** weightedTrailed - weightedHeld, in points. Always defined — see note above. */
+  diff: number;
 };
 
 type TooltipPayloadItem = { payload: Row };
@@ -30,28 +36,24 @@ const CustomTooltip = memo(function CustomTooltip({
   if (!active || !payload || !payload.length) return null;
   const row = payload[0].payload;
   return (
-    <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass">
+    <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass min-w-[200px]">
       <p className="text-xs text-ink-secondary">{row.label}</p>
-      {row.diff == null ? (
-        <p className="text-xs text-ink-muted mt-1">
-          No held-SL trades in this range to compare against ({row.trailedCount} trailed).
+      <p className={`font-mono text-sm mt-0.5 ${row.diff >= 0 ? "text-gain" : "text-loss"}`}>
+        {row.diff > 0 ? "+" : ""}
+        {row.diff.toFixed(1)} pts
+      </p>
+      <div className="mt-1.5 space-y-0.5">
+        <p className="text-xs text-ink-muted">
+          Trailed: {row.trailedWinRatePicked != null ? `${row.trailedWinRatePicked.toFixed(0)}%` : "—"} win ×{" "}
+          {(row.trailedShare * 100).toFixed(0)}% share = {row.weightedTrailed.toFixed(1)} pts ({row.trailedCount}{" "}
+          trade{row.trailedCount === 1 ? "" : "s"})
         </p>
-      ) : (
-        <>
-          <p className={`font-mono text-sm mt-0.5 ${row.diff >= 0 ? "text-gain" : "text-loss"}`}>
-            {row.diff > 0 ? "+" : ""}
-            {row.diff.toFixed(1)} pts
-          </p>
-          <p className="text-xs text-ink-muted mt-1">
-            Trailed: {row.trailedWinRatePicked != null ? `${row.trailedWinRatePicked.toFixed(0)}%` : "—"} (
-            {row.trailedCount} trade{row.trailedCount === 1 ? "" : "s"})
-          </p>
-          <p className="text-xs text-ink-muted">
-            Held: {row.heldWinRatePicked != null ? `${row.heldWinRatePicked.toFixed(0)}%` : "—"} ({row.heldCount}{" "}
-            trade{row.heldCount === 1 ? "" : "s"})
-          </p>
-        </>
-      )}
+        <p className="text-xs text-ink-muted">
+          Held: {row.heldWinRatePicked != null ? `${row.heldWinRatePicked.toFixed(0)}%` : "—"} win ×{" "}
+          {(row.heldShare * 100).toFixed(0)}% share = {row.weightedHeld.toFixed(1)} pts ({row.heldCount} trade
+          {row.heldCount === 1 ? "" : "s"})
+        </p>
+      </div>
       <p className="text-[11px] text-glow mt-1.5">Click to view both groups' trades</p>
     </div>
   );
@@ -69,7 +71,7 @@ function SlTrailImpactChart({
   const { mode } = useWinRateMode();
 
   const chartRows = useMemo(() => {
-    const withDiff = rows.map((r) => {
+    const withDiff: Row[] = rows.map((r) => {
       const trailedWinRatePicked = pickWinRate(
         { winRateStrict: r.trailedWinRateStrict, winRateDecided: r.trailedWinRateDecided },
         mode
@@ -78,16 +80,34 @@ function SlTrailImpactChart({
         { winRateStrict: r.heldWinRateStrict, winRateDecided: r.heldWinRateDecided },
         mode
       );
-      const diff = trailedWinRatePicked != null && heldWinRatePicked != null ? trailedWinRatePicked - heldWinRatePicked : null;
-      return { ...r, trailedWinRatePicked, heldWinRatePicked, diff, plotValue: diff ?? 0 };
+      // Denominator is just the compared sample (trailed + held) — trades
+      // with no sl_movement recorded were never part of either side, so
+      // they don't dilute the shares here.
+      const sampleCount = r.trailedCount + r.heldCount;
+      const trailedShare = sampleCount > 0 ? r.trailedCount / sampleCount : 0;
+      const heldShare = sampleCount > 0 ? r.heldCount / sampleCount : 0;
+      const weightedTrailed = (trailedWinRatePicked ?? 0) * trailedShare;
+      const weightedHeld = (heldWinRatePicked ?? 0) * heldShare;
+      return {
+        ...r,
+        trailedWinRatePicked,
+        heldWinRatePicked,
+        trailedShare,
+        heldShare,
+        weightedTrailed,
+        weightedHeld,
+        diff: weightedTrailed - weightedHeld,
+      };
     });
-    // Biggest positive impact (trailing helped most) at top, biggest negative
-    // at the bottom — the strategies with no baseline to compare sink to the
-    // very end since there's no signal to rank them by.
-    return withDiff.sort((a, b) => (b.diff ?? -Infinity) - (a.diff ?? -Infinity));
+    // Biggest positive impact (trailing helped most) at top, biggest
+    // negative at the bottom.
+    return withDiff.sort((a, b) => b.diff - a.diff);
   }, [rows, mode]);
 
-  const noBaselineCount = useMemo(() => chartRows.filter((r) => r.diff == null).length, [chartRows]);
+  const lopsidedCount = useMemo(
+    () => chartRows.filter((r) => r.heldCount === 0).length,
+    [chartRows]
+  );
   const hasData = chartRows.length > 0;
   const chartHeight = Math.max(120, chartRows.length * 44);
 
@@ -103,7 +123,7 @@ function SlTrailImpactChart({
   return (
     <Card
       title="Does trailing the stop help?"
-      description="Win rate of trailed-SL trades minus held-SL trades, by strategy — click a bar to view both groups"
+      description="Win rate weighted by each side's share of trailed vs. held trades, by strategy — click a bar to view both groups"
     >
       {!hasData ? (
         <div className="h-40 flex items-center justify-center">
@@ -138,28 +158,22 @@ function SlTrailImpactChart({
                 />
                 <ReferenceLine x={0} stroke="rgba(255,255,255,0.25)" />
                 <Tooltip cursor={{ fill: "rgba(255,255,255,0.06)" }} content={<CustomTooltip />} />
-                <Bar dataKey="plotValue" radius={3} style={{ cursor: "pointer" }} isAnimationActive={false}>
+                <Bar dataKey="diff" radius={3} style={{ cursor: "pointer" }} isAnimationActive={false}>
                   {chartRows.map((row) => (
                     <Cell
                       key={row.key}
-                      fill={row.diff == null ? "#5C6180" : row.diff >= 0 ? "#5CE6C8" : "#FB7185"}
-                      opacity={
-                        row.diff == null
-                          ? 0.25
-                          : selectedKey == null || selectedKey === row.key
-                          ? 1
-                          : 0.35
-                      }
+                      fill={row.diff >= 0 ? "#5CE6C8" : "#FB7185"}
+                      opacity={selectedKey == null || selectedKey === row.key ? 1 : 0.35}
                     />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          {noBaselineCount > 0 && (
+          {lopsidedCount > 0 && (
             <p className="text-[11px] text-ink-muted mt-3">
-              {noBaselineCount} strateg{noBaselineCount === 1 ? "y has" : "ies have"} trailed-SL trades but no
-              held-SL trades in this range to compare against — shown at zero above.
+              {lopsidedCount} strateg{lopsidedCount === 1 ? "y has" : "ies have"} no held-SL trades in this range,
+              so its bar reflects the trailed side's win rate at full weight — hover for the exact math.
             </p>
           )}
         </>
