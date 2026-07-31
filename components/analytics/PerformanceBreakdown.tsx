@@ -68,9 +68,9 @@ function PerformanceBreakdown({
     [currency]
   );
 
-  const handleBarClick = useCallback(
-    (data: any) => {
-      const key = data?.payload?.key ?? data?.key;
+  const handleChartClick = useCallback(
+    (state: any) => {
+      const key = state?.activePayload?.[0]?.payload?.key;
       if (key) onSelectGroup(selectedKey === key ? null : key);
     },
     [onSelectGroup, selectedKey]
@@ -108,9 +108,9 @@ function PerformanceBreakdown({
           <p className="text-ink-muted text-sm">No trades in this range.</p>
         </div>
       ) : (
-        <div className="h-64">
+        <div className="h-64 cursor-pointer">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={groups} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+            <BarChart data={groups} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} onClick={handleChartClick}>
               <defs>
                 <linearGradient id="perfBarUp" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#5CE6C8" />
@@ -147,7 +147,6 @@ function PerformanceBreakdown({
                 dataKey="totalPnl"
                 radius={[3, 3, 0, 0]}
                 style={{ cursor: "pointer" }}
-                onClick={handleBarClick}
                 isAnimationActive={false}
               >
                 {groups.map((g) => (

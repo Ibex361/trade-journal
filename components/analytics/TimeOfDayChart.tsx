@@ -74,10 +74,11 @@ function TimeOfDayChart({
     [currency]
   );
 
-  const handleBarClick = useCallback(
-    (data: any) => {
-      const key = data?.payload?.key ?? data?.key;
-      const count = data?.payload?.count ?? data?.count;
+  const handleChartClick = useCallback(
+    (state: any) => {
+      const payload = state?.activePayload?.[0]?.payload;
+      const key = payload?.key;
+      const count = payload?.count;
       if (key && count > 0) onSelectBucket(selectedKey === key ? null : key);
     },
     [onSelectBucket, selectedKey]
@@ -116,9 +117,9 @@ function TimeOfDayChart({
         </div>
       ) : (
         <>
-          <div className="h-56">
+          <div className="h-56 cursor-pointer">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={buckets} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <BarChart data={buckets} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} onClick={handleChartClick}>
                 <defs>
                   <linearGradient id="todBarUp" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#5CE6C8" />
@@ -152,7 +153,6 @@ function TimeOfDayChart({
                   dataKey="totalPnl"
                   radius={[3, 3, 0, 0]}
                   style={{ cursor: "pointer" }}
-                  onClick={handleBarClick}
                   isAnimationActive={false}
                 >
                   {buckets.map((b) => (
