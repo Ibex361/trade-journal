@@ -22,11 +22,15 @@ import {
   getPerformanceByHour,
   getTradesInHourBucket,
   countMissingTimeOfDay,
+  getPerformanceByHoldingTime,
+  getTradesInHoldingTimeBucket,
+  countMissingHoldingTime,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
 import AnalyticsHero from "@/components/analytics/AnalyticsHero";
 import PnlByPeriodChart from "@/components/analytics/PnlByPeriodChart";
 import TimeOfDayChart from "@/components/analytics/TimeOfDayChart";
+import HoldingTimeChart from "@/components/analytics/HoldingTimeChart";
 import PerformanceBreakdown from "@/components/analytics/PerformanceBreakdown";
 import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
 import RMultipleHistogram from "@/components/analytics/RMultipleHistogram";
@@ -42,6 +46,7 @@ export default function AnalyticsPage() {
   const [granularity, setGranularity] = useState<PeriodGranularity>("day");
   const [timeOfDaySource, setTimeOfDaySource] = useState<TimeOfDaySource>("entry");
   const [selectedHourKey, setSelectedHourKey] = useState<string | null>(null);
+  const [selectedHoldingKey, setSelectedHoldingKey] = useState<string | null>(null);
   const [breakdownDimension, setBreakdownDimension] = useState<BreakdownDimension>("instrument");
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [selectedRBucketKey, setSelectedRBucketKey] = useState<string | null>(null);
@@ -116,6 +121,23 @@ export default function AnalyticsPage() {
     setSelectedHourKey(null);
   }, [deferredRange, deferredTimeOfDaySource]);
 
+  const holdingBuckets = useMemo(() => getPerformanceByHoldingTime(rangeTrades), [rangeTrades]);
+  const missingHoldingTimeCount = useMemo(() => countMissingHoldingTime(rangeTrades), [rangeTrades]);
+  const holdingDrilldownTrades = useMemo(
+    () => (selectedHoldingKey ? getTradesInHoldingTimeBucket(rangeTrades, selectedHoldingKey) : []),
+    [rangeTrades, selectedHoldingKey]
+  );
+  const selectedHoldingBucket = useMemo(
+    () => holdingBuckets.find((b) => b.key === selectedHoldingKey) ?? null,
+    [holdingBuckets, selectedHoldingKey]
+  );
+
+  // Clear the holding-time drilldown whenever the range changes, so a stale
+  // key never lingers on screen.
+  useEffect(() => {
+    setSelectedHoldingKey(null);
+  }, [deferredRange]);
+
   const breakdownGroups = useMemo(
     () => getBreakdownByDimension(rangeTrades, deferredBreakdownDimension),
     [rangeTrades, deferredBreakdownDimension]
@@ -169,6 +191,7 @@ export default function AnalyticsPage() {
 
   const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
   const closeHourDrilldown = useCallback(() => setSelectedHourKey(null), []);
+  const closeHoldingDrilldown = useCallback(() => setSelectedHoldingKey(null), []);
   const closeRBucketDrilldown = useCallback(() => setSelectedRBucketKey(null), []);
   const closeRulesDrilldown = useCallback(() => setSelectedRulesKey(null), []);
 
@@ -221,6 +244,21 @@ export default function AnalyticsPage() {
               trades={hourDrilldownTrades}
               currency={selectedAccount.currency}
               onClose={closeHourDrilldown}
+            />
+          )}
+          <HoldingTimeChart
+            buckets={holdingBuckets}
+            currency={selectedAccount.currency}
+            missingCount={missingHoldingTimeCount}
+            selectedKey={selectedHoldingKey}
+            onSelectBucket={setSelectedHoldingKey}
+          />
+          {selectedHoldingBucket && (
+            <BreakdownDrilldown
+              groupLabel={`Held ${selectedHoldingBucket.label}`}
+              trades={holdingDrilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={closeHoldingDrilldown}
             />
           )}
           <PerformanceBreakdown

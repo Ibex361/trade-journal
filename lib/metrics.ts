@@ -631,6 +631,103 @@ export function countMissingTimeOfDay(trades: Trade[], source: TimeOfDaySource):
   return trades.filter((t) => !timeSourceValue(t, source)).length;
 }
 
+/**
+ * How long a trade was held, in minutes — from entry_date+entry_time to
+ * exit_date+exit_time. Both a full entry timestamp AND a full exit
+ * timestamp are required; a trade missing any of the four fields (common
+ * for older manually-entered trades, since all four are optional) has no
+ * reliable duration and returns null rather than guessing. Also guards
+ * against a negative duration from a data-entry mistake (exit logged
+ * before entry).
+ */
+function holdingMinutes(trade: Trade): number | null {
+  if (!trade.entry_time || !trade.exit_date || !trade.exit_time) return null;
+  const start = new Date(`${trade.entry_date}T${trade.entry_time}`);
+  const end = new Date(`${trade.exit_date}T${trade.exit_time}`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const minutes = (end.getTime() - start.getTime()) / 60000;
+  return minutes >= 0 ? minutes : null;
+}
+
+// Bucket edges span from sub-minute scalps through multi-day swings, since
+// a single trader can reasonably work all three styles. Bucket i covers
+// [edges[i], edges[i+1]) minutes.
+const HOLDING_BUCKET_EDGES_MINUTES = [0, 1, 5, 15, 30, 60, 120, 240, 480, 1440, 4320, Infinity];
+const HOLDING_BUCKET_LABELS = [
+  "<1m",
+  "1-5m",
+  "5-15m",
+  "15-30m",
+  "30-60m",
+  "1-2h",
+  "2-4h",
+  "4-8h",
+  "8-24h",
+  "1-3d",
+  "3d+",
+];
+
+export type HoldingTimeBucket = {
+  key: string;
+  label: string;
+  count: number;
+  totalPnl: number;
+  winRateStrict: number | null;
+  winRateDecided: number | null;
+  avgR: number | null;
+};
+
+/**
+ * Groups trades into holding-time buckets (entry timestamp to exit
+ * timestamp) for the Analytics "performance by holding time" chart. Trades
+ * without a full entry AND exit timestamp are left out of every bucket —
+ * see countMissingHoldingTime for surfacing how many that is.
+ */
+export function getPerformanceByHoldingTime(trades: Trade[]): HoldingTimeBucket[] {
+  const byBucket: Trade[][] = HOLDING_BUCKET_LABELS.map(() => []);
+
+  for (const t of trades) {
+    const minutes = holdingMinutes(t);
+    if (minutes == null) continue;
+    for (let i = 0; i < HOLDING_BUCKET_EDGES_MINUTES.length - 1; i++) {
+      if (minutes >= HOLDING_BUCKET_EDGES_MINUTES[i] && minutes < HOLDING_BUCKET_EDGES_MINUTES[i + 1]) {
+        byBucket[i].push(t);
+        break;
+      }
+    }
+  }
+
+  return HOLDING_BUCKET_LABELS.map((label, i) => {
+    const summary = summarizeTrades(byBucket[i]);
+    return {
+      key: `ht${i}`,
+      label,
+      count: summary.count,
+      totalPnl: summary.totalPnl,
+      winRateStrict: summary.winRateStrict,
+      winRateDecided: summary.winRateDecided,
+      avgR: summary.avgR,
+    };
+  });
+}
+
+/** Trades falling into a specific holding-time bucket (by its "ht0".."ht10" key) — used for drill-down. */
+export function getTradesInHoldingTimeBucket(trades: Trade[], bucketKey: string): Trade[] {
+  const idx = HOLDING_BUCKET_LABELS.findIndex((_, i) => `ht${i}` === bucketKey);
+  if (idx === -1) return [];
+  const min = HOLDING_BUCKET_EDGES_MINUTES[idx];
+  const max = HOLDING_BUCKET_EDGES_MINUTES[idx + 1];
+  return trades.filter((t) => {
+    const minutes = holdingMinutes(t);
+    return minutes != null && minutes >= min && minutes < max;
+  });
+}
+
+/** How many trades in the set have no reliable holding-time (missing entry or exit timestamp) — for an "excluded" note under the chart. */
+export function countMissingHoldingTime(trades: Trade[]): number {
+  return trades.filter((t) => holdingMinutes(t) == null).length;
+}
+
 /** Trades whose entry_date falls within the given calendar month. `month` is 1-indexed (Jan = 1). */
 export function getTradesInMonth(trades: Trade[], year: number, month: number): Trade[] {
   return trades.filter((t) => {
