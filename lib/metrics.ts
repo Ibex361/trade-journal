@@ -698,6 +698,109 @@ export function getTradesInRMultipleBucket(trades: Trade[], bucketKey: string): 
 }
 
 /**
+ * Planned R-multiple = reward / risk using the take-profit price as the
+ * reward target instead of the actual exit price — i.e. the R the trade was
+ * set up to capture before it got managed. Same direction-aware risk
+ * convention as calculateRMultiple (risk = |entry - stop|). Returns null if
+ * any required input is missing or risk is zero — this is what makes a
+ * trade "unplanned" for the planned-vs-realized comparison below.
+ */
+export function calculatePlannedRMultiple(
+  direction: Direction | null,
+  entryPrice: number | null,
+  stopLossPrice: number | null,
+  takeProfitPrice: number | null
+): number | null {
+  if (entryPrice == null || stopLossPrice == null || takeProfitPrice == null) return null;
+  if (Number.isNaN(entryPrice) || Number.isNaN(stopLossPrice) || Number.isNaN(takeProfitPrice)) return null;
+
+  const risk = Math.abs(entryPrice - stopLossPrice);
+  if (risk === 0) return null;
+
+  const reward = direction === "short" ? entryPrice - takeProfitPrice : takeProfitPrice - entryPrice;
+  return reward / risk;
+}
+
+export type PlannedVsRealizedPoint = {
+  /** Trade id, so a clicked point can be matched back to its full Trade for drill-down. */
+  id: string;
+  label: string;
+  strategy: string | null;
+  exitReason: ExitReason | null;
+  plannedR: number;
+  realizedR: number;
+  /** realizedR - plannedR. Positive/zero means the trade matched or beat its plan; negative means it fell short. */
+  delta: number;
+};
+
+/**
+ * Pairs each trade's planned R (from entry/stop/take-profit, set before the
+ * trade was managed) against its realized R (the actual outcome) — the data
+ * behind the Analytics "Planned vs. realized R" chart. Only trades with a
+ * full plan (entry, stop loss, AND take-profit all recorded) and a realized
+ * R-multiple are included; see countMissingPlannedR for what's excluded.
+ */
+export function getPlannedVsRealizedR(trades: Trade[]): PlannedVsRealizedPoint[] {
+  const points: PlannedVsRealizedPoint[] = [];
+  for (const t of trades) {
+    if (t.r_multiple == null || Number.isNaN(t.r_multiple)) continue;
+    const plannedR = calculatePlannedRMultiple(t.direction, t.entry_price, t.stop_loss_price, t.take_profit_price);
+    if (plannedR == null) continue;
+    points.push({
+      id: t.id,
+      label: `${t.instrument}${t.direction ? ` · ${t.direction}` : ""}`,
+      strategy: t.strategy,
+      exitReason: t.exit_reason,
+      plannedR,
+      realizedR: t.r_multiple,
+      delta: t.r_multiple - plannedR,
+    });
+  }
+  return points;
+}
+
+/**
+ * Trades excluded from the planned-vs-realized chart — missing a
+ * take-profit price (so no plan was ever set), a stop loss price, or a
+ * realized R-multiple. Surfaced as a note under the chart, same convention
+ * as countMissingTimeOfDay/countMissingHoldingTime.
+ */
+export function countMissingPlannedR(trades: Trade[]): number {
+  return trades.filter((t) => {
+    if (t.r_multiple == null || Number.isNaN(t.r_multiple)) return true;
+    return calculatePlannedRMultiple(t.direction, t.entry_price, t.stop_loss_price, t.take_profit_price) == null;
+  }).length;
+}
+
+export type PlannedVsRealizedSummary = {
+  avgPlannedR: number | null;
+  avgRealizedR: number | null;
+  /** avgRealizedR - avgPlannedR — positive means, on average, trades matched or beat their plan. */
+  avgDelta: number | null;
+  /** Count of trades that met or exceeded their planned R (delta >= 0). */
+  metOrExceededCount: number;
+  /** Count of trades that fell short of their planned R (delta < 0) — stopped out, closed early, or reversed before reaching target. */
+  fellShortCount: number;
+};
+
+/** Aggregate stats over a set of planned-vs-realized points — the chip row above the scatter chart. */
+export function summarizePlannedVsRealizedR(points: PlannedVsRealizedPoint[]): PlannedVsRealizedSummary {
+  if (points.length === 0) {
+    return { avgPlannedR: null, avgRealizedR: null, avgDelta: null, metOrExceededCount: 0, fellShortCount: 0 };
+  }
+  const avgPlannedR = points.reduce((s, p) => s + p.plannedR, 0) / points.length;
+  const avgRealizedR = points.reduce((s, p) => s + p.realizedR, 0) / points.length;
+  const metOrExceededCount = points.filter((p) => p.delta >= 0).length;
+  return {
+    avgPlannedR,
+    avgRealizedR,
+    avgDelta: avgRealizedR - avgPlannedR,
+    metOrExceededCount,
+    fellShortCount: points.length - metOrExceededCount,
+  };
+}
+
+/**
  * Which clock-time field the "performance by time of day" chart buckets
  * trades by. "entry" is when a trade was taken; "exit" is when it was
  * closed — for a strategy that holds trades for hours, these can tell very

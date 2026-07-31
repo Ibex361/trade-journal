@@ -30,6 +30,9 @@ import {
   EXIT_REASON_META,
   getSlTrailImpactByStrategy,
   getTradesInSlTrailGroup,
+  getPlannedVsRealizedR,
+  summarizePlannedVsRealizedR,
+  countMissingPlannedR,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
 import AnalyticsHero from "@/components/analytics/AnalyticsHero";
@@ -44,6 +47,7 @@ import ExitReasonByStrategyChart, {
   exitStrategySelectionKey,
 } from "@/components/analytics/ExitReasonByStrategyChart";
 import SlTrailImpactChart from "@/components/analytics/SlTrailImpactChart";
+import PlannedVsRealizedRChart from "@/components/analytics/PlannedVsRealizedRChart";
 import AnalyticsSkeleton from "@/components/analytics/AnalyticsSkeleton";
 import Card from "@/components/shared/Card";
 
@@ -64,6 +68,7 @@ export default function AnalyticsPage() {
     null
   );
   const [selectedSlTrailKey, setSelectedSlTrailKey] = useState<string | null>(null);
+  const [selectedPlannedRId, setSelectedPlannedRId] = useState<string | null>(null);
 
   // The controls themselves (DateRangeSelector, granularity toggle,
   // breakdown-dimension tabs) read the raw state below so they respond to a
@@ -233,6 +238,22 @@ export default function AnalyticsPage() {
   );
   const closeSlTrailDrilldown = useCallback(() => setSelectedSlTrailKey(null), []);
 
+  const plannedVsRealizedPoints = useMemo(() => getPlannedVsRealizedR(rangeTrades), [rangeTrades]);
+  const plannedVsRealizedSummary = useMemo(
+    () => summarizePlannedVsRealizedR(plannedVsRealizedPoints),
+    [plannedVsRealizedPoints]
+  );
+  const missingPlannedRCount = useMemo(() => countMissingPlannedR(rangeTrades), [rangeTrades]);
+  const selectedPlannedRPoint = useMemo(
+    () => (selectedPlannedRId ? plannedVsRealizedPoints.find((p) => p.id === selectedPlannedRId) ?? null : null),
+    [plannedVsRealizedPoints, selectedPlannedRId]
+  );
+  const selectedPlannedRTrade = useMemo(
+    () => (selectedPlannedRId ? rangeTrades.find((t) => t.id === selectedPlannedRId) ?? null : null),
+    [rangeTrades, selectedPlannedRId]
+  );
+  const closePlannedRDrilldown = useCallback(() => setSelectedPlannedRId(null), []);
+
   // Clear every drill-down selection whenever the date range changes, so a
   // stale key never lingers on screen.
   useEffect(() => {
@@ -240,6 +261,7 @@ export default function AnalyticsPage() {
     setSelectedRulesKey(null);
     setSelectedExitStrategy(null);
     setSelectedSlTrailKey(null);
+    setSelectedPlannedRId(null);
   }, [deferredRange]);
 
   const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
@@ -374,6 +396,24 @@ export default function AnalyticsPage() {
               )}
             </div>
           </div>
+
+          <PlannedVsRealizedRChart
+            points={plannedVsRealizedPoints}
+            summary={plannedVsRealizedSummary}
+            missingCount={missingPlannedRCount}
+            selectedId={selectedPlannedRId}
+            onSelectPoint={setSelectedPlannedRId}
+          />
+          {selectedPlannedRPoint && selectedPlannedRTrade && (
+            <BreakdownDrilldown
+              groupLabel={`${selectedPlannedRPoint.label} · planned ${selectedPlannedRPoint.plannedR.toFixed(
+                2
+              )}R vs. realized ${selectedPlannedRPoint.realizedR.toFixed(2)}R`}
+              trades={[selectedPlannedRTrade]}
+              currency={selectedAccount.currency}
+              onClose={closePlannedRDrilldown}
+            />
+          )}
 
           <ExitReasonByStrategyChart
             rows={exitStrategyRows}
