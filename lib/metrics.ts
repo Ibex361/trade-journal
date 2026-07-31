@@ -2,7 +2,7 @@
 // Dashboard, Trades, Analytics, and Reports should all import from
 // here so the numbers can never drift apart between pages.
 
-import { Direction, Trade } from "./trades";
+import { Direction, ExitReason, Trade } from "./trades";
 import { localDateString } from "./date";
 
 /**
@@ -494,6 +494,88 @@ export function getBreakdownByDimension(trades: Trade[], dimension: BreakdownDim
 /** Trades matching a specific breakdown group's key for the given dimension — used for drill-down. */
 export function getTradesInBreakdownGroup(trades: Trade[], dimension: BreakdownDimension, key: string): Trade[] {
   return trades.filter((t) => (breakdownFieldValue(t, dimension) ?? "unspecified") === key);
+}
+
+/**
+ * Display metadata for each exit_reason value, shared by the chart (fill
+ * color) and any other UI that needs a consistent label/order. Order here
+ * is also the stacking order in the 100%-stacked bar (stop loss first,
+ * since it's the segment traders most want to see at a glance).
+ */
+export const EXIT_REASON_META: { value: ExitReason; label: string; color: string }[] = [
+  { value: "stop_loss", label: "Stop loss", color: "#FB7185" }, // loss/coral
+  { value: "take_profit", label: "Take profit", color: "#5CE6C8" }, // gain/teal
+  { value: "manual", label: "Manual close", color: "#7C6FF0" }, // glow-violet
+  { value: "other", label: "Other", color: "#5C6180" }, // ink-muted
+];
+
+export type StrategyExitBreakdown = {
+  /** Raw strategy value used to match trades back for drill-down; "unspecified" if null. */
+  key: string;
+  label: string;
+  /** All trades for this strategy in range, regardless of whether exit_reason is set. */
+  totalCount: number;
+  /** Trades for this strategy with an exit_reason recorded — the denominator for the percentages below. */
+  recordedCount: number;
+  /** Trades for this strategy with no exit_reason recorded — excluded from the bar, called out separately. */
+  missingCount: number;
+  counts: Record<ExitReason, number>;
+  /** Each reason's share of recordedCount, 0–100. Sums to 100 (within rounding) when recordedCount > 0. */
+  pcts: Record<ExitReason, number>;
+};
+
+/**
+ * For each strategy, what share of its closed trades hit the stop loss vs.
+ * the take profit vs. were closed manually vs. something else — the data
+ * behind the Analytics "SL/TP hit rate by strategy" chart. Percentages are
+ * computed only over trades that actually have exit_reason recorded, so a
+ * strategy with lots of un-tagged older trades doesn't get diluted; those
+ * trades are counted in missingCount instead. Strategies with zero recorded
+ * exit reasons are dropped entirely (nothing meaningful to show), and the
+ * rest are sorted by recordedCount descending so the most data-rich
+ * strategies read first.
+ */
+export function getExitReasonByStrategy(trades: Trade[]): StrategyExitBreakdown[] {
+  const groups = new Map<string, Trade[]>();
+  for (const t of trades) {
+    const key = t.strategy ?? "unspecified";
+    const existing = groups.get(key);
+    if (existing) existing.push(t);
+    else groups.set(key, [t]);
+  }
+
+  const result: StrategyExitBreakdown[] = [];
+  for (const [key, groupTrades] of groups.entries()) {
+    const counts: Record<ExitReason, number> = { stop_loss: 0, take_profit: 0, manual: 0, other: 0 };
+    let missingCount = 0;
+    for (const t of groupTrades) {
+      if (t.exit_reason) counts[t.exit_reason] += 1;
+      else missingCount += 1;
+    }
+    const recordedCount = groupTrades.length - missingCount;
+    const pcts: Record<ExitReason, number> = { stop_loss: 0, take_profit: 0, manual: 0, other: 0 };
+    if (recordedCount > 0) {
+      for (const reason of Object.keys(counts) as ExitReason[]) {
+        pcts[reason] = (counts[reason] / recordedCount) * 100;
+      }
+    }
+    result.push({
+      key,
+      label: key === "unspecified" ? "Unspecified" : key,
+      totalCount: groupTrades.length,
+      recordedCount,
+      missingCount,
+      counts,
+      pcts,
+    });
+  }
+
+  return result.filter((g) => g.recordedCount > 0).sort((a, b) => b.recordedCount - a.recordedCount);
+}
+
+/** Trades matching a specific strategy + exit-reason combination — used for drill-down. */
+export function getTradesInStrategyExitGroup(trades: Trade[], strategyKey: string, exitReason: ExitReason): Trade[] {
+  return trades.filter((t) => (t.strategy ?? "unspecified") === strategyKey && t.exit_reason === exitReason);
 }
 
 /** Fixed R-multiple bucket edges: bucket i covers [edges[i], edges[i+1]). */

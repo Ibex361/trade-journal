@@ -2,7 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, Trade } from "@/lib/trades";
+import { fetchTrades, Trade, ExitReason } from "@/lib/trades";
 import {
   DateRange,
   PeriodGranularity,
@@ -25,6 +25,9 @@ import {
   getPerformanceByHoldingTime,
   getTradesInHoldingTimeBucket,
   countMissingHoldingTime,
+  getExitReasonByStrategy,
+  getTradesInStrategyExitGroup,
+  EXIT_REASON_META,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
 import AnalyticsHero from "@/components/analytics/AnalyticsHero";
@@ -35,6 +38,9 @@ import PerformanceBreakdown from "@/components/analytics/PerformanceBreakdown";
 import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
 import RMultipleHistogram from "@/components/analytics/RMultipleHistogram";
 import RulesFollowedComparison from "@/components/analytics/RulesFollowedComparison";
+import ExitReasonByStrategyChart, {
+  exitStrategySelectionKey,
+} from "@/components/analytics/ExitReasonByStrategyChart";
 import AnalyticsSkeleton from "@/components/analytics/AnalyticsSkeleton";
 import Card from "@/components/shared/Card";
 
@@ -51,6 +57,9 @@ export default function AnalyticsPage() {
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [selectedRBucketKey, setSelectedRBucketKey] = useState<string | null>(null);
   const [selectedRulesKey, setSelectedRulesKey] = useState<string | null>(null);
+  const [selectedExitStrategy, setSelectedExitStrategy] = useState<{ strategyKey: string; reason: ExitReason } | null>(
+    null
+  );
 
   // The controls themselves (DateRangeSelector, granularity toggle,
   // breakdown-dimension tabs) read the raw state below so they respond to a
@@ -182,11 +191,35 @@ export default function AnalyticsPage() {
     [rulesGroups, selectedRulesKey]
   );
 
+  const exitStrategyRows = useMemo(() => getExitReasonByStrategy(rangeTrades), [rangeTrades]);
+  const exitStrategyDrilldownTrades = useMemo(
+    () =>
+      selectedExitStrategy
+        ? getTradesInStrategyExitGroup(rangeTrades, selectedExitStrategy.strategyKey, selectedExitStrategy.reason)
+        : [],
+    [rangeTrades, selectedExitStrategy]
+  );
+  const selectedExitStrategyRow = useMemo(
+    () => (selectedExitStrategy ? exitStrategyRows.find((r) => r.key === selectedExitStrategy.strategyKey) : null),
+    [exitStrategyRows, selectedExitStrategy]
+  );
+  const selectedExitStrategyLabel = useMemo(() => {
+    if (!selectedExitStrategy || !selectedExitStrategyRow) return "";
+    const reasonLabel = EXIT_REASON_META.find((r) => r.value === selectedExitStrategy.reason)?.label ?? "";
+    return `${selectedExitStrategyRow.label} · ${reasonLabel}`;
+  }, [selectedExitStrategy, selectedExitStrategyRow]);
+  const onSelectExitStrategySegment = useCallback((strategyKey: string, reason: ExitReason) => {
+    setSelectedExitStrategy((prev) =>
+      prev && prev.strategyKey === strategyKey && prev.reason === reason ? null : { strategyKey, reason }
+    );
+  }, []);
+
   // Clear every drill-down selection whenever the date range changes, so a
   // stale key never lingers on screen.
   useEffect(() => {
     setSelectedRBucketKey(null);
     setSelectedRulesKey(null);
+    setSelectedExitStrategy(null);
   }, [deferredRange]);
 
   const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
@@ -194,6 +227,7 @@ export default function AnalyticsPage() {
   const closeHoldingDrilldown = useCallback(() => setSelectedHoldingKey(null), []);
   const closeRBucketDrilldown = useCallback(() => setSelectedRBucketKey(null), []);
   const closeRulesDrilldown = useCallback(() => setSelectedRulesKey(null), []);
+  const closeExitStrategyDrilldown = useCallback(() => setSelectedExitStrategy(null), []);
 
   return (
     <div className="space-y-6">
@@ -320,6 +354,24 @@ export default function AnalyticsPage() {
               )}
             </div>
           </div>
+
+          <ExitReasonByStrategyChart
+            rows={exitStrategyRows}
+            selectedKey={
+              selectedExitStrategy
+                ? exitStrategySelectionKey(selectedExitStrategy.strategyKey, selectedExitStrategy.reason)
+                : null
+            }
+            onSelectSegment={onSelectExitStrategySegment}
+          />
+          {selectedExitStrategy && (
+            <BreakdownDrilldown
+              groupLabel={selectedExitStrategyLabel}
+              trades={exitStrategyDrilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={closeExitStrategyDrilldown}
+            />
+          )}
         </>
       )}
     </div>
