@@ -547,6 +547,90 @@ export function getTradesInRMultipleBucket(trades: Trade[], bucketKey: string): 
   return trades.filter((t) => t.r_multiple != null && !Number.isNaN(t.r_multiple) && t.r_multiple >= min && t.r_multiple < max);
 }
 
+/**
+ * Which clock-time field the "performance by time of day" chart buckets
+ * trades by. "entry" is when a trade was taken; "exit" is when it was
+ * closed — for a strategy that holds trades for hours, these can tell very
+ * different stories (e.g. entries clustered at the open but exits spread
+ * through the day), which is why the chart lets the user toggle between them
+ * rather than picking one.
+ */
+export type TimeOfDaySource = "entry" | "exit";
+
+export const TIME_OF_DAY_SOURCES: { value: TimeOfDaySource; label: string }[] = [
+  { value: "entry", label: "Entry time" },
+  { value: "exit", label: "Exit time" },
+];
+
+function timeSourceValue(trade: Trade, source: TimeOfDaySource): string | null {
+  return source === "entry" ? trade.entry_time : trade.exit_time;
+}
+
+/** Pulls the 0-23 hour out of an "HH:MM" / "HH:MM:SS" time string. Returns null if unparseable. */
+function hourOf(time: string): number | null {
+  const hour = parseInt(time.slice(0, 2), 10);
+  return Number.isNaN(hour) || hour < 0 || hour > 23 ? null : hour;
+}
+
+export type TimeOfDayBucket = {
+  key: string;
+  hour: number;
+  label: string;
+  count: number;
+  totalPnl: number;
+  winRateStrict: number | null;
+  winRateDecided: number | null;
+  avgR: number | null;
+};
+
+/**
+ * Groups trades into 24 hourly buckets (local time, midnight to 11pm) by
+ * either their entry time or their exit time, for the Analytics "performance
+ * by time of day" chart. Trades with no recorded value for the chosen field
+ * are left out of every bucket — see countMissingTimeOfDay for surfacing how
+ * many that is.
+ */
+export function getPerformanceByHour(trades: Trade[], source: TimeOfDaySource): TimeOfDayBucket[] {
+  const byHour: Trade[][] = Array.from({ length: 24 }, () => []);
+
+  for (const t of trades) {
+    const time = timeSourceValue(t, source);
+    if (!time) continue;
+    const hour = hourOf(time);
+    if (hour == null) continue;
+    byHour[hour].push(t);
+  }
+
+  return byHour.map((hourTrades, hour) => {
+    const summary = summarizeTrades(hourTrades);
+    return {
+      key: `h${hour}`,
+      hour,
+      label: `${String(hour).padStart(2, "0")}:00`,
+      count: summary.count,
+      totalPnl: summary.totalPnl,
+      winRateStrict: summary.winRateStrict,
+      winRateDecided: summary.winRateDecided,
+      avgR: summary.avgR,
+    };
+  });
+}
+
+/** Trades falling into a specific hour bucket (by its "h0".."h23" key) for the chosen time source — used for drill-down. */
+export function getTradesInHourBucket(trades: Trade[], source: TimeOfDaySource, bucketKey: string): Trade[] {
+  const hour = parseInt(bucketKey.slice(1), 10);
+  if (Number.isNaN(hour)) return [];
+  return trades.filter((t) => {
+    const time = timeSourceValue(t, source);
+    return time != null && hourOf(time) === hour;
+  });
+}
+
+/** How many trades in the set have no recorded value for the chosen time source — for an "excluded" note under the chart. */
+export function countMissingTimeOfDay(trades: Trade[], source: TimeOfDaySource): number {
+  return trades.filter((t) => !timeSourceValue(t, source)).length;
+}
+
 /** Trades whose entry_date falls within the given calendar month. `month` is 1-indexed (Jan = 1). */
 export function getTradesInMonth(trades: Trade[], year: number, month: number): Trade[] {
   return trades.filter((t) => {

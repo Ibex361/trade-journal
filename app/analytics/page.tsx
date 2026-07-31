@@ -7,6 +7,7 @@ import {
   DateRange,
   PeriodGranularity,
   BreakdownDimension,
+  TimeOfDaySource,
   filterTradesByRange,
   buildEquityCurveForRange,
   getDrawdown,
@@ -18,10 +19,14 @@ import {
   getTradesInBreakdownGroup,
   getRMultipleDistribution,
   getTradesInRMultipleBucket,
+  getPerformanceByHour,
+  getTradesInHourBucket,
+  countMissingTimeOfDay,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
 import AnalyticsHero from "@/components/analytics/AnalyticsHero";
 import PnlByPeriodChart from "@/components/analytics/PnlByPeriodChart";
+import TimeOfDayChart from "@/components/analytics/TimeOfDayChart";
 import PerformanceBreakdown from "@/components/analytics/PerformanceBreakdown";
 import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
 import RMultipleHistogram from "@/components/analytics/RMultipleHistogram";
@@ -35,6 +40,8 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<DateRange>("30d");
   const [granularity, setGranularity] = useState<PeriodGranularity>("day");
+  const [timeOfDaySource, setTimeOfDaySource] = useState<TimeOfDaySource>("entry");
+  const [selectedHourKey, setSelectedHourKey] = useState<string | null>(null);
   const [breakdownDimension, setBreakdownDimension] = useState<BreakdownDimension>("instrument");
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [selectedRBucketKey, setSelectedRBucketKey] = useState<string | null>(null);
@@ -49,6 +56,7 @@ export default function AnalyticsPage() {
   // used for the Trades page's filters/sort.
   const deferredRange = useDeferredValue(range);
   const deferredGranularity = useDeferredValue(granularity);
+  const deferredTimeOfDaySource = useDeferredValue(timeOfDaySource);
   const deferredBreakdownDimension = useDeferredValue(breakdownDimension);
 
   useEffect(() => {
@@ -83,6 +91,30 @@ export default function AnalyticsPage() {
     () => getPnlByPeriod(rangeTrades, deferredGranularity),
     [rangeTrades, deferredGranularity]
   );
+
+  const hourBuckets = useMemo(
+    () => getPerformanceByHour(rangeTrades, deferredTimeOfDaySource),
+    [rangeTrades, deferredTimeOfDaySource]
+  );
+  const missingTimeOfDayCount = useMemo(
+    () => countMissingTimeOfDay(rangeTrades, deferredTimeOfDaySource),
+    [rangeTrades, deferredTimeOfDaySource]
+  );
+  const hourDrilldownTrades = useMemo(
+    () =>
+      selectedHourKey ? getTradesInHourBucket(rangeTrades, deferredTimeOfDaySource, selectedHourKey) : [],
+    [rangeTrades, deferredTimeOfDaySource, selectedHourKey]
+  );
+  const selectedHourBucket = useMemo(
+    () => hourBuckets.find((b) => b.key === selectedHourKey) ?? null,
+    [hourBuckets, selectedHourKey]
+  );
+
+  // Clear the hour drilldown whenever the underlying trade set changes shape
+  // (range or time source), so a stale key never lingers on screen.
+  useEffect(() => {
+    setSelectedHourKey(null);
+  }, [deferredRange, deferredTimeOfDaySource]);
 
   const breakdownGroups = useMemo(
     () => getBreakdownByDimension(rangeTrades, deferredBreakdownDimension),
@@ -136,6 +168,7 @@ export default function AnalyticsPage() {
   }, [deferredRange]);
 
   const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
+  const closeHourDrilldown = useCallback(() => setSelectedHourKey(null), []);
   const closeRBucketDrilldown = useCallback(() => setSelectedRBucketKey(null), []);
   const closeRulesDrilldown = useCallback(() => setSelectedRulesKey(null), []);
 
@@ -173,6 +206,23 @@ export default function AnalyticsPage() {
             granularity={granularity}
             onGranularityChange={setGranularity}
           />
+          <TimeOfDayChart
+            buckets={hourBuckets}
+            currency={selectedAccount.currency}
+            source={timeOfDaySource}
+            onSourceChange={setTimeOfDaySource}
+            missingCount={missingTimeOfDayCount}
+            selectedKey={selectedHourKey}
+            onSelectBucket={setSelectedHourKey}
+          />
+          {selectedHourBucket && (
+            <BreakdownDrilldown
+              groupLabel={selectedHourBucket.label}
+              trades={hourDrilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={closeHourDrilldown}
+            />
+          )}
           <PerformanceBreakdown
             groups={breakdownGroups}
             currency={selectedAccount.currency}
