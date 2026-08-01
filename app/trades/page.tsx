@@ -67,7 +67,7 @@ export default function TradesPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
-  const { filters, setFilters, sort, setSort, resetFilters } = useTradesPageState();
+  const { filters, setFilters, sort, setSort } = useTradesPageState();
   // Typing in the filter bar or changing sort updates `filters`/`sort` (and
   // their controls) immediately; this combined, deferred copy is what
   // actually drives the filter+sort+row-render pipeline below, so neither
@@ -105,7 +105,6 @@ export default function TradesPage() {
 
   useEffect(() => {
     load();
-    resetFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 

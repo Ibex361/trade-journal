@@ -142,12 +142,6 @@ export default function AnalyticsPage() {
     [hourBuckets, selectedHourKey]
   );
 
-  // Clear the hour drilldown whenever the underlying trade set changes shape
-  // (range or time source), so a stale key never lingers on screen.
-  useEffect(() => {
-    setSelectedHourKey(null);
-  }, [deferredRange, deferredTimeOfDaySource]);
-
   const holdingBuckets = useMemo(() => getPerformanceByHoldingTime(rangeTrades), [rangeTrades]);
   const missingHoldingTimeCount = useMemo(() => countMissingHoldingTime(rangeTrades), [rangeTrades]);
   const holdingDrilldownTrades = useMemo(
@@ -159,22 +153,10 @@ export default function AnalyticsPage() {
     [holdingBuckets, selectedHoldingKey]
   );
 
-  // Clear the holding-time drilldown whenever the range changes, so a stale
-  // key never lingers on screen.
-  useEffect(() => {
-    setSelectedHoldingKey(null);
-  }, [deferredRange]);
-
   const breakdownGroups = useMemo(
     () => getBreakdownByDimension(rangeTrades, deferredBreakdownDimension),
     [rangeTrades, deferredBreakdownDimension]
   );
-
-  // Clear the drill-down selection whenever the underlying trade set changes
-  // shape (range or dimension), so a stale key never lingers on screen.
-  useEffect(() => {
-    setSelectedGroupKey(null);
-  }, [deferredRange, deferredBreakdownDimension]);
 
   const selectedGroup = useMemo(
     () => breakdownGroups.find((g) => g.key === selectedGroupKey) ?? null,
@@ -272,16 +254,6 @@ export default function AnalyticsPage() {
     [rangeTrades, selectedPlannedRId]
   );
   const closePlannedRDrilldown = useCallback(() => setSelectedPlannedRId(null), []);
-
-  // Clear every drill-down selection whenever the date range changes, so a
-  // stale key never lingers on screen.
-  useEffect(() => {
-    setSelectedRBucketKey(null);
-    setSelectedRulesKey(null);
-    setSelectedExitStrategy(null);
-    setSelectedSlMovement(null);
-    setSelectedPlannedRId(null);
-  }, [deferredRange]);
 
   const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
   const closeHourDrilldown = useCallback(() => setSelectedHourKey(null), []);
