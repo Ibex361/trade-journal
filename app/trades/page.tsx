@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
+import { useTradesPageState } from "@/lib/TradesPageStateContext";
 import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { deleteScreenshotByUrl } from "@/lib/screenshots";
@@ -9,7 +10,7 @@ import { summarizeTrades } from "@/lib/metrics";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
 import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
-import TradesFilterBar, { TradeFilters, EMPTY_FILTERS } from "@/components/trades/TradesFilterBar";
+import TradesFilterBar, { TradeFilters } from "@/components/trades/TradesFilterBar";
 import TradesPerformanceRibbon from "@/components/trades/TradesPerformanceRibbon";
 import TradesSkeleton from "@/components/trades/TradesSkeleton";
 import BulkActionsBar from "@/components/trades/BulkActionsBar";
@@ -66,8 +67,7 @@ export default function TradesPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
-  const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
-  const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
+  const { filters, setFilters, sort, setSort, resetFilters } = useTradesPageState();
   // Typing in the filter bar or changing sort updates `filters`/`sort` (and
   // their controls) immediately; this combined, deferred copy is what
   // actually drives the filter+sort+row-render pipeline below, so neither
@@ -105,7 +105,7 @@ export default function TradesPage() {
 
   useEffect(() => {
     load();
-    setFilters(EMPTY_FILTERS);
+    resetFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 

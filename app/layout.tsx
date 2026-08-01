@@ -5,6 +5,9 @@ import AppHeader from "@/components/AppHeader";
 import MobileTabBar from "@/components/MobileTabBar";
 import { AccountProvider } from "@/lib/AccountContext";
 import { WinRateModeProvider } from "@/lib/WinRateModeContext";
+import { TradesPageStateProvider } from "@/lib/TradesPageStateContext";
+import { AnalyticsPageStateProvider } from "@/lib/AnalyticsPageStateContext";
+import ScrollRestoration from "@/components/ScrollRestoration";
 
 // Concept C's type pairing: Space Grotesk (display) + Inter (body) + JetBrains
 // Mono (numbers). Inter/JetBrains Mono are unchanged from before.
@@ -48,11 +51,16 @@ export default function RootLayout({
       <body className="font-body min-h-screen">
         <AccountProvider>
           <WinRateModeProvider>
+          <TradesPageStateProvider>
+          <AnalyticsPageStateProvider>
+          <ScrollRestoration />
           <AppHeader />
           <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-24 md:pb-8 print:max-w-none print:px-0 print:py-0">
             {children}
           </main>
           <MobileTabBar />
+          </AnalyticsPageStateProvider>
+          </TradesPageStateProvider>
           </WinRateModeProvider>
         </AccountProvider>
       </body>

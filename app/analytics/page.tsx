@@ -2,12 +2,9 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
+import { useAnalyticsPageState } from "@/lib/AnalyticsPageStateContext";
 import { fetchTrades, Trade, ExitReason, StopMovement } from "@/lib/trades";
 import {
-  DateRange,
-  PeriodGranularity,
-  BreakdownDimension,
-  TimeOfDaySource,
   filterTradesByRange,
   buildEquityCurveForRange,
   getDrawdown,
@@ -55,22 +52,32 @@ export default function AnalyticsPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState<DateRange>("30d");
-  const [granularity, setGranularity] = useState<PeriodGranularity>("day");
-  const [timeOfDaySource, setTimeOfDaySource] = useState<TimeOfDaySource>("entry");
-  const [selectedHourKey, setSelectedHourKey] = useState<string | null>(null);
-  const [selectedHoldingKey, setSelectedHoldingKey] = useState<string | null>(null);
-  const [breakdownDimension, setBreakdownDimension] = useState<BreakdownDimension>("instrument");
-  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
-  const [selectedRBucketKey, setSelectedRBucketKey] = useState<string | null>(null);
-  const [selectedRulesKey, setSelectedRulesKey] = useState<string | null>(null);
-  const [selectedExitStrategy, setSelectedExitStrategy] = useState<{ strategyKey: string; reason: ExitReason } | null>(
-    null
-  );
-  const [selectedSlMovement, setSelectedSlMovement] = useState<{ strategyKey: string; movement: StopMovement } | null>(
-    null
-  );
-  const [selectedPlannedRId, setSelectedPlannedRId] = useState<string | null>(null);
+  const {
+    range,
+    setRange,
+    granularity,
+    setGranularity,
+    timeOfDaySource,
+    setTimeOfDaySource,
+    selectedHourKey,
+    setSelectedHourKey,
+    selectedHoldingKey,
+    setSelectedHoldingKey,
+    breakdownDimension,
+    setBreakdownDimension,
+    selectedGroupKey,
+    setSelectedGroupKey,
+    selectedRBucketKey,
+    setSelectedRBucketKey,
+    selectedRulesKey,
+    setSelectedRulesKey,
+    selectedExitStrategy,
+    setSelectedExitStrategy,
+    selectedSlMovement,
+    setSelectedSlMovement,
+    selectedPlannedRId,
+    setSelectedPlannedRId,
+  } = useAnalyticsPageState();
 
   // The controls themselves (DateRangeSelector, granularity toggle,
   // breakdown-dimension tabs) read the raw state below so they respond to a
