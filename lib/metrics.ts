@@ -2,7 +2,7 @@
 // Dashboard, Trades, Analytics, and Reports should all import from
 // here so the numbers can never drift apart between pages.
 
-import { Direction, ExitReason, Trade } from "./trades";
+import { Direction, ExitReason, StopMovement, Trade } from "./trades";
 import { localDateString } from "./date";
 
 /**
@@ -578,36 +578,44 @@ export function getTradesInStrategyExitGroup(trades: Trade[], strategyKey: strin
   return trades.filter((t) => (t.strategy ?? "unspecified") === strategyKey && t.exit_reason === exitReason);
 }
 
-export type SlTrailImpact = {
+export type SlHitRateSegment = {
+  /** All trades in this strategy/movement group, regardless of exit reason. */
+  count: number;
+  /** The subset of those that were stopped out (exit_reason === "stop_loss"). */
+  hitCount: number;
+  /** hitCount / count as a percentage. Null when count is 0 — there is nothing to rate, not a 0% rate. */
+  hitRate: number | null;
+};
+
+export type SlHitRateRow = {
   /** Raw strategy value used to match trades back for drill-down; "unspecified" if null. */
   key: string;
   label: string;
-  /** Trades whose stop loss was moved during the trade (sl_movement is "tightened" or "widened"). */
-  trailedCount: number;
-  /** Trades whose stop loss was left alone (sl_movement === "held"). The comparison baseline. */
-  heldCount: number;
-  trailedWinRateStrict: number | null;
-  trailedWinRateDecided: number | null;
-  heldWinRateStrict: number | null;
-  heldWinRateDecided: number | null;
+  held: SlHitRateSegment;
+  tightened: SlHitRateSegment;
+  widened: SlHitRateSegment;
 };
 
-function isTrailedSl(trade: Trade): boolean {
-  return trade.sl_movement === "tightened" || trade.sl_movement === "widened";
+function summarizeSlHitRate(groupTrades: Trade[]): SlHitRateSegment {
+  const count = groupTrades.length;
+  const hitCount = groupTrades.filter((t) => t.exit_reason === "stop_loss").length;
+  return { count, hitCount, hitRate: count > 0 ? (hitCount / count) * 100 : null };
 }
 
 /**
- * For each strategy, compares the win rate of trades where the stop loss
- * was trailed (tightened or widened mid-trade) against trades where it was
- * left alone (sl_movement === "held") — the data behind the Analytics
- * "Does trailing the stop help?" chart. Trades with no sl_movement recorded
- * at all land in neither bucket, since there's nothing to compare. Both win
- * rate conventions (strict/decided) are carried for each side so the chart
- * can react to the user's WinRateModeContext choice without recomputing.
- * Only strategies with at least one trailed-SL trade are returned — a
- * strategy that never trails its stop has nothing for this chart to show.
+ * For each strategy, how often the stop loss actually got hit
+ * (exit_reason === "stop_loss"), split by whether that stop was held,
+ * tightened, or widened mid-trade — the data behind the Analytics
+ * "SL-hit rate by stop management" chart. This replaces an earlier
+ * weighted-win-rate-diff metric that collapsed to (trailedWins - heldWins) /
+ * totalTrades — a formula that could report "no effect" even when one side
+ * was a clean 2-for-2 and the other was 2-for-1000. This metric doesn't
+ * compare or blend the three groups at all: each is reported on its own, so
+ * nothing is diluted by the others' sample size. Trades with no sl_movement
+ * recorded land in none of the three segments. Only strategies with at
+ * least one trade that has an sl_movement recorded are returned.
  */
-export function getSlTrailImpactByStrategy(trades: Trade[]): SlTrailImpact[] {
+export function getSlHitRateByStrategy(trades: Trade[]): SlHitRateRow[] {
   const groups = new Map<string, Trade[]>();
   for (const t of trades) {
     const key = t.strategy ?? "unspecified";
@@ -616,34 +624,29 @@ export function getSlTrailImpactByStrategy(trades: Trade[]): SlTrailImpact[] {
     else groups.set(key, [t]);
   }
 
-  const result: SlTrailImpact[] = [];
+  const result: SlHitRateRow[] = [];
   for (const [key, groupTrades] of groups.entries()) {
-    const trailedTrades = groupTrades.filter(isTrailedSl);
-    if (trailedTrades.length === 0) continue;
     const heldTrades = groupTrades.filter((t) => t.sl_movement === "held");
-    const trailedSummary = summarizeTrades(trailedTrades);
-    const heldSummary = summarizeTrades(heldTrades);
+    const tightenedTrades = groupTrades.filter((t) => t.sl_movement === "tightened");
+    const widenedTrades = groupTrades.filter((t) => t.sl_movement === "widened");
+    if (heldTrades.length + tightenedTrades.length + widenedTrades.length === 0) continue;
     result.push({
       key,
       label: key === "unspecified" ? "Unspecified" : key,
-      trailedCount: trailedTrades.length,
-      heldCount: heldTrades.length,
-      trailedWinRateStrict: trailedSummary.winRateStrict,
-      trailedWinRateDecided: trailedSummary.winRateDecided,
-      heldWinRateStrict: heldSummary.winRateStrict,
-      heldWinRateDecided: heldSummary.winRateDecided,
+      held: summarizeSlHitRate(heldTrades),
+      tightened: summarizeSlHitRate(tightenedTrades),
+      widened: summarizeSlHitRate(widenedTrades),
     });
   }
 
-  return result.sort((a, b) => b.trailedCount - a.trailedCount);
+  return result.sort(
+    (a, b) => b.held.count + b.tightened.count + b.widened.count - (a.held.count + a.tightened.count + a.widened.count)
+  );
 }
 
-/** Trades for a specific strategy's trailed (or held) SL group — used for drill-down. */
-export function getTradesInSlTrailGroup(trades: Trade[], strategyKey: string, trailed: boolean): Trade[] {
-  return trades.filter((t) => {
-    if ((t.strategy ?? "unspecified") !== strategyKey) return false;
-    return trailed ? isTrailedSl(t) : t.sl_movement === "held";
-  });
+/** Trades for a specific strategy's held/tightened/widened SL group — used for drill-down. */
+export function getTradesInSlMovementGroup(trades: Trade[], strategyKey: string, movement: StopMovement): Trade[] {
+  return trades.filter((t) => (t.strategy ?? "unspecified") === strategyKey && t.sl_movement === movement);
 }
 
 /** Fixed R-multiple bucket edges: bucket i covers [edges[i], edges[i+1]). */

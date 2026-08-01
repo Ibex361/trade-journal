@@ -2,7 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, Trade, ExitReason } from "@/lib/trades";
+import { fetchTrades, Trade, ExitReason, StopMovement } from "@/lib/trades";
 import {
   DateRange,
   PeriodGranularity,
@@ -28,8 +28,8 @@ import {
   getExitReasonByStrategy,
   getTradesInStrategyExitGroup,
   EXIT_REASON_META,
-  getSlTrailImpactByStrategy,
-  getTradesInSlTrailGroup,
+  getSlHitRateByStrategy,
+  getTradesInSlMovementGroup,
   getPlannedVsRealizedR,
   summarizePlannedVsRealizedR,
   countMissingPlannedR,
@@ -46,7 +46,7 @@ import RulesFollowedComparison from "@/components/analytics/RulesFollowedCompari
 import ExitReasonByStrategyChart, {
   exitStrategySelectionKey,
 } from "@/components/analytics/ExitReasonByStrategyChart";
-import SlTrailImpactChart from "@/components/analytics/SlTrailImpactChart";
+import SlTrailImpactChart, { slMovementSelectionKey } from "@/components/analytics/SlTrailImpactChart";
 import PlannedVsRealizedRChart from "@/components/analytics/PlannedVsRealizedRChart";
 import AnalyticsSkeleton from "@/components/analytics/AnalyticsSkeleton";
 import Card from "@/components/shared/Card";
@@ -67,7 +67,9 @@ export default function AnalyticsPage() {
   const [selectedExitStrategy, setSelectedExitStrategy] = useState<{ strategyKey: string; reason: ExitReason } | null>(
     null
   );
-  const [selectedSlTrailKey, setSelectedSlTrailKey] = useState<string | null>(null);
+  const [selectedSlMovement, setSelectedSlMovement] = useState<{ strategyKey: string; movement: StopMovement } | null>(
+    null
+  );
   const [selectedPlannedRId, setSelectedPlannedRId] = useState<string | null>(null);
 
   // The controls themselves (DateRangeSelector, granularity toggle,
@@ -223,20 +225,30 @@ export default function AnalyticsPage() {
     );
   }, []);
 
-  const slTrailRows = useMemo(() => getSlTrailImpactByStrategy(rangeTrades), [rangeTrades]);
-  const selectedSlTrailRow = useMemo(
-    () => (selectedSlTrailKey ? slTrailRows.find((r) => r.key === selectedSlTrailKey) ?? null : null),
-    [slTrailRows, selectedSlTrailKey]
+  const slHitRateRows = useMemo(() => getSlHitRateByStrategy(rangeTrades), [rangeTrades]);
+  const selectedSlMovementRow = useMemo(
+    () => (selectedSlMovement ? slHitRateRows.find((r) => r.key === selectedSlMovement.strategyKey) ?? null : null),
+    [slHitRateRows, selectedSlMovement]
   );
-  const slTrailTrailedTrades = useMemo(
-    () => (selectedSlTrailKey ? getTradesInSlTrailGroup(rangeTrades, selectedSlTrailKey, true) : []),
-    [rangeTrades, selectedSlTrailKey]
+  const selectedSlMovementTrades = useMemo(
+    () =>
+      selectedSlMovement
+        ? getTradesInSlMovementGroup(rangeTrades, selectedSlMovement.strategyKey, selectedSlMovement.movement)
+        : [],
+    [rangeTrades, selectedSlMovement]
   );
-  const slTrailHeldTrades = useMemo(
-    () => (selectedSlTrailKey ? getTradesInSlTrailGroup(rangeTrades, selectedSlTrailKey, false) : []),
-    [rangeTrades, selectedSlTrailKey]
-  );
-  const closeSlTrailDrilldown = useCallback(() => setSelectedSlTrailKey(null), []);
+  const selectedSlMovementLabel = useMemo(() => {
+    if (!selectedSlMovement || !selectedSlMovementRow) return "";
+    const movementLabel =
+      selectedSlMovement.movement.charAt(0).toUpperCase() + selectedSlMovement.movement.slice(1);
+    return `${selectedSlMovementRow.label} · ${movementLabel} SL`;
+  }, [selectedSlMovement, selectedSlMovementRow]);
+  const onSelectSlMovementSegment = useCallback((strategyKey: string, movement: StopMovement) => {
+    setSelectedSlMovement((prev) =>
+      prev && prev.strategyKey === strategyKey && prev.movement === movement ? null : { strategyKey, movement }
+    );
+  }, []);
+  const closeSlTrailDrilldown = useCallback(() => setSelectedSlMovement(null), []);
 
   const plannedVsRealizedPoints = useMemo(() => getPlannedVsRealizedR(rangeTrades), [rangeTrades]);
   const plannedVsRealizedSummary = useMemo(
@@ -260,7 +272,7 @@ export default function AnalyticsPage() {
     setSelectedRBucketKey(null);
     setSelectedRulesKey(null);
     setSelectedExitStrategy(null);
-    setSelectedSlTrailKey(null);
+    setSelectedSlMovement(null);
     setSelectedPlannedRId(null);
   }, [deferredRange]);
 
@@ -434,25 +446,19 @@ export default function AnalyticsPage() {
           )}
 
           <SlTrailImpactChart
-            rows={slTrailRows}
-            selectedKey={selectedSlTrailKey}
-            onSelectStrategy={setSelectedSlTrailKey}
+            rows={slHitRateRows}
+            selectedKey={
+              selectedSlMovement ? slMovementSelectionKey(selectedSlMovement.strategyKey, selectedSlMovement.movement) : null
+            }
+            onSelectStrategy={onSelectSlMovementSegment}
           />
-          {selectedSlTrailRow && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <BreakdownDrilldown
-                groupLabel={`${selectedSlTrailRow.label} · Trailed SL`}
-                trades={slTrailTrailedTrades}
-                currency={selectedAccount.currency}
-                onClose={closeSlTrailDrilldown}
-              />
-              <BreakdownDrilldown
-                groupLabel={`${selectedSlTrailRow.label} · Held SL`}
-                trades={slTrailHeldTrades}
-                currency={selectedAccount.currency}
-                onClose={closeSlTrailDrilldown}
-              />
-            </div>
+          {selectedSlMovement && selectedSlMovementRow && (
+            <BreakdownDrilldown
+              groupLabel={selectedSlMovementLabel}
+              trades={selectedSlMovementTrades}
+              currency={selectedAccount.currency}
+              onClose={closeSlTrailDrilldown}
+            />
           )}
         </>
       )}

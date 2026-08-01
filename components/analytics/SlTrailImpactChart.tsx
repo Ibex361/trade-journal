@@ -1,186 +1,125 @@
 "use client";
 
 import { useCallback, useMemo, memo } from "react";
-import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, ResponsiveContainer } from "recharts";
-import { SlTrailImpact, pickWinRate } from "@/lib/metrics";
-import { useWinRateMode } from "@/lib/WinRateModeContext";
+import { SlHitRateRow, SlHitRateSegment } from "@/lib/metrics";
+import { StopMovement } from "@/lib/trades";
 import Card from "@/components/shared/Card";
 
-type Row = SlTrailImpact & {
-  /** Win rate under the current WinRateMode for each side, picked once per row so the tooltip and sort don't recompute it. */
-  trailedWinRatePicked: number | null;
-  heldWinRatePicked: number | null;
-  /** Each side's share of the compared sample (trailedCount + heldCount) — 0-1. */
-  trailedShare: number;
-  heldShare: number;
-  /** Win rate × share — a side with a great win rate but a tiny share of the
-   * sample can't swing the result the way it would in a raw win-rate
-   * subtraction. A null win rate (no trades on that side) contributes 0. */
-  weightedTrailed: number;
-  weightedHeld: number;
-  /** weightedTrailed - weightedHeld, in points. Always defined — see note above. */
-  diff: number;
-};
+// Combines a strategy key and a stop-movement type into the single string
+// the selection state (and Analytics' clear-on-range-change effect) works
+// with, mirroring exitStrategySelectionKey's convention for the same kind
+// of two-part selection.
+export function slMovementSelectionKey(strategyKey: string, movement: StopMovement): string {
+  return `${strategyKey}::${movement}`;
+}
 
-type TooltipPayloadItem = { payload: Row };
+// No good/bad color here on purpose — unlike win rate, a higher or lower
+// SL-hit rate isn't inherently better or worse out of context, so the three
+// groups are just distinguished, not judged.
+const MOVEMENT_META: { value: StopMovement; label: string; color: string }[] = [
+  { value: "held", label: "Held", color: "#9BA0BE" }, // ink-secondary — the untouched baseline
+  { value: "tightened", label: "Tightened", color: "#7C6FF0" }, // glow-violet
+  { value: "widened", label: "Widened", color: "#5CE6C8" }, // glow teal
+];
 
-// Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
-// fresh render when the hovered strategy hasn't actually changed.
-const CustomTooltip = memo(function CustomTooltip({
-  active,
-  payload,
+function SegmentRow({
+  meta,
+  segment,
+  selected,
+  onSelect,
 }: {
-  active?: boolean;
-  payload?: TooltipPayloadItem[];
+  meta: (typeof MOVEMENT_META)[number];
+  segment: SlHitRateSegment;
+  selected: boolean;
+  onSelect: () => void;
 }) {
-  if (!active || !payload || !payload.length) return null;
-  const row = payload[0].payload;
+  const hasData = segment.count > 0;
   return (
-    <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass min-w-[200px]">
-      <p className="text-xs text-ink-secondary">{row.label}</p>
-      <p className={`font-mono text-sm mt-0.5 ${row.diff >= 0 ? "text-gain" : "text-loss"}`}>
-        {row.diff > 0 ? "+" : ""}
-        {row.diff.toFixed(1)} pts
-      </p>
-      <div className="mt-1.5 space-y-0.5">
-        <p className="text-xs text-ink-muted">
-          Trailed: {row.trailedWinRatePicked != null ? `${row.trailedWinRatePicked.toFixed(0)}%` : "—"} win ×{" "}
-          {(row.trailedShare * 100).toFixed(0)}% share = {row.weightedTrailed.toFixed(1)} pts ({row.trailedCount}{" "}
-          trade{row.trailedCount === 1 ? "" : "s"})
-        </p>
-        <p className="text-xs text-ink-muted">
-          Held: {row.heldWinRatePicked != null ? `${row.heldWinRatePicked.toFixed(0)}%` : "—"} win ×{" "}
-          {(row.heldShare * 100).toFixed(0)}% share = {row.weightedHeld.toFixed(1)} pts ({row.heldCount} trade
-          {row.heldCount === 1 ? "" : "s"})
-        </p>
-      </div>
-      <p className="text-[11px] text-glow mt-1.5">Click to view both groups' trades</p>
-    </div>
+    <button
+      type="button"
+      onClick={hasData ? onSelect : undefined}
+      disabled={!hasData}
+      className={`w-full flex items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors ${
+        hasData ? "cursor-pointer hover:bg-surface-2" : "cursor-default opacity-45"
+      } ${selected ? "bg-surface-2" : ""}`}
+    >
+      <span className="w-16 shrink-0 text-[11px] text-ink-muted">{meta.label}</span>
+      <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+        {hasData && (
+          <span
+            className="block h-full rounded-full"
+            style={{ width: `${segment.hitRate}%`, backgroundColor: meta.color }}
+          />
+        )}
+      </span>
+      <span className="w-32 shrink-0 text-right font-mono text-xs text-ink-primary">
+        {hasData ? `${segment.hitRate!.toFixed(0)}% (${segment.hitCount}/${segment.count})` : "No trades"}
+      </span>
+    </button>
   );
-});
+}
 
+/**
+ * How often the stop loss actually got hit, split by whether it was held,
+ * tightened, or widened mid-trade — one strategy per row, one bar per
+ * movement type within it. Deliberately not a recharts bar chart: each
+ * segment's exact rate and trade count are always visible as text rather
+ * than hidden behind a hover tooltip (the count matters here, since a rate
+ * from 2 trades and a rate from 200 both render the same bar length), and a
+ * segment with zero trades reads as "No trades" rather than a
+ * visually-identical-to-real-0% empty bar.
+ */
 function SlTrailImpactChart({
   rows,
   selectedKey,
   onSelectStrategy,
 }: {
-  rows: SlTrailImpact[];
+  rows: SlHitRateRow[];
   selectedKey: string | null;
-  onSelectStrategy: (key: string | null) => void;
+  onSelectStrategy: (strategyKey: string, movement: StopMovement) => void;
 }) {
-  const { mode } = useWinRateMode();
+  const hasData = rows.length > 0;
 
-  const chartRows = useMemo(() => {
-    const withDiff: Row[] = rows.map((r) => {
-      const trailedWinRatePicked = pickWinRate(
-        { winRateStrict: r.trailedWinRateStrict, winRateDecided: r.trailedWinRateDecided },
-        mode
-      );
-      const heldWinRatePicked = pickWinRate(
-        { winRateStrict: r.heldWinRateStrict, winRateDecided: r.heldWinRateDecided },
-        mode
-      );
-      // Denominator is just the compared sample (trailed + held) — trades
-      // with no sl_movement recorded were never part of either side, so
-      // they don't dilute the shares here.
-      const sampleCount = r.trailedCount + r.heldCount;
-      const trailedShare = sampleCount > 0 ? r.trailedCount / sampleCount : 0;
-      const heldShare = sampleCount > 0 ? r.heldCount / sampleCount : 0;
-      const weightedTrailed = (trailedWinRatePicked ?? 0) * trailedShare;
-      const weightedHeld = (heldWinRatePicked ?? 0) * heldShare;
-      return {
-        ...r,
-        trailedWinRatePicked,
-        heldWinRatePicked,
-        trailedShare,
-        heldShare,
-        weightedTrailed,
-        weightedHeld,
-        diff: weightedTrailed - weightedHeld,
-      };
-    });
-    // Biggest positive impact (trailing helped most) at top, biggest
-    // negative at the bottom.
-    return withDiff.sort((a, b) => b.diff - a.diff);
-  }, [rows, mode]);
-
-  const lopsidedCount = useMemo(
-    () => chartRows.filter((r) => r.heldCount === 0).length,
-    [chartRows]
-  );
-  const hasData = chartRows.length > 0;
-  const chartHeight = Math.max(120, chartRows.length * 44);
-
-  const handleChartClick = useCallback(
-    (state: any) => {
-      const row = state?.activePayload?.[0]?.payload;
-      const key = row?.key;
-      if (key) onSelectStrategy(selectedKey === key ? null : key);
-    },
-    [onSelectStrategy, selectedKey]
+  const makeSelectHandler = useCallback(
+    (strategyKey: string, movement: StopMovement) => () => onSelectStrategy(strategyKey, movement),
+    [onSelectStrategy]
   );
 
   return (
     <Card
-      title="Does trailing the stop help?"
-      description="Win rate weighted by each side's share of trailed vs. held trades, by strategy — click a bar to view both groups"
+      title="SL-hit rate by stop management"
+      description="How often the stop actually got hit, by strategy and by whether it was held, tightened, or widened — click a row to view those trades"
     >
       {!hasData ? (
         <div className="h-40 flex items-center justify-center">
-          <p className="text-ink-muted text-sm">No strategy in this range has a trailed stop loss yet.</p>
+          <p className="text-ink-muted text-sm text-center px-4">
+            No trades in this range have a stop-management outcome (held, tightened, or widened) recorded yet.
+          </p>
         </div>
       ) : (
-        <>
-          <div style={{ height: chartHeight }} className="cursor-pointer">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartRows}
-                layout="vertical"
-                margin={{ top: 5, right: 16, left: 0, bottom: 0 }}
-                onClick={handleChartClick}
-              >
-                <CartesianGrid stroke="rgba(255,255,255,0.09)" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[-100, 100]}
-                  unit=" pts"
-                  tick={{ fill: "#5C6180", fontSize: 11 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  tick={{ fill: "#5C6180", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={100}
-                />
-                <ReferenceLine x={0} stroke="rgba(255,255,255,0.25)" />
-                <Tooltip cursor={{ fill: "rgba(255,255,255,0.06)" }} content={<CustomTooltip />} />
-                <Bar dataKey="diff" radius={3} style={{ cursor: "pointer" }} isAnimationActive={false}>
-                  {chartRows.map((row) => (
-                    <Cell
-                      key={row.key}
-                      fill={row.diff >= 0 ? "#5CE6C8" : "#FB7185"}
-                      opacity={selectedKey == null || selectedKey === row.key ? 1 : 0.35}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          {lopsidedCount > 0 && (
-            <p className="text-[11px] text-ink-muted mt-3">
-              {lopsidedCount} strateg{lopsidedCount === 1 ? "y has" : "ies have"} no held-SL trades in this range,
-              so its bar reflects the trailed side's win rate at full weight — hover for the exact math.
-            </p>
-          )}
-        </>
+        <div className="space-y-4">
+          {rows.map((row) => (
+            <div key={row.key}>
+              <p className="mb-1.5 text-xs text-ink-secondary">{row.label}</p>
+              <div className="space-y-1">
+                {MOVEMENT_META.map((meta) => (
+                  <SegmentRow
+                    key={meta.value}
+                    meta={meta}
+                    segment={row[meta.value]}
+                    selected={selectedKey === slMovementSelectionKey(row.key, meta.value)}
+                    onSelect={makeSelectHandler(row.key, meta.value)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </Card>
   );
 }
 
-// Memoized for the same reason as the tooltip above.
+// Memoized so a re-render elsewhere on the page (e.g. another chart's
+// hover state) doesn't re-render this whole list.
 export default memo(SlTrailImpactChart);
