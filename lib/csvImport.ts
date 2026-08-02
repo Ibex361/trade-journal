@@ -141,7 +141,13 @@ export function parseTradesCsv(csvText: string): ParsedImport {
       sl_movement: stopMovement(cell(cells, "sl_movement")),
       tp_movement: stopMovement(cell(cells, "tp_movement")),
       notes: text(cell(cells, "notes")),
-      screenshot_url: null,
+      screenshot_url: text(cell(cells, "screenshot_url")),
+      // The file ID is ImageKit's own internal handle, not something a CSV
+      // round-trip carries — a re-imported trade still shows its screenshot
+      // (screenshot_url still points at the same hosted image), it just
+      // isn't one this app can delete from ImageKit later via its own
+      // controls, since deleting there requires that ID. It'll just sit
+      // there if that ever happens, which costs nothing on the free tier.
       screenshot_file_id: null,
       tags: tagsRaw ? tagsRaw.split(";").map((t) => stripFormulaGuard(t.trim())).filter(Boolean) : [],
       broker_ticket: text(cell(cells, "broker_ticket")),

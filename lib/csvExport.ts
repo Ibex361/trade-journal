@@ -2,7 +2,9 @@ import { Trade } from "./trades";
 
 // Column order/labels for the exported CSV. Kept explicit (rather than
 // Object.keys(trade)) so column order is stable and internal fields like
-// id/account_id/screenshot_url/created_at are left out.
+// id/account_id/screenshot_file_id/created_at are left out. screenshot_url
+// IS included — it's just a link to the hosted image, so round-tripping it
+// through export/import keeps a trade's screenshot attached.
 export const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
   { key: "entry_date", label: "Entry date" },
   { key: "entry_time", label: "Entry time" },
@@ -27,6 +29,7 @@ export const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
   { key: "emotion", label: "Emotion" },
   { key: "tags", label: "Tags" },
   { key: "notes", label: "Notes" },
+  { key: "screenshot_url", label: "Screenshot" },
   { key: "broker_ticket", label: "Broker Ticket" },
 ];
 

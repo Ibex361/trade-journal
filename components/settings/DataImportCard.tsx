@@ -229,7 +229,7 @@ export default function DataImportCard() {
             <p className="text-xs text-ink-muted">
               {source === "exness"
                 ? "P&L includes commission and swap. Take-profit, equity, and margin level aren't tracked by this app and are left out. Screenshots aren't part of a broker export, so add those individually if you want them."
-                : "Screenshots aren't included in CSV exports, so imported trades won't have one attached — add those back individually if you need them."}
+                : "Screenshots come along automatically if the file was exported from this app — each trade's screenshot link is restored."}
             </p>
 
             {error && <p className="text-xs text-loss">{error}</p>}
