@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { useAnalyticsPageState } from "@/lib/AnalyticsPageStateContext";
-import { fetchTrades, Trade, ExitReason, StopMovement } from "@/lib/trades";
+import { useTradesData } from "@/lib/TradesDataContext";
+import { ExitReason, StopMovement } from "@/lib/trades";
 import {
   filterTradesByRange,
   buildEquityCurveForRange,
@@ -50,8 +51,7 @@ import Card from "@/components/shared/Card";
 
 export default function AnalyticsPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { trades, loading } = useTradesData();
   const {
     range,
     setRange,
@@ -90,17 +90,6 @@ export default function AnalyticsPage() {
   const deferredGranularity = useDeferredValue(granularity);
   const deferredTimeOfDaySource = useDeferredValue(timeOfDaySource);
   const deferredBreakdownDimension = useDeferredValue(breakdownDimension);
-
-  useEffect(() => {
-    async function load() {
-      if (!selectedAccount) return;
-      setLoading(true);
-      const { data } = await fetchTrades(selectedAccount.id);
-      if (data) setTrades(data as Trade[]);
-      setLoading(false);
-    }
-    load();
-  }, [selectedAccount?.id]);
 
   const rangeTrades = useMemo(() => filterTradesByRange(trades, deferredRange), [trades, deferredRange]);
 

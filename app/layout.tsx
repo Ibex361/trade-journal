@@ -4,6 +4,7 @@ import "./globals.css";
 import AppHeader from "@/components/AppHeader";
 import MobileTabBar from "@/components/MobileTabBar";
 import { AccountProvider } from "@/lib/AccountContext";
+import { TradesDataProvider } from "@/lib/TradesDataContext";
 import { WinRateModeProvider } from "@/lib/WinRateModeContext";
 import { TradesPageStateProvider } from "@/lib/TradesPageStateContext";
 import { AnalyticsPageStateProvider } from "@/lib/AnalyticsPageStateContext";
@@ -50,6 +51,7 @@ export default function RootLayout({
     <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jbmono.variable}`}>
       <body className="font-body min-h-screen">
         <AccountProvider>
+          <TradesDataProvider>
           <WinRateModeProvider>
           <TradesPageStateProvider>
           <AnalyticsPageStateProvider>
@@ -62,6 +64,7 @@ export default function RootLayout({
           </AnalyticsPageStateProvider>
           </TradesPageStateProvider>
           </WinRateModeProvider>
+          </TradesDataProvider>
         </AccountProvider>
       </body>
     </html>

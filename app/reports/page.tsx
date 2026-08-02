@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, Trade } from "@/lib/trades";
+import { useTradesData } from "@/lib/TradesDataContext";
 import { getTradesInMonth, getDailyPnlForMonth, getBestWorstDay, getBestWorstTrade, getTagFrequency, summarizeTrades } from "@/lib/metrics";
 import MonthSelector from "@/components/reports/MonthSelector";
 import CalendarHeatmap from "@/components/reports/CalendarHeatmap";
@@ -20,8 +20,7 @@ const MONTH_LABELS = [
 
 export default function ReportsPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { trades, loading } = useTradesData();
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -34,17 +33,6 @@ export default function ReportsPage() {
     setYear(y);
     setMonth(m);
   }, []);
-
-  useEffect(() => {
-    async function load() {
-      if (!selectedAccount) return;
-      setLoading(true);
-      const { data } = await fetchTrades(selectedAccount.id);
-      if (data) setTrades(data as Trade[]);
-      setLoading(false);
-    }
-    load();
-  }, [selectedAccount?.id]);
 
   const monthTrades = useMemo(
     () => getTradesInMonth(trades, deferredYear, deferredMonth),

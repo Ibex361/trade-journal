@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
+import { useTradesData } from "@/lib/TradesDataContext";
 import { createTrades, getExistingBrokerTickets, TradeInput } from "@/lib/trades";
 import { parseTradesCsv } from "@/lib/csvImport";
 import { parseExnessCsv } from "@/lib/exnessImport";
@@ -29,6 +30,7 @@ const SOURCES: { id: Source; label: string; description: string }[] = [
 
 export default function DataImportCard() {
   const { accounts, selectedAccount } = useAccount();
+  const { refreshTrades } = useTradesData();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [source, setSource] = useState<Source>("app");
@@ -129,6 +131,13 @@ export default function DataImportCard() {
         setReadyTrades(null);
         setDuplicateCount(0);
         if (fileInputRef.current) fileInputRef.current.value = "";
+        // The shared trades cache (Dashboard/Trades/Analytics/Reports) only
+        // holds data for the currently selected account — only that one
+        // needs refreshing. An import into a different account will be
+        // fetched fresh whenever it's next selected.
+        if (account.id === selectedAccount?.id) {
+          refreshTrades();
+        }
       }
     } catch (err) {
       console.error("handleImport threw:", err);

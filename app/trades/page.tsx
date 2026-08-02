@@ -3,7 +3,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { useTradesPageState } from "@/lib/TradesPageStateContext";
-import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
+import { deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
+import { useTradesData } from "@/lib/TradesDataContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { deleteScreenshot } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
@@ -61,9 +62,10 @@ function applySort(trades: Trade[], sort: SortState): Trade[] {
 
 export default function TradesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const { trades, loading: tradesLoading, refreshTrades } = useTradesData();
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dropdownsLoading, setDropdownsLoading] = useState(true);
+  const loading = tradesLoading || dropdownsLoading;
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
@@ -91,20 +93,16 @@ export default function TradesPage() {
     setSelectedIds(new Set([id]));
   }, []);
 
-  async function load() {
+  async function loadDropdowns() {
     if (!selectedAccount) return;
-    setLoading(true);
-    const [{ data: tradesData }, { data: dropdownData }] = await Promise.all([
-      fetchTrades(selectedAccount.id),
-      fetchDropdownItems(selectedAccount.id),
-    ]);
-    if (tradesData) setTrades(tradesData as Trade[]);
-    if (dropdownData) setDropdowns(dropdownData as DropdownItem[]);
-    setLoading(false);
+    setDropdownsLoading(true);
+    const { data } = await fetchDropdownItems(selectedAccount.id);
+    if (data) setDropdowns(data as DropdownItem[]);
+    setDropdownsLoading(false);
   }
 
   useEffect(() => {
-    load();
+    loadDropdowns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
@@ -168,7 +166,7 @@ export default function TradesPage() {
 
   async function handleSaved() {
     closePanel();
-    await load();
+    await refreshTrades();
   }
 
   const handleDelete = useCallback(async (id: string) => {
@@ -182,7 +180,7 @@ export default function TradesPage() {
     if (trade?.screenshot_url) {
       deleteScreenshot({ url: trade.screenshot_url, fileId: trade.screenshot_file_id ?? null }).catch(() => {});
     }
-    await load();
+    await refreshTrades();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trades]);
 
@@ -222,27 +220,27 @@ export default function TradesPage() {
       }
     });
     exitSelectionMode();
-    await load();
+    await refreshTrades();
   }
 
   async function handleBulkAddTag(tag: string) {
     const ids = Array.from(selectedIds);
     const targets = trades.filter((t) => ids.includes(t.id) && !(t.tags ?? []).includes(tag));
     await Promise.all(targets.map((t) => updateTradeTags(t.id, [...t.tags, tag])));
-    await load();
+    await refreshTrades();
   }
 
   async function handleBulkRemoveTag(tag: string) {
     const ids = Array.from(selectedIds);
     const targets = trades.filter((t) => ids.includes(t.id) && (t.tags ?? []).includes(tag));
     await Promise.all(targets.map((t) => updateTradeTags(t.id, t.tags.filter((existing) => existing !== tag))));
-    await load();
+    await refreshTrades();
   }
 
   async function handleBulkSetRules(value: boolean) {
     const ids = Array.from(selectedIds);
     await Promise.all(ids.map((id) => updateTradeRules(id, value)));
-    await load();
+    await refreshTrades();
   }
 
   function handleBulkExport() {

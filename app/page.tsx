@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, Trade } from "@/lib/trades";
+import { useTradesData } from "@/lib/TradesDataContext";
 import {
   summarizeTrades,
   buildEquityCurve,
@@ -24,19 +24,7 @@ import Card from "@/components/shared/Card";
 export default function DashboardPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
   const { mode: winRateMode } = useWinRateMode();
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
-      if (!selectedAccount) return;
-      setLoading(true);
-      const { data } = await fetchTrades(selectedAccount.id);
-      if (data) setTrades(data as Trade[]);
-      setLoading(false);
-    }
-    load();
-  }, [selectedAccount?.id]);
+  const { trades, loading } = useTradesData();
 
   const summary = useMemo(() => summarizeTrades(trades), [trades]);
 

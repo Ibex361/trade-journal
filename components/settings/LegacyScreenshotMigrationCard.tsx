@@ -6,11 +6,13 @@ import {
   migrateLegacyScreenshot,
   LegacyScreenshotTrade,
 } from "@/lib/screenshots";
+import { useTradesData } from "@/lib/TradesDataContext";
 import SettingsCard from "./SettingsCard";
 
 type Status = "checking" | "none" | "ready" | "migrating" | "done";
 
 export default function LegacyScreenshotMigrationCard() {
+  const { refreshTrades } = useTradesData();
   const [status, setStatus] = useState<Status>("checking");
   const [pending, setPending] = useState<LegacyScreenshotTrade[]>([]);
   const [total, setTotal] = useState(0);
@@ -43,6 +45,11 @@ export default function LegacyScreenshotMigrationCard() {
 
     setFailures(errors);
     setStatus("done");
+    // Every migrated trade's screenshot_url/screenshot_file_id changed
+    // directly in Supabase, bypassing the shared trades cache — bring it
+    // back in sync so Trades/Dashboard/etc. show the new ImageKit links
+    // without needing a manual refresh.
+    refreshTrades();
   }
 
   // Nothing left to migrate (or nothing ever was) — no need to take up
