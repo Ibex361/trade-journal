@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { deleteScreenshotsByUrls } from "./screenshots";
+import { deleteScreenshots } from "./screenshots";
 import { seedDefaultDropdownItems } from "./dropdownSettings";
 import { localDateString } from "./date";
 
@@ -98,13 +98,14 @@ export async function deleteAccountPermanently(id: string) {
   // orphaned in the bucket forever.
   const { data: trades } = await supabase
     .from("trades")
-    .select("screenshot_url")
+    .select("screenshot_url, screenshot_file_id")
     .eq("account_id", id)
     .not("screenshot_url", "is", null);
 
   if (trades && trades.length > 0) {
-    const urls = trades.map((t) => t.screenshot_url as string);
-    await deleteScreenshotsByUrls(urls);
+    await deleteScreenshots(
+      trades.map((t) => ({ url: t.screenshot_url as string, fileId: t.screenshot_file_id as string | null }))
+    );
   }
 
   return supabase.from("accounts").delete().eq("id", id);
@@ -149,12 +150,14 @@ function dateOffset(days: number) {
 export async function resetDemoData() {
   const { data: existing } = await supabase
     .from("trades")
-    .select("screenshot_url")
+    .select("screenshot_url, screenshot_file_id")
     .eq("account_id", DEMO_ACCOUNT_ID)
     .not("screenshot_url", "is", null);
 
   if (existing && existing.length > 0) {
-    await deleteScreenshotsByUrls(existing.map((t) => t.screenshot_url as string));
+    await deleteScreenshots(
+      existing.map((t) => ({ url: t.screenshot_url as string, fileId: t.screenshot_file_id as string | null }))
+    );
   }
 
   await supabase.from("trades").delete().eq("account_id", DEMO_ACCOUNT_ID);

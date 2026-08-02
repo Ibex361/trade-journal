@@ -5,7 +5,7 @@ import { useAccount } from "@/lib/AccountContext";
 import { useTradesPageState } from "@/lib/TradesPageStateContext";
 import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
-import { deleteScreenshotByUrl } from "@/lib/screenshots";
+import { deleteScreenshot } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
 import TradesList, { SortState } from "@/components/trades/TradesList";
@@ -180,7 +180,7 @@ export default function TradesPage() {
       return;
     }
     if (trade?.screenshot_url) {
-      deleteScreenshotByUrl(trade.screenshot_url).catch(() => {});
+      deleteScreenshot({ url: trade.screenshot_url, fileId: trade.screenshot_file_id ?? null }).catch(() => {});
     }
     await load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,7 +217,9 @@ export default function TradesPage() {
       return;
     }
     targets.forEach((t) => {
-      if (t.screenshot_url) deleteScreenshotByUrl(t.screenshot_url).catch(() => {});
+      if (t.screenshot_url) {
+        deleteScreenshot({ url: t.screenshot_url, fileId: t.screenshot_file_id ?? null }).catch(() => {});
+      }
     });
     exitSelectionMode();
     await load();

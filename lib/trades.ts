@@ -30,6 +30,7 @@ export type Trade = {
   tp_movement: StopMovement | null;
   notes: string | null;
   screenshot_url: string | null;
+  screenshot_file_id: string | null;
   tags: string[];
   broker_ticket: string | null;
   created_at: string;
@@ -59,6 +60,7 @@ export type TradeInput = {
   tp_movement: StopMovement | null;
   notes: string | null;
   screenshot_url: string | null;
+  screenshot_file_id: string | null;
   tags: string[];
   // The broker's own trade ID, when this trade came from a broker CSV
   // import (e.g. Exness' "ticket"). Null for manually-entered trades.

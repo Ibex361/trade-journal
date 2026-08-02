@@ -209,6 +209,7 @@ export function parseExnessCsv(csvText: string): ParsedImport {
       tp_movement: null,
       notes: null,
       screenshot_url: null,
+      screenshot_file_id: null,
       tags: [],
       broker_ticket: ticket || null,
     });

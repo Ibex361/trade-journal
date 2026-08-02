@@ -142,6 +142,7 @@ export function parseTradesCsv(csvText: string): ParsedImport {
       tp_movement: stopMovement(cell(cells, "tp_movement")),
       notes: text(cell(cells, "notes")),
       screenshot_url: null,
+      screenshot_file_id: null,
       tags: tagsRaw ? tagsRaw.split(";").map((t) => stripFormulaGuard(t.trim())).filter(Boolean) : [],
       broker_ticket: text(cell(cells, "broker_ticket")),
     });

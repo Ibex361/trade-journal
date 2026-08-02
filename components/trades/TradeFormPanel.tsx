@@ -6,7 +6,7 @@ import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { createTrade, updateTrade, Trade, TradeInput, Direction, ExitReason, StopMovement } from "@/lib/trades";
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
-import { uploadScreenshot, deleteScreenshotByUrl, validateScreenshotFile } from "@/lib/screenshots";
+import { uploadScreenshot, deleteScreenshot, validateScreenshotFile } from "@/lib/screenshots";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 const emptyForm = {
@@ -480,9 +480,10 @@ export default function TradeFormPanel({
     // trade half-saved: keep the existing URL by default, replace it if a
     // new file was picked, or clear it if the user removed it.
     let finalScreenshotUrl: string | null = trade?.screenshot_url ?? null;
+    let finalScreenshotFileId: string | null = trade?.screenshot_file_id ?? null;
     if (screenshotFile) {
       setUploadingScreenshot(true);
-      const { url, error: uploadError } = await uploadScreenshot(selectedAccount.id, screenshotFile);
+      const { url, fileId, error: uploadError } = await uploadScreenshot(selectedAccount.id, screenshotFile);
       setUploadingScreenshot(false);
       if (uploadError || !url) {
         setSaving(false);
@@ -490,8 +491,10 @@ export default function TradeFormPanel({
         return;
       }
       finalScreenshotUrl = url;
+      finalScreenshotFileId = fileId;
     } else if (screenshotRemoved) {
       finalScreenshotUrl = null;
+      finalScreenshotFileId = null;
     }
 
     const finalPnl = form.pnl.trim() !== "" ? parseFloat(form.pnl) : computedPnl ?? 0;
@@ -521,6 +524,7 @@ export default function TradeFormPanel({
       tp_movement: form.tp_movement,
       notes: form.notes.trim() || null,
       screenshot_url: finalScreenshotUrl,
+      screenshot_file_id: finalScreenshotFileId,
       tags: form.tags,
       broker_ticket: trade?.broker_ticket ?? null,
     };
@@ -538,8 +542,9 @@ export default function TradeFormPanel({
     // Now that the trade row points at the new screenshot (or none), it's
     // safe to remove whatever it used to point at.
     const previousUrl = trade?.screenshot_url ?? null;
+    const previousFileId = trade?.screenshot_file_id ?? null;
     if (previousUrl && previousUrl !== finalScreenshotUrl) {
-      deleteScreenshotByUrl(previousUrl).catch(() => {});
+      deleteScreenshot({ url: previousUrl, fileId: previousFileId }).catch(() => {});
     }
 
     onSaved();
