@@ -1,0 +1,64 @@
+name: Supabase backup
+
+# Supabase's free tier doesn't take automatic backups, so this does it
+# instead: every Sunday it dumps the "public" schema (all your trade
+# data — accounts, trades, dropdown settings, etc.) straight from
+# Supabase's Postgres, gzips it, and commits it into this repo under
+# backups/. Nothing to run yourself — this runs on GitHub's servers on
+# a timer. You can also trigger it manually any time from the Actions
+# tab ("Run workflow") if you want a backup right before making some
+# risky change.
+#
+# Only the last 12 backups (about 3 months on a weekly schedule) are
+# kept — older ones are pruned automatically each run so this doesn't
+# grow the repo forever.
+#
+# Auth/session internals aren't included (only your own app's "public"
+# schema is dumped), so this is safe to keep in a private repo without
+# leaking Supabase-managed credentials.
+
+on:
+  schedule:
+    - cron: "0 4 * * 0" # every Sunday at 04:00 UTC
+  workflow_dispatch: {} # lets you click "Run workflow" in the Actions tab any time
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    container: postgres:16-bookworm # ships a pg_dump version that matches Supabase's Postgres
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Dump the public schema
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          mkdir -p backups
+          stamp=$(date -u +%Y-%m-%d)
+          pg_dump "$SUPABASE_DB_URL" \
+            --schema=public \
+            --no-owner \
+            --no-privileges \
+            --format=plain \
+          | gzip > "backups/backup-${stamp}.sql.gz"
+
+      - name: Prune old backups (keep the last 12)
+        run: |
+          cd backups
+          ls -1t backup-*.sql.gz | tail -n +13 | xargs -r rm --
+
+      - name: Commit and push the backup
+        run: |
+          git config user.name "supabase-backup-bot"
+          git config user.email "actions@github.com"
+          git add backups/
+          if git diff --cached --quiet; then
+            echo "Nothing changed, skipping commit."
+          else
+            git commit -m "Weekly Supabase backup: $(date -u +%Y-%m-%d)"
+            git push
+          fi
