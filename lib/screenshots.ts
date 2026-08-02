@@ -101,3 +101,65 @@ async function deleteLegacySupabaseScreenshots(urls: string[]): Promise<void> {
   if (paths.length === 0) return;
   await supabase.storage.from(LEGACY_SCREENSHOT_BUCKET).remove(paths);
 }
+
+// --- One-time migration: move existing legacy screenshots to ImageKit ---
+
+export type LegacyScreenshotTrade = { id: string; account_id: string; screenshot_url: string };
+
+/** Finds every trade whose screenshot is still sitting in the old Supabase Storage bucket. */
+export async function findLegacyScreenshots(): Promise<LegacyScreenshotTrade[]> {
+  const { data, error } = await supabase
+    .from("trades")
+    .select("id, account_id, screenshot_url")
+    .is("screenshot_file_id", null)
+    .not("screenshot_url", "is", null)
+    .ilike("screenshot_url", `%/${LEGACY_SCREENSHOT_BUCKET}/%`);
+  if (error) {
+    console.error("findLegacyScreenshots failed:", error);
+    return [];
+  }
+  return (data ?? []) as LegacyScreenshotTrade[];
+}
+
+/**
+ * Moves one trade's screenshot off Supabase Storage: downloads the existing
+ * image, re-uploads it to ImageKit (via the same route/private-key path as
+ * a normal upload), repoints the trade row at the new location, then removes
+ * the original from Supabase Storage now that nothing references it.
+ */
+export async function migrateLegacyScreenshot(trade: LegacyScreenshotTrade): Promise<{ error: string | null }> {
+  let blob: Blob;
+  try {
+    const res = await fetch(trade.screenshot_url);
+    if (!res.ok) return { error: `Couldn't download the existing screenshot (${res.status}).` };
+    blob = await res.blob();
+  } catch {
+    return { error: "Couldn't download the existing screenshot." };
+  }
+
+  // Supabase doesn't always report a usable image/* content-type for these
+  // older uploads — fall back to guessing from the file extension so
+  // validateScreenshotFile doesn't reject a perfectly good image over that.
+  const ext = trade.screenshot_url.split(".").pop()?.split("?")[0]?.toLowerCase() || "png";
+  const inferredType = ext === "webp" ? "image/webp" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/png";
+  const mimeType = ALLOWED_TYPES.includes(blob.type) ? blob.type : inferredType;
+  const file = new File([blob], `legacy.${ext}`, { type: mimeType });
+
+  const { url, fileId, error: uploadError } = await uploadScreenshot(trade.account_id, file);
+  if (uploadError || !url || !fileId) {
+    return { error: uploadError || "Upload to ImageKit failed." };
+  }
+
+  const { error: dbError } = await supabase
+    .from("trades")
+    .update({ screenshot_url: url, screenshot_file_id: fileId })
+    .eq("id", trade.id);
+  if (dbError) {
+    return { error: "Uploaded to ImageKit, but couldn't update the trade record." };
+  }
+
+  // Best-effort cleanup — the trade row no longer points at this file.
+  await deleteLegacySupabaseScreenshots([trade.screenshot_url]);
+
+  return { error: null };
+}

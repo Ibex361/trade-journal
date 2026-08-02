@@ -4,6 +4,7 @@ import TargetsCard from "@/components/settings/TargetsCard";
 import WinRateModeCard from "@/components/settings/WinRateModeCard";
 import DataExportCard from "@/components/settings/DataExportCard";
 import DataImportCard from "@/components/settings/DataImportCard";
+import LegacyScreenshotMigrationCard from "@/components/settings/LegacyScreenshotMigrationCard";
 
 export default function SettingsPage() {
   return (
@@ -24,6 +25,7 @@ export default function SettingsPage() {
         <DataExportCard />
       </div>
       <DataImportCard />
+      <LegacyScreenshotMigrationCard />
       <DropdownLists />
     </div>
   );
