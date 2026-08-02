@@ -11,7 +11,13 @@ import { getSessionFromRequest } from "@/lib/supabase/middleware";
 // user (see supabase/phase3_auth_migration.sql) — so even someone with the
 // public anon key can't read or write data without being signed in.
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = [
+  "/login",
+  // The Vercel Cron job that pings Supabase to prevent free-tier
+  // auto-pause hits this route with no session cookie — it authenticates
+  // itself instead via a secret header (see app/api/cron/keep-alive).
+  "/api/cron",
+];
 
 export async function middleware(request: NextRequest) {
   const { response, user } = await getSessionFromRequest(request);
