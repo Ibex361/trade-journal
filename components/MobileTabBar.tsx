@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_TABS } from "@/lib/navTabs";
-import { DashboardIcon, TradesIcon, AnalyticsIcon, ReportsIcon, SettingsIcon } from "@/components/icons";
+import { DashboardIcon, TradesIcon, AnalyticsIcon, StrategiesIcon, ReportsIcon, SettingsIcon } from "@/components/icons";
 
 const ICONS: Record<string, (props: { className?: string }) => JSX.Element> = {
   "/": DashboardIcon,
   "/trades": TradesIcon,
   "/analytics": AnalyticsIcon,
+  "/strategies": StrategiesIcon,
   "/reports": ReportsIcon,
   "/settings": SettingsIcon,
 };
@@ -30,7 +31,7 @@ export default function MobileTabBar() {
       className="md:hidden print:hidden fixed bottom-0 inset-x-0 z-30 bg-surface-0/85 backdrop-blur-xl border-t border-surface-border"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="grid grid-cols-5">
+      <div className="grid grid-cols-6">
         {NAV_TABS.map((tab) => {
           const active = pathname === tab.href;
           const Icon = ICONS[tab.href];

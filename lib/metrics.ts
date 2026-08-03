@@ -235,6 +235,112 @@ export function getDrawdown(points: EquityPoint[]): Drawdown {
   return { currentAmount, currentPct, maxAmount, maxPct };
 }
 
+/**
+ * Below this many trades, a strategy's stats are flagged as too small a
+ * sample to trust — a few lucky/unlucky trades can otherwise make a
+ * strategy look far better or worse than it really is.
+ */
+export const STRATEGY_MIN_SAMPLE_SIZE = 20;
+
+export type StrategyLeaderboardRow = {
+  /** Raw strategy value used to match trades back for drill-down; "unspecified" if null. */
+  key: string;
+  label: string;
+  count: number;
+  totalPnl: number;
+  winRateStrict: number | null;
+  winRateDecided: number | null;
+  /** Average R-multiple per trade — the headline "does this system have an edge" number. */
+  expectancyR: number | null;
+  /** Average P&L per trade, in account currency. */
+  expectancyPnl: number | null;
+  /** Gross R won ÷ gross R lost. Null if there are no losing trades to divide by. */
+  profitFactor: number | null;
+  /** Avg winning R ÷ avg |losing R| — separates "wins often, wins small" systems from "wins rarely, wins big" ones. */
+  payoffRatio: number | null;
+  /** Population std deviation of R-multiple across the strategy's trades — a rough consistency/variance measure. */
+  stdDevR: number | null;
+  /**
+   * Max peak-to-trough drawdown of this strategy's OWN trades, in isolation
+   * — i.e. "if this strategy were the only thing in the account, starting
+   * from 0, how bad did its own equity curve get". Not a share of the real
+   * account's drawdown, since strategies interleave and can't be cleanly
+   * separated out of a single real balance history.
+   */
+  maxDrawdownAmount: number;
+  maxDrawdownPct: number | null;
+  /** True when count is below STRATEGY_MIN_SAMPLE_SIZE — surface a "not enough data yet" flag in the UI. */
+  lowSample: boolean;
+};
+
+/**
+ * One row per strategy tag, covering every figure the Strategies
+ * leaderboard needs. Built directly off summarizeTrades / getExpectancy /
+ * getProfitFactor / buildEquityCurve / getDrawdown so nothing here can drift
+ * from the equivalent numbers shown elsewhere in the app. Sorted by
+ * expectancyR descending (best edge first); strategies with no R data sort
+ * last.
+ */
+export function getStrategyLeaderboard(trades: Trade[]): StrategyLeaderboardRow[] {
+  const groups = new Map<string, Trade[]>();
+  for (const t of trades) {
+    const key = t.strategy ?? "unspecified";
+    const existing = groups.get(key);
+    if (existing) existing.push(t);
+    else groups.set(key, [t]);
+  }
+
+  const rows: StrategyLeaderboardRow[] = [];
+  for (const [key, groupTrades] of groups.entries()) {
+    const summary = summarizeTrades(groupTrades);
+    const expectancy = getExpectancy(groupTrades);
+    const profitFactor = getProfitFactor(groupTrades);
+
+    const rValues = groupTrades
+      .map((t) => t.r_multiple)
+      .filter((r): r is number => r != null && !Number.isNaN(r));
+    const winningR = rValues.filter((r) => r > 0);
+    const losingR = rValues.filter((r) => r < 0);
+    const avgWinR = winningR.length > 0 ? winningR.reduce((s, r) => s + r, 0) / winningR.length : null;
+    const avgLossR =
+      losingR.length > 0 ? Math.abs(losingR.reduce((s, r) => s + r, 0) / losingR.length) : null;
+    const payoffRatio = avgWinR != null && avgLossR != null && avgLossR !== 0 ? avgWinR / avgLossR : null;
+
+    let stdDevR: number | null = null;
+    if (rValues.length > 1 && expectancy.perR != null) {
+      const mean = expectancy.perR;
+      const variance = rValues.reduce((s, r) => s + (r - mean) ** 2, 0) / rValues.length;
+      stdDevR = Math.sqrt(variance);
+    }
+
+    const drawdown = getDrawdown(buildEquityCurve(groupTrades, 0));
+
+    rows.push({
+      key,
+      label: key === "unspecified" ? "No strategy tagged" : key,
+      count: summary.count,
+      totalPnl: summary.totalPnl,
+      winRateStrict: summary.winRateStrict,
+      winRateDecided: summary.winRateDecided,
+      expectancyR: expectancy.perR,
+      expectancyPnl: expectancy.perTrade,
+      profitFactor,
+      payoffRatio,
+      stdDevR,
+      maxDrawdownAmount: drawdown.maxAmount,
+      maxDrawdownPct: drawdown.maxPct,
+      lowSample: summary.count < STRATEGY_MIN_SAMPLE_SIZE,
+    });
+  }
+
+  return rows.sort((a, b) => {
+    if (a.expectancyR == null && b.expectancyR == null) return 0;
+    if (a.expectancyR == null) return 1;
+    if (b.expectancyR == null) return -1;
+    return b.expectancyR - a.expectancyR;
+  });
+}
+
 /** Trades whose entry_date falls in the current calendar month (local time). */
 export function getTradesInCurrentMonth(trades: Trade[]): Trade[] {
   const now = new Date();
