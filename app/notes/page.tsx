@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
 import { useAccount } from "@/lib/AccountContext";
 import { supabase, type Note } from "@/lib/supabaseClient";
@@ -29,12 +29,16 @@ function formatUpdated(iso: string) {
   }
 }
 
+function stableJson(value: unknown) {
+  return JSON.stringify(value ?? null);
+}
+
 /**
- * Notes — Phase 1c.
+ * Notes — Phase 1c + polish.
  *
- * Full list CRUD: create, open/edit, save, delete (with confirm dialog).
- * Empty states and loading skeleton match the rest of the app. Autosave,
- * page-state context, search, and rich Phase 2 editing come later.
+ * Full list CRUD with unsaved-changes guard on close and a clear save-status
+ * indicator. Autosave / page-state context / search / Phase 2 rich editing
+ * come later.
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -43,11 +47,19 @@ export default function NotesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState<JSONContent | null>(null);
+  // Snapshot of last saved (or opened) title/content for dirty detection
+  const savedSnapshot = useRef<{ title: string; content: string }>({
+    title: "",
+    content: stableJson(EMPTY_DOC),
+  });
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [unsavedOpen, setUnsavedOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchNotes = useCallback(async (accountId: string) => {
@@ -78,22 +90,60 @@ export default function NotesPage() {
     setSelectedId(null);
     setTitle("");
     setContent(null);
+    setDirty(false);
     fetchNotes(selectedAccount.id);
   }, [selectedAccount, fetchNotes]);
 
-  function openNote(note: Note) {
-    setSelectedId(note.id);
-    setTitle(note.title || "Untitled");
-    setContent(note.content ?? EMPTY_DOC);
-    setSavedFlash(false);
-    setError(null);
+  useEffect(() => {
+    return () => {
+      if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+    };
+  }, []);
+
+  function markClean(nextTitle: string, nextContent: JSONContent | null) {
+    savedSnapshot.current = {
+      title: nextTitle,
+      content: stableJson(nextContent ?? EMPTY_DOC),
+    };
+    setDirty(false);
   }
 
-  function closeNote() {
+  function recomputeDirty(nextTitle: string, nextContent: JSONContent | null) {
+    const isDirty =
+      nextTitle !== savedSnapshot.current.title ||
+      stableJson(nextContent ?? EMPTY_DOC) !== savedSnapshot.current.content;
+    setDirty(isDirty);
+    if (isDirty) setSavedFlash(false);
+  }
+
+  function openNote(note: Note) {
+    const t = note.title || "Untitled";
+    const c = note.content ?? EMPTY_DOC;
+    setSelectedId(note.id);
+    setTitle(t);
+    setContent(c);
+    markClean(t, c);
+    setSavedFlash(false);
+    setError(null);
+    setUnsavedOpen(false);
+  }
+
+  function forceCloseNote() {
     setSelectedId(null);
     setTitle("");
     setContent(null);
+    setDirty(false);
     setSavedFlash(false);
+    setUnsavedOpen(false);
+  }
+
+  /** Close with unsaved-changes guard. */
+  function requestCloseNote() {
+    if (dirty) {
+      setUnsavedOpen(true);
+      return;
+    }
+    forceCloseNote();
   }
 
   async function handleCreate() {
@@ -120,8 +170,8 @@ export default function NotesPage() {
     openNote(note);
   }
 
-  async function handleSave() {
-    if (!selectedId || saving) return;
+  async function handleSave(): Promise<boolean> {
+    if (!selectedId || saving) return false;
     setSaving(true);
     setError(null);
     setSavedFlash(false);
@@ -140,9 +190,10 @@ export default function NotesPage() {
     setSaving(false);
     if (upErr) {
       setError(upErr.message);
-      return;
+      return false;
     }
     setTitle(nextTitle);
+    markClean(nextTitle, nextContent);
     setNotes((prev) =>
       prev
         .map((n) =>
@@ -153,7 +204,15 @@ export default function NotesPage() {
         .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
     );
     setSavedFlash(true);
-    window.setTimeout(() => setSavedFlash(false), 2000);
+    if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+    savedFlashTimer.current = setTimeout(() => setSavedFlash(false), 2500);
+    return true;
+  }
+
+  async function handleSaveAndClose() {
+    const ok = await handleSave();
+    if (ok) forceCloseNote();
+    else setUnsavedOpen(false);
   }
 
   async function handleDeleteConfirm() {
@@ -170,7 +229,7 @@ export default function NotesPage() {
     }
     setNotes((prev) => prev.filter((n) => n.id !== id));
     if (selectedId === id) {
-      closeNote();
+      forceCloseNote();
     }
   }
 
@@ -191,12 +250,19 @@ export default function NotesPage() {
             <div>
               <button
                 type="button"
-                onClick={closeNote}
+                onClick={requestCloseNote}
                 className="text-sm text-ink-secondary hover:text-ink-primary transition-colors duration-fast mb-2"
               >
                 ← All notes
               </button>
-              <h1 className="font-display text-2xl font-medium tracking-tight">Edit note</h1>
+              <div className="flex items-center gap-2.5">
+                <h1 className="font-display text-2xl font-medium tracking-tight">Edit note</h1>
+                {dirty && !savedFlash && (
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted bg-surface-2 border border-surface-border rounded-full px-2 py-0.5">
+                    Unsaved
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Button
@@ -207,12 +273,37 @@ export default function NotesPage() {
               >
                 Delete
               </Button>
-              <Button variant="secondary" size="sm" onClick={closeNote}>
+              <Button variant="secondary" size="sm" onClick={requestCloseNote}>
                 Close
               </Button>
-              <Button size="sm" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : savedFlash ? "Saved" : "Save"}
-              </Button>
+              <div className="flex items-center gap-2">
+                {savedFlash && (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-glow motion-safe:animate-fade-in"
+                    aria-live="polite"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      className="w-3.5 h-3.5"
+                      aria-hidden
+                    >
+                      <circle cx="8" cy="8" r="7" className="stroke-glow/40" strokeWidth="1.5" />
+                      <path
+                        d="M4.5 8.2l2.2 2.2 4.8-4.8"
+                        className="stroke-glow"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Saved
+                  </span>
+                )}
+                <Button size="sm" onClick={() => handleSave()} disabled={saving || (!dirty && !savedFlash)}>
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -225,8 +316,9 @@ export default function NotesPage() {
           <input
             value={title}
             onChange={(e) => {
-              setTitle(e.target.value);
-              setSavedFlash(false);
+              const next = e.target.value;
+              setTitle(next);
+              recomputeDirty(next, content);
             }}
             className="w-full bg-transparent font-display text-xl font-medium text-ink-primary placeholder:text-ink-muted focus:outline-none border-b border-surface-border pb-2"
             placeholder="Note title"
@@ -236,7 +328,7 @@ export default function NotesPage() {
             content={content}
             onChange={(next) => {
               setContent(next);
-              setSavedFlash(false);
+              recomputeDirty(title, next);
             }}
             placeholder="Start writing…"
           />
@@ -254,6 +346,42 @@ export default function NotesPage() {
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTargetId(null)}
         />
+
+        {/* Unsaved changes — Save / Discard / Keep editing */}
+        {unsavedOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/70 motion-safe:animate-fade-in"
+              onClick={() => setUnsavedOpen(false)}
+            />
+            <div className="relative w-full max-w-sm bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in">
+              <h3 className="font-display text-base font-medium text-ink-primary">
+                Unsaved changes
+              </h3>
+              <p className="text-sm text-ink-secondary mt-2 leading-relaxed">
+                You have edits that haven’t been saved. Save them, discard them, or keep
+                editing.
+              </p>
+              <div className="flex items-center justify-end gap-2 mt-6 flex-wrap">
+                <Button variant="ghost" size="sm" onClick={() => setUnsavedOpen(false)}>
+                  Keep editing
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    forceCloseNote();
+                  }}
+                >
+                  Discard
+                </Button>
+                <Button size="sm" onClick={handleSaveAndClose} disabled={saving}>
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
