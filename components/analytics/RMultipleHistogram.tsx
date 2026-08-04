@@ -140,7 +140,7 @@ function RMultipleHistogram({
           </div>
           {missingCount > 0 && (
             <p className="text-[11px] text-ink-muted mt-3">
-              {missingCount} trade{missingCount === 1 ? "" : "s"} in this range excluded — no stop-loss price
+              {missingCount} trade{missingCount === 1 ? "" : "s"} excluded — no stop-loss price
               recorded (so there's no R-multiple to bucket).
             </p>
           )}
