@@ -7,6 +7,13 @@ export type Note = {
   title: string;
   content: JSONContent;
   tags: string[];
+  // Phase 3 part 3: optional linking. linked_trade_ids is a plain array of
+  // trade ids (no join table, no FK — see phase12 migration comment);
+  // linked_strategy stores the same raw string a trade's own `strategy`
+  // field would hold, since there's no separate strategies table anywhere
+  // in this app.
+  linked_trade_ids: string[];
+  linked_strategy: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -45,16 +52,31 @@ export async function createNote(accountId: string) {
 
 /**
  * Phase 1c: persists title/content edits for an existing note. Phase 3
- * part 1 adds tags to what gets saved. The notes table has no updated_at
- * trigger (unlike trades, which doesn't track this at all), so updated_at
- * is set explicitly here rather than relying on the DB — this is also what
- * the notes list sorts by, so it has to actually change on every save for
- * the list ordering to make sense.
+ * part 1 added tags to what gets saved; Phase 3 part 3 adds the optional
+ * trade/strategy links. The notes table has no updated_at trigger (unlike
+ * trades, which doesn't track this at all), so updated_at is set
+ * explicitly here rather than relying on the DB — this is also what the
+ * notes list sorts by, so it has to actually change on every save for the
+ * list ordering to make sense.
  */
-export async function updateNote(id: string, title: string, content: JSONContent, tags: string[]) {
+export async function updateNote(
+  id: string,
+  title: string,
+  content: JSONContent,
+  tags: string[],
+  linkedTradeIds: string[],
+  linkedStrategy: string | null
+) {
   const result = await supabase
     .from("notes")
-    .update({ title, content, tags, updated_at: new Date().toISOString() })
+    .update({
+      title,
+      content,
+      tags,
+      linked_trade_ids: linkedTradeIds,
+      linked_strategy: linkedStrategy,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .select()
     .single();

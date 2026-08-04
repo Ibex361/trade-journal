@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
 import { useAccount } from "@/lib/AccountContext";
+import { useTradesData } from "@/lib/TradesDataContext";
 import { useNotesPageState } from "@/lib/NotesPageStateContext";
 import { fetchNotes, createNote, updateNote, deleteNote, extractFullText, type Note } from "@/lib/notes";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
@@ -43,6 +44,10 @@ function applyFilters(notes: Note[], filters: NoteFilters): Note[] {
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
+  // Phase 3 part 3: the account's trades, already fetched/cached by
+  // TradesDataProvider in the root layout — threaded down into
+  // NoteEditPanel's LinkedTradesPicker rather than re-fetched here.
+  const { trades } = useTradesData();
   const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId } = useNotesPageState();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,10 +122,16 @@ export default function NotesPage() {
     setActiveNoteId(note.id);
   }
 
-  async function handleSaveNote(title: string, content: JSONContent, tags: string[]) {
+  async function handleSaveNote(
+    title: string,
+    content: JSONContent,
+    tags: string[],
+    linkedTradeIds: string[],
+    linkedStrategy: string | null
+  ) {
     if (!activeNote || saving) return;
     setSaving(true);
-    const { data, error } = await updateNote(activeNote.id, title, content, tags);
+    const { data, error } = await updateNote(activeNote.id, title, content, tags, linkedTradeIds, linkedStrategy);
     setSaving(false);
     if (error || !data) return;
     const updated = data as Note;
@@ -171,6 +182,7 @@ export default function NotesPage() {
           {activeNote && (
             <NoteEditPanel
               note={activeNote}
+              trades={trades}
               saving={saving}
               deleting={deleting}
               onSave={handleSaveNote}
