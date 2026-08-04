@@ -20,7 +20,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -67,16 +66,6 @@ function relativeUpdated(iso: string) {
   }
 }
 
-/**
- * Notes page — mobile-hardened.
- *
- * Critical fix: only reset the editor when the *account id* changes, not when
- * AccountContext re-creates the account object on tab resume (that was closing
- * the editor on minimize/restore).
- *
- * Drafts live in localStorage; flushed on every dirty change and on pagehide.
- * Server write remains explicit Save only.
- */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
   const accountId = selectedAccount?.id ?? null;
@@ -145,7 +134,6 @@ export default function NotesPage() {
     setLoading(false);
   }, []);
 
-  // Only react to account *id* changes — not object identity from context
   useEffect(() => {
     if (!accountId) {
       setNotes([]);
@@ -163,7 +151,6 @@ export default function NotesPage() {
     prevAccountIdRef.current = accountId;
 
     if (accountChanged) {
-      // Real account switch: leave editor and reload
       setSelectedId(null);
       setTitle("");
       setContent(null);
@@ -171,13 +158,11 @@ export default function NotesPage() {
       restoredRef.current = false;
       fetchNotes(accountId);
     } else if (notes.length === 0 && !loading) {
-      // First load for this account (e.g. after hard refresh)
       fetchNotes(accountId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, fetchNotes]);
 
-  // Restore open note + draft after list is ready
   useEffect(() => {
     if (loading || restoredRef.current || selectedId || !notes.length) return;
     const savedId = getOpenNoteId();
@@ -195,13 +180,11 @@ export default function NotesPage() {
     setOpenNoteId(selectedId);
   }, [selectedId]);
 
-  // Continuous draft while dirty
   useEffect(() => {
     if (!selectedId || !dirty) return;
     writeDraft(selectedId, title, content ?? EMPTY_DOC);
   }, [selectedId, title, content, dirty]);
 
-  // Flush on background / page hide (minimize, app switch, tab discard)
   useEffect(() => {
     function onHide() {
       persistDraftNow();
@@ -234,7 +217,6 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Browser Back only — ignore while document is hidden (minimize quirk)
   useEffect(() => {
     if (!selectedId) {
       interceptBackRef.current = false;
@@ -548,28 +530,34 @@ export default function NotesPage() {
             <DialogHeader>
               <DialogTitle>Unsaved changes</DialogTitle>
               <DialogDescription>
-                You have edits that haven’t been saved to the server. Save them, discard the
-                local draft, or keep editing.
+                Save to the server, discard this draft, or keep editing.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter>
-              <Button variant="ghost" size="sm" onClick={() => setUnsavedOpen(false)}>
-                Keep editing
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  if (selectedId) clearDraft(selectedId);
-                  forceCloseNote();
-                }}
+            <div className="mt-6 flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    if (selectedId) clearDraft(selectedId);
+                    forceCloseNote();
+                  }}
+                >
+                  Discard
+                </Button>
+                <Button size="sm" className="w-full" onClick={handleSaveAndClose} disabled={saving}>
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUnsavedOpen(false)}
+                className="w-full text-center text-sm text-ink-secondary hover:text-ink-primary py-2 transition-colors duration-fast"
               >
-                Discard
-              </Button>
-              <Button size="sm" onClick={handleSaveAndClose} disabled={saving}>
-                {saving ? "Saving…" : "Save"}
-              </Button>
-            </DialogFooter>
+                Keep editing
+              </button>
+            </div>
           </DialogContent>
         </Dialog>
       </>
