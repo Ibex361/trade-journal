@@ -36,9 +36,8 @@ function stableJson(value: unknown) {
 /**
  * Notes — Phase 1c + polish.
  *
- * Full list CRUD with unsaved-changes guard on close and a clear save-status
- * indicator. Autosave / page-state context / search / Phase 2 rich editing
- * come later.
+ * Full list CRUD with unsaved-changes guard on Close and on mobile browser
+ * Back (history.popstate). Save-status indicator + dirty tracking.
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -47,12 +46,12 @@ export default function NotesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState<JSONContent | null>(null);
-  // Snapshot of last saved (or opened) title/content for dirty detection
   const savedSnapshot = useRef<{ title: string; content: string }>({
     title: "",
     content: stableJson(EMPTY_DOC),
   });
   const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +60,13 @@ export default function NotesPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [unsavedOpen, setUnsavedOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When the user hits browser Back while editing, we intercept and show the
+  // unsaved dialog instead of leaving the page.
+  const interceptBackRef = useRef(false);
+
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
   const fetchNotes = useCallback(async (accountId: string) => {
     setLoading(true);
@@ -100,6 +106,38 @@ export default function NotesPage() {
     };
   }, []);
 
+  // History guard: while a note is open, push a dummy state so Android/iOS
+  // browser Back lands here instead of leaving /notes. If dirty, show the
+  // unsaved dialog; otherwise close the editor.
+  useEffect(() => {
+    if (!selectedId) return;
+
+    interceptBackRef.current = true;
+    window.history.pushState({ notesEditor: true }, "");
+
+    function onPopState() {
+      if (!interceptBackRef.current) return;
+      // Re-push so another Back doesn't leave the app until they confirm
+      window.history.pushState({ notesEditor: true }, "");
+      if (dirtyRef.current) {
+        setUnsavedOpen(true);
+      } else {
+        interceptBackRef.current = false;
+        // Drop the extra history entry we added, then close
+        window.history.back();
+        forceCloseNote();
+      }
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      interceptBackRef.current = false;
+      window.removeEventListener("popstate", onPopState);
+    };
+    // forceCloseNote is stable enough via setState; avoid re-binding every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   function markClean(nextTitle: string, nextContent: JSONContent | null) {
     savedSnapshot.current = {
       title: nextTitle,
@@ -129,6 +167,7 @@ export default function NotesPage() {
   }
 
   function forceCloseNote() {
+    interceptBackRef.current = false;
     setSelectedId(null);
     setTitle("");
     setContent(null);
@@ -137,7 +176,6 @@ export default function NotesPage() {
     setUnsavedOpen(false);
   }
 
-  /** Close with unsaved-changes guard. */
   function requestCloseNote() {
     if (dirty) {
       setUnsavedOpen(true);
@@ -241,7 +279,6 @@ export default function NotesPage() {
     return <NotesSkeleton />;
   }
 
-  // —— Editor view ——
   if (selectedId) {
     return (
       <>
@@ -282,12 +319,7 @@ export default function NotesPage() {
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-glow motion-safe:animate-fade-in"
                     aria-live="polite"
                   >
-                    <svg
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      className="w-3.5 h-3.5"
-                      aria-hidden
-                    >
+                    <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5" aria-hidden>
                       <circle cx="8" cy="8" r="7" className="stroke-glow/40" strokeWidth="1.5" />
                       <path
                         d="M4.5 8.2l2.2 2.2 4.8-4.8"
@@ -347,7 +379,6 @@ export default function NotesPage() {
           onCancel={() => setDeleteTargetId(null)}
         />
 
-        {/* Unsaved changes — Save / Discard / Keep editing */}
         {unsavedOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div
@@ -366,13 +397,7 @@ export default function NotesPage() {
                 <Button variant="ghost" size="sm" onClick={() => setUnsavedOpen(false)}>
                   Keep editing
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    forceCloseNote();
-                  }}
-                >
+                <Button variant="secondary" size="sm" onClick={() => forceCloseNote()}>
                   Discard
                 </Button>
                 <Button size="sm" onClick={handleSaveAndClose} disabled={saving}>
@@ -386,7 +411,6 @@ export default function NotesPage() {
     );
   }
 
-  // —— List view ——
   return (
     <>
       <div className="space-y-6">

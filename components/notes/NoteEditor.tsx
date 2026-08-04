@@ -19,14 +19,15 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
+import Button from "@/components/shared/Button";
 
 /**
- * Notes/diary — Phase 2 rich editor.
+ * Notes/diary — Phase 2 rich editor (+ polish).
  *
- * Phase 1a baseline (StarterKit + toolbar) plus: links, underline, highlight,
- * task lists, tables, selection bubble menu, and a `/` slash-command menu.
- * Implemented with Tiptap extensions only (no Radix/cmdk) so Vercel installs
- * the same way as Phase 1 — no local npm step for the user.
+ * Links use an in-app dialog (never window.prompt). While editing, links are
+ * not hijacked by the browser — use the bubble "Open" control. Mobile
+ * backspace at the start of an empty doc is swallowed so Android doesn't
+ * treat it as browser Back.
  */
 
 type NoteEditorProps = {
@@ -69,19 +70,107 @@ function Divider() {
   return <span className="w-px h-5 bg-surface-border mx-1 shrink-0" />;
 }
 
-function setLink(editor: Editor) {
-  const previous = editor.getAttributes("link").href as string | undefined;
-  const url = window.prompt("Link URL", previous ?? "https://");
-  if (url === null) return;
-  const trimmed = url.trim();
-  if (trimmed === "") {
-    editor.chain().focus().extendMarkRange("link").unsetLink().run();
-    return;
+function LinkDialog({
+  open,
+  initialUrl,
+  onApply,
+  onRemove,
+  onClose,
+}: {
+  open: boolean;
+  initialUrl: string;
+  onApply: (url: string) => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState(initialUrl);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setUrl(initialUrl || "https://");
+      // Focus after paint so the keyboard opens cleanly on mobile
+      const t = window.setTimeout(() => inputRef.current?.focus(), 50);
+      return () => window.clearTimeout(t);
+    }
+  }, [open, initialUrl]);
+
+  if (!open) return null;
+
+  function submit() {
+    const trimmed = url.trim();
+    if (!trimmed || trimmed === "https://" || trimmed === "http://") {
+      onRemove();
+      return;
+    }
+    onApply(trimmed);
   }
-  editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 motion-safe:animate-fade-in" onClick={onClose} />
+      <div
+        className="relative w-full max-w-sm bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in"
+        role="dialog"
+        aria-labelledby="link-dialog-title"
+      >
+        <h3 id="link-dialog-title" className="font-display text-base font-medium text-ink-primary">
+          {initialUrl ? "Edit link" : "Add link"}
+        </h3>
+        <p className="text-sm text-ink-secondary mt-1.5">
+          Paste a full URL. Leave empty and remove to clear the link.
+        </p>
+        <input
+          ref={inputRef}
+          type="url"
+          inputMode="url"
+          autoComplete="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              onClose();
+            }
+          }}
+          placeholder="https://"
+          className="mt-4 w-full rounded-lg bg-surface-2 border border-surface-border px-3 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:border-glow/50"
+        />
+        <div className="flex items-center justify-between gap-2 mt-5 flex-wrap">
+          <div>
+            {initialUrl ? (
+              <Button variant="ghost" size="sm" onClick={onRemove}>
+                Remove link
+              </Button>
+            ) : (
+              <span />
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={submit}>
+              Apply
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({
+  editor,
+  onRequestLink,
+}: {
+  editor: Editor;
+  onRequestLink: () => void;
+}) {
   return (
     <div className="flex items-center gap-0.5 flex-wrap px-2 py-1.5 border-b border-surface-border">
       <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
@@ -102,7 +191,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           <path d="M13 7l4 4 4.5-4.5a2.12 2.12 0 00-3-3L13 7z" />
         </svg>
       </ToolbarButton>
-      <ToolbarButton label="Link" active={editor.isActive("link")} onClick={() => setLink(editor)}>
+      <ToolbarButton label="Link" active={editor.isActive("link")} onClick={onRequestLink}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
           <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
@@ -157,9 +246,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       <ToolbarButton
         label="Table"
         active={editor.isActive("table")}
-        onClick={() =>
-          editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-        }
+        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
           <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -191,66 +278,16 @@ type SlashItem = {
 };
 
 const SLASH_ITEMS: SlashItem[] = [
-  {
-    title: "Heading 1",
-    description: "Large section heading",
-    keywords: "h1 title",
-    run: (e) => e.chain().focus().toggleHeading({ level: 1 }).run(),
-  },
-  {
-    title: "Heading 2",
-    description: "Medium section heading",
-    keywords: "h2 subtitle",
-    run: (e) => e.chain().focus().toggleHeading({ level: 2 }).run(),
-  },
-  {
-    title: "Heading 3",
-    description: "Small section heading",
-    keywords: "h3",
-    run: (e) => e.chain().focus().toggleHeading({ level: 3 }).run(),
-  },
-  {
-    title: "Bullet list",
-    description: "Unordered list",
-    keywords: "ul bullets",
-    run: (e) => e.chain().focus().toggleBulletList().run(),
-  },
-  {
-    title: "Numbered list",
-    description: "Ordered list",
-    keywords: "ol numbers",
-    run: (e) => e.chain().focus().toggleOrderedList().run(),
-  },
-  {
-    title: "Checklist",
-    description: "Tasks with checkboxes",
-    keywords: "todo task checkbox",
-    run: (e) => e.chain().focus().toggleTaskList().run(),
-  },
-  {
-    title: "Quote",
-    description: "Blockquote",
-    keywords: "blockquote cite",
-    run: (e) => e.chain().focus().toggleBlockquote().run(),
-  },
-  {
-    title: "Code block",
-    description: "Monospace code",
-    keywords: "code pre",
-    run: (e) => e.chain().focus().toggleCodeBlock().run(),
-  },
-  {
-    title: "Table",
-    description: "3×3 table with header",
-    keywords: "grid spreadsheet",
-    run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
-  },
-  {
-    title: "Divider",
-    description: "Horizontal rule",
-    keywords: "hr line",
-    run: (e) => e.chain().focus().setHorizontalRule().run(),
-  },
+  { title: "Heading 1", description: "Large section heading", keywords: "h1 title", run: (e) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+  { title: "Heading 2", description: "Medium section heading", keywords: "h2 subtitle", run: (e) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { title: "Heading 3", description: "Small section heading", keywords: "h3", run: (e) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+  { title: "Bullet list", description: "Unordered list", keywords: "ul bullets", run: (e) => e.chain().focus().toggleBulletList().run() },
+  { title: "Numbered list", description: "Ordered list", keywords: "ol numbers", run: (e) => e.chain().focus().toggleOrderedList().run() },
+  { title: "Checklist", description: "Tasks with checkboxes", keywords: "todo task checkbox", run: (e) => e.chain().focus().toggleTaskList().run() },
+  { title: "Quote", description: "Blockquote", keywords: "blockquote cite", run: (e) => e.chain().focus().toggleBlockquote().run() },
+  { title: "Code block", description: "Monospace code", keywords: "code pre", run: (e) => e.chain().focus().toggleCodeBlock().run() },
+  { title: "Table", description: "3×3 table with header", keywords: "grid spreadsheet", run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  { title: "Divider", description: "Horizontal rule", keywords: "hr line", run: (e) => e.chain().focus().setHorizontalRule().run() },
 ];
 
 function SlashMenu({
@@ -282,7 +319,6 @@ function SlashMenu({
 
   const runItem = useCallback(
     (item: SlashItem) => {
-      // Remove the leading "/query" text before applying the command
       const { from } = editor.state.selection;
       const deleteFrom = Math.max(0, from - (query.length + 1));
       editor.chain().focus().deleteRange({ from: deleteFrom, to: from }).run();
@@ -360,20 +396,33 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   const [slashQuery, setSlashQuery] = useState("");
   const [slashPos, setSlashPos] = useState<{ top: number; left: number } | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
-  const slashRangeFrom = useRef<number | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkInitial, setLinkInitial] = useState("");
+
+  const openLinkDialog = useCallback((editor: Editor) => {
+    const prev = (editor.getAttributes("link").href as string | undefined) ?? "";
+    setLinkInitial(prev);
+    setLinkOpen(true);
+  }, []);
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        // Link is a separate extension; keep code blocks etc.
-      }),
+      StarterKit,
       Placeholder.configure({
         placeholder: placeholder ?? "Start writing… Type / for commands",
       }),
       Underline,
       Link.configure({
+        // While editing, don't navigate on tap (that makes links uneditable on mobile).
+        // Use the bubble "Open" control instead. openOnClick is for read-only views.
         openOnClick: false,
-        HTMLAttributes: { class: "note-link" },
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: {
+          class: "note-link",
+          rel: "noopener noreferrer",
+          target: "_blank",
+        },
       }),
       Highlight.configure({ multicolor: false }),
       TaskList,
@@ -391,10 +440,18 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         class:
           "prose-notes min-h-[240px] px-4 py-4 focus:outline-none text-ink-primary text-sm leading-relaxed",
       },
-      handleKeyDown: (_view, event) => {
-        // Let SlashMenu own Enter/arrows while open
+      handleKeyDown: (view, event) => {
         if (slashOpen && ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) {
           return true;
+        }
+        // Mobile / desktop: when the doc is empty and caret is at the start,
+        // Backspace must not bubble into browser history (Android does this).
+        if (event.key === "Backspace") {
+          const { empty, from } = view.state.selection;
+          if (empty && from <= 1 && view.state.doc.textContent.length === 0) {
+            event.preventDefault();
+            return true;
+          }
         }
         return false;
       },
@@ -402,7 +459,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
     onUpdate: ({ editor: ed }) => {
       onChange?.(ed.getJSON());
 
-      // Slash menu detection: "/" at start of a text block or after whitespace
       const { from } = ed.state.selection;
       const textBefore = ed.state.doc.textBetween(Math.max(0, from - 32), from, "\n", "\0");
       const match = textBefore.match(/(?:^|\s)\/([a-zA-Z0-9]*)$/);
@@ -411,8 +467,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         setSlashQuery(query);
         setSlashOpen(true);
         setSlashIndex(0);
-        slashRangeFrom.current = from - query.length - 1;
-        // Position near the caret using the selection coords if available
         try {
           const coords = ed.view.coordsAtPos(from);
           setSlashPos({ top: coords.bottom + 6, left: coords.left });
@@ -422,12 +476,10 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
       } else if (slashOpen) {
         setSlashOpen(false);
         setSlashQuery("");
-        slashRangeFrom.current = null;
       }
     },
   });
 
-  // Keep editor content in sync when parent swaps the open note
   useEffect(() => {
     if (!editor) return;
     const next = content ?? DEFAULT_DOC;
@@ -450,9 +502,11 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
     );
   }
 
+  const activeHref = (editor.getAttributes("link").href as string | undefined) ?? "";
+
   return (
     <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass overflow-hidden relative">
-      {editable && <Toolbar editor={editor} />}
+      {editable && <Toolbar editor={editor} onRequestLink={() => openLinkDialog(editor)} />}
 
       {editable && (
         <BubbleMenu
@@ -474,12 +528,26 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
               <path d="M9 11l-6 6v3h3l6-6M13 7l4 4 4.5-4.5a2.12 2.12 0 00-3-3L13 7z" />
             </svg>
           </ToolbarButton>
-          <ToolbarButton label="Link" active={editor.isActive("link")} onClick={() => setLink(editor)}>
+          <ToolbarButton label="Link" active={editor.isActive("link")} onClick={() => openLinkDialog(editor)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
               <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
               <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
             </svg>
           </ToolbarButton>
+          {activeHref && (
+            <ToolbarButton
+              label="Open link"
+              onClick={() => {
+                window.open(activeHref, "_blank", "noopener,noreferrer");
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                <path d="M15 3h6v6" />
+                <path d="M10 14L21 3" />
+              </svg>
+            </ToolbarButton>
+          )}
         </BubbleMenu>
       )}
 
@@ -496,6 +564,20 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
           setSlashQuery("");
         }}
         onSelectIndex={(i) => setSlashIndex(i)}
+      />
+
+      <LinkDialog
+        open={linkOpen}
+        initialUrl={linkInitial}
+        onClose={() => setLinkOpen(false)}
+        onRemove={() => {
+          editor.chain().focus().extendMarkRange("link").unsetLink().run();
+          setLinkOpen(false);
+        }}
+        onApply={(url) => {
+          editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+          setLinkOpen(false);
+        }}
       />
     </div>
   );
