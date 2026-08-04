@@ -179,6 +179,13 @@ export default function TradeFormPanel({
   const initialFormRef = useRef(form);
   // Drives the custom ConfirmDialog (replaces window.confirm — see below).
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  // Which action the discard-confirm dialog is guarding — closing the
+  // panel outright, or (see requestOpenDiary below) jumping to the Diary
+  // button's destination instead. Same dialog, different follow-through on
+  // confirm, so the wording matches whichever one the user actually
+  // triggered rather than always saying "Discard changes?" for both.
+  const [pendingAction, setPendingAction] = useState<"close" | "diary">("close");
+  const pendingDiaryTradeRef = useRef<Trade | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -224,6 +231,23 @@ export default function TradeFormPanel({
       onClose();
       return;
     }
+    setPendingAction("close");
+    setShowDiscardConfirm(true);
+  }
+
+  // Same guard as requestClose, for the "Diary" button — jumping to the
+  // note discards in-progress trade edits exactly the same way closing the
+  // panel would, so it goes through the same styled ConfirmDialog (not a
+  // separate window.confirm) rather than a second, differently-worded
+  // native popup for what's really the same kind of decision.
+  function requestOpenDiary(t: Trade) {
+    if (saving || !onOpenDiary) return;
+    if (!hasUnsavedChanges()) {
+      onOpenDiary(t);
+      return;
+    }
+    pendingDiaryTradeRef.current = t;
+    setPendingAction("diary");
     setShowDiscardConfirm(true);
   }
 
@@ -292,6 +316,7 @@ export default function TradeFormPanel({
         return;
       }
       window.history.pushState({ tradeFormPanel: stateId }, "");
+      setPendingAction("close");
       setShowDiscardConfirm(true);
     }
     window.addEventListener("popstate", handlePopState);
@@ -578,15 +603,10 @@ export default function TradeFormPanel({
           <div className="flex items-center gap-2">
             {trade && onOpenDiary && (
               <button
-                onClick={() => {
-                  if (hasUnsavedChanges() && !window.confirm("You have unsaved changes to this trade. Open the diary entry anyway and discard them?")) {
-                    return;
-                  }
-                  onOpenDiary(trade);
-                }}
+                onClick={() => requestOpenDiary(trade)}
                 disabled={openingDiary}
                 title="Open this trade's diary entry — creates one if it doesn't exist yet"
-                className="flex items-center gap-1.5 text-xs text-ink-secondary hover:text-brass border border-surface-border rounded-full px-3 py-1.5 disabled:opacity-60"
+                className="flex items-center gap-1.5 text-xs font-medium text-glow bg-glow/15 border border-glow/40 hover:bg-glow/25 rounded-full px-3 py-1.5 disabled:opacity-60 transition-colors"
               >
                 <NotesIcon className="w-3.5 h-3.5" />
                 {openingDiary ? "Opening…" : "Diary"}
@@ -1063,14 +1083,22 @@ export default function TradeFormPanel({
       </div>
       <ConfirmDialog
         open={showDiscardConfirm}
-        title="Discard changes?"
-        description="You have unsaved changes to this trade. If you leave now, they'll be lost."
-        confirmLabel="Discard changes"
+        title={pendingAction === "diary" ? "Open diary entry?" : "Discard changes?"}
+        description={
+          pendingAction === "diary"
+            ? "You have unsaved changes to this trade. Opening the diary entry now will discard them."
+            : "You have unsaved changes to this trade. If you leave now, they'll be lost."
+        }
+        confirmLabel={pendingAction === "diary" ? "Discard & open diary" : "Discard changes"}
         cancelLabel="Keep editing"
         onCancel={() => setShowDiscardConfirm(false)}
         onConfirm={() => {
           setShowDiscardConfirm(false);
-          onClose();
+          if (pendingAction === "diary" && onOpenDiary && pendingDiaryTradeRef.current) {
+            onOpenDiary(pendingDiaryTradeRef.current);
+          } else {
+            onClose();
+          }
         }}
       />
     </>
