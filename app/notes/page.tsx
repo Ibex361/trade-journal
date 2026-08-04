@@ -15,11 +15,12 @@ const EMPTY_DOC: JSONContent = {
   content: [{ type: "paragraph" }],
 };
 
+const NOTES_OPEN_KEY = "trade-journal:notes:open-id";
+
 function stableJson(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
-/** Plain-text preview from Tiptap JSON for the notes list. */
 function notePreview(content: JSONContent | null | undefined, max = 100): string {
   if (!content) return "";
   const parts: string[] = [];
@@ -40,18 +41,9 @@ function relativeUpdated(iso: string) {
     const now = Date.now();
     const sec = Math.round((now - then) / 1000);
     if (sec < 45) return "Just now";
-    if (sec < 3600) {
-      const m = Math.round(sec / 60);
-      return `${m}m ago`;
-    }
-    if (sec < 86400) {
-      const h = Math.round(sec / 3600);
-      return `${h}h ago`;
-    }
-    if (sec < 86400 * 7) {
-      const d = Math.round(sec / 86400);
-      return `${d}d ago`;
-    }
+    if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+    if (sec < 86400 * 7) return `${Math.round(sec / 86400)}d ago`;
     return new Date(iso).toLocaleDateString(undefined, {
       month: "short",
       day: "numeric",
@@ -63,7 +55,8 @@ function relativeUpdated(iso: string) {
 }
 
 /**
- * Notes — Phase 1–2 + 2.5 polish (no autosave).
+ * Notes — gap fill complete (manual save only; no autosave).
+ * Session restores the last open note id when returning to /notes.
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -87,6 +80,7 @@ export default function NotesPage() {
   const [unsavedOpen, setUnsavedOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const interceptBackRef = useRef(false);
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     dirtyRef.current = dirty;
@@ -115,20 +109,61 @@ export default function NotesPage() {
       setNotes([]);
       setSelectedId(null);
       setLoading(false);
+      restoredRef.current = false;
       return;
     }
     setSelectedId(null);
     setTitle("");
     setContent(null);
     setDirty(false);
+    restoredRef.current = false;
     fetchNotes(selectedAccount.id);
   }, [selectedAccount, fetchNotes]);
+
+  // Restore last open note once the list has loaded (same account session)
+  useEffect(() => {
+    if (loading || restoredRef.current || selectedId || !notes.length) return;
+    try {
+      const saved = sessionStorage.getItem(NOTES_OPEN_KEY);
+      if (!saved) {
+        restoredRef.current = true;
+        return;
+      }
+      const note = notes.find((n) => n.id === saved);
+      if (note) {
+        openNote(note);
+      }
+    } catch {
+      /* ignore */
+    }
+    restoredRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, notes, selectedId]);
+
+  useEffect(() => {
+    try {
+      if (selectedId) sessionStorage.setItem(NOTES_OPEN_KEY, selectedId);
+      else sessionStorage.removeItem(NOTES_OPEN_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [selectedId]);
 
   useEffect(() => {
     return () => {
       if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
     };
   }, []);
+
+  // Cmd/Ctrl+S from editor
+  useEffect(() => {
+    function onSaveEvent() {
+      if (selectedId) void handleSave();
+    }
+    window.addEventListener("notes:save", onSaveEvent);
+    return () => window.removeEventListener("notes:save", onSaveEvent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, title, content, saving]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -374,7 +409,6 @@ export default function NotesPage() {
             placeholder="Note title"
           />
 
-          {/* key forces a clean editor per note — no cross-note content bleed */}
           <NoteEditor
             key={selectedId}
             content={content}
@@ -384,6 +418,10 @@ export default function NotesPage() {
             }}
             placeholder="Start writing… Type / for commands"
           />
+
+          <p className="text-[11px] text-ink-muted">
+            Shortcuts: ⌘/Ctrl+B I U · ⌘/Ctrl+K link · ⌘/Ctrl+⇧H highlight · ⌘/Ctrl+S save
+          </p>
         </div>
 
         <ConfirmDialog
@@ -405,7 +443,11 @@ export default function NotesPage() {
               className="absolute inset-0 bg-black/70 motion-safe:animate-fade-in"
               onClick={() => setUnsavedOpen(false)}
             />
-            <div className="relative w-full max-w-sm bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in">
+            <div
+              className="relative w-full max-w-sm bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in"
+              role="dialog"
+              aria-modal="true"
+            >
               <h3 className="font-display text-base font-medium text-ink-primary">
                 Unsaved changes
               </h3>

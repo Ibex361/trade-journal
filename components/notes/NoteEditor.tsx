@@ -22,9 +22,10 @@ import TableCell from "@tiptap/extension-table-cell";
 import Button from "@/components/shared/Button";
 
 /**
- * Notes editor — Phase 2 + 2.5.
- * Toolbar scrolls horizontally on narrow screens (no wrap clutter).
- * Parent should pass key={noteId} so each open note gets a fresh instance.
+ * Notes editor — Phase 2 + 2.5 + gap fill (no autosave).
+ * Table row/col controls appear only while the caret is inside a table.
+ * Links: dialog for edit; bubble Open; click a link mark opens the dialog.
+ * Shortcuts: Mod-b/i/u, Mod-Shift-h (highlight), Mod-k (link).
  */
 
 type NoteEditorProps = {
@@ -108,6 +109,7 @@ function LinkDialog({
       <div
         className="relative w-full max-w-sm bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="link-dialog-title"
       >
         <h3 id="link-dialog-title" className="font-display text-base font-medium text-ink-primary">
@@ -137,11 +139,20 @@ function LinkDialog({
           className="mt-4 w-full rounded-lg bg-surface-2 border border-surface-border px-3 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:border-glow/50"
         />
         <div className="flex items-center justify-between gap-2 mt-5 flex-wrap">
-          <div>
+          <div className="flex items-center gap-1">
             {initialUrl ? (
-              <Button variant="ghost" size="sm" onClick={onRemove}>
-                Remove link
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(initialUrl, "_blank", "noopener,noreferrer")}
+                >
+                  Open
+                </Button>
+                <Button variant="ghost" size="sm" onClick={onRemove}>
+                  Remove
+                </Button>
+              </>
             ) : (
               <span />
             )}
@@ -160,6 +171,38 @@ function LinkDialog({
   );
 }
 
+function TableControls({ editor }: { editor: Editor }) {
+  if (!editor.isActive("table")) return null;
+  return (
+    <div className="flex items-center gap-0.5 px-2 py-1 border-t border-surface-border bg-surface-2/40 overflow-x-auto no-scrollbar">
+      <span className="text-[10px] uppercase tracking-wide text-ink-muted px-1.5 shrink-0">Table</span>
+      <ToolbarButton label="Add column before" onClick={() => editor.chain().focus().addColumnBefore().run()}>
+        <span className="text-[11px] font-mono">+col</span>
+      </ToolbarButton>
+      <ToolbarButton label="Add column after" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+        <span className="text-[11px] font-mono">col+</span>
+      </ToolbarButton>
+      <ToolbarButton label="Delete column" onClick={() => editor.chain().focus().deleteColumn().run()}>
+        <span className="text-[11px] font-mono text-loss/90">−col</span>
+      </ToolbarButton>
+      <Divider />
+      <ToolbarButton label="Add row before" onClick={() => editor.chain().focus().addRowBefore().run()}>
+        <span className="text-[11px] font-mono">+row</span>
+      </ToolbarButton>
+      <ToolbarButton label="Add row after" onClick={() => editor.chain().focus().addRowAfter().run()}>
+        <span className="text-[11px] font-mono">row+</span>
+      </ToolbarButton>
+      <ToolbarButton label="Delete row" onClick={() => editor.chain().focus().deleteRow().run()}>
+        <span className="text-[11px] font-mono text-loss/90">−row</span>
+      </ToolbarButton>
+      <Divider />
+      <ToolbarButton label="Delete table" onClick={() => editor.chain().focus().deleteTable().run()}>
+        <span className="text-[11px] font-mono text-loss/90">× table</span>
+      </ToolbarButton>
+    </div>
+  );
+}
+
 function Toolbar({
   editor,
   onRequestLink,
@@ -169,27 +212,26 @@ function Toolbar({
 }) {
   return (
     <div className="border-b border-surface-border">
-      {/* Single-row horizontal scroll — no wrapping stack on mobile */}
       <div className="flex items-center gap-0.5 px-2 py-1.5 overflow-x-auto no-scrollbar">
-        <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
+        <ToolbarButton label="Bold (⌘B)" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
           B
         </ToolbarButton>
-        <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <ToolbarButton label="Italic (⌘I)" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
           <span className="italic">I</span>
         </ToolbarButton>
-        <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+        <ToolbarButton label="Underline (⌘U)" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
           <span className="underline">U</span>
         </ToolbarButton>
         <ToolbarButton label="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
           <span className="line-through">S</span>
         </ToolbarButton>
-        <ToolbarButton label="Highlight" active={editor.isActive("highlight")} onClick={() => editor.chain().focus().toggleHighlight().run()}>
+        <ToolbarButton label="Highlight (⌘⇧H)" active={editor.isActive("highlight")} onClick={() => editor.chain().focus().toggleHighlight().run()}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
             <path d="M9 11l-6 6v3h3l6-6" />
             <path d="M13 7l4 4 4.5-4.5a2.12 2.12 0 00-3-3L13 7z" />
           </svg>
         </ToolbarButton>
-        <ToolbarButton label="Link" active={editor.isActive("link")} onClick={onRequestLink}>
+        <ToolbarButton label="Link (⌘K)" active={editor.isActive("link")} onClick={onRequestLink}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
             <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
             <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
@@ -265,6 +307,7 @@ function Toolbar({
           </svg>
         </ToolbarButton>
       </div>
+      <TableControls editor={editor} />
     </div>
   );
 }
@@ -292,11 +335,9 @@ const SLASH_ITEMS: SlashItem[] = [
 function clampMenuPosition(top: number, left: number, width = 256, height = 280) {
   if (typeof window === "undefined") return { top, left };
   const pad = 8;
-  const maxLeft = window.innerWidth - width - pad;
-  const maxTop = window.innerHeight - height - pad;
   return {
-    top: Math.max(pad, Math.min(top, maxTop)),
-    left: Math.max(pad, Math.min(left, maxLeft)),
+    top: Math.max(pad, Math.min(top, window.innerHeight - height - pad)),
+    left: Math.max(pad, Math.min(left, window.innerWidth - width - pad)),
   };
 }
 
@@ -409,6 +450,8 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   const [slashIndex, setSlashIndex] = useState(0);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkInitial, setLinkInitial] = useState("");
+  // Force toolbar re-render when selection enters/leaves a table
+  const [, setSelTick] = useState(0);
 
   const openLinkDialog = useCallback((ed: Editor) => {
     const prev = (ed.getAttributes("link").href as string | undefined) ?? "";
@@ -462,7 +505,21 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         }
         return false;
       },
+      handleClick: (view, _pos, event) => {
+        // Tap/click an existing link → open edit dialog (better than dead links on mobile)
+        const target = event.target as HTMLElement | null;
+        const anchor = target?.closest?.("a.note-link, a[href]") as HTMLAnchorElement | null;
+        if (anchor && editable) {
+          event.preventDefault();
+          const href = anchor.getAttribute("href") ?? "";
+          setLinkInitial(href);
+          setLinkOpen(true);
+          return true;
+        }
+        return false;
+      },
     },
+    onSelectionUpdate: () => setSelTick((n) => n + 1),
     onUpdate: ({ editor: ed }) => {
       onChange?.(ed.getJSON());
 
@@ -486,6 +543,39 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
       }
     },
   });
+
+  // Keyboard shortcuts (Mod = ⌘ on Mac, Ctrl elsewhere)
+  useEffect(() => {
+    if (!editor || !editable) return;
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "b") {
+        e.preventDefault();
+        editor!.chain().focus().toggleBold().run();
+      } else if (key === "i") {
+        e.preventDefault();
+        editor!.chain().focus().toggleItalic().run();
+      } else if (key === "u") {
+        e.preventDefault();
+        editor!.chain().focus().toggleUnderline().run();
+      } else if (key === "k") {
+        e.preventDefault();
+        openLinkDialog(editor!);
+      } else if (key === "h" && e.shiftKey) {
+        e.preventDefault();
+        editor!.chain().focus().toggleHighlight().run();
+      } else if (key === "s") {
+        // Let the page handle Cmd/Ctrl+S for manual save if it listens;
+        // don't block default here beyond preventDefault so parent can catch.
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("notes:save"));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editor, editable, openLinkDialog]);
 
   useEffect(() => {
     if (editor) editor.setEditable(editable);
