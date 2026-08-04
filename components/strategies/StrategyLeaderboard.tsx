@@ -33,17 +33,23 @@ function formatPct(value: number | null): string {
 
 /**
  * One row per strategy, sortable by any metric, with a quick toggle to
- * hide strategies below STRATEGY_MIN_SAMPLE_SIZE trades. Phase 1a of the
- * Strategies page — the per-strategy asset × direction breakdown and
- * filtered chart views (planned vs realized R, SL/TP hit rate, etc.) come
- * in later phases as drill-downs from here.
+ * hide strategies below STRATEGY_MIN_SAMPLE_SIZE trades. Rows are
+ * clickable to drill into that strategy's asset × direction breakdown
+ * (Phase 2b) — filtered chart views (planned vs realized R, SL/TP hit
+ * rate, etc.) come in Phase 3 as further drill-downs from here.
  */
 export default function StrategyLeaderboard({
   rows,
   currency,
+  selectedKey = null,
+  onSelectRow,
 }: {
   rows: StrategyLeaderboardRow[];
   currency: string;
+  /** Currently drilled-into strategy key, if any — highlights that row. */
+  selectedKey?: string | null;
+  /** Called with a row's key when clicked; called again with the same key to toggle it closed. */
+  onSelectRow?: (key: string) => void;
 }) {
   const { mode } = useWinRateMode();
   const [sortKey, setSortKey] = useState<SortKey>("expectancyR");
@@ -90,7 +96,11 @@ export default function StrategyLeaderboard({
   return (
     <Card
       title="Strategy leaderboard"
-      description="Ranked by expectancy — click a column heading to sort"
+      description={
+        onSelectRow
+          ? "Ranked by expectancy — click a column heading to sort, or a row to see its asset/direction breakdown"
+          : "Ranked by expectancy — click a column heading to sort"
+      }
       action={
         <div className="inline-flex items-center bg-surface-2 backdrop-blur-md border border-surface-border rounded-full p-1">
           <button
@@ -137,8 +147,15 @@ export default function StrategyLeaderboard({
               const pnlColor = r.totalPnl > 0 ? "text-gain" : r.totalPnl < 0 ? "text-loss" : "text-ink-secondary";
               const expectancyColor =
                 r.expectancyR == null ? "text-ink-muted" : r.expectancyR > 0 ? "text-gain" : r.expectancyR < 0 ? "text-loss" : "text-ink-secondary";
+              const selected = selectedKey === r.key;
               return (
-                <tr key={r.key} className="border-b border-surface-border last:border-0 hover:bg-surface-2/50 transition-colors">
+                <tr
+                  key={r.key}
+                  onClick={() => onSelectRow?.(r.key)}
+                  className={`border-b border-surface-border last:border-0 transition-colors ${
+                    onSelectRow ? "cursor-pointer hover:bg-surface-2/50" : ""
+                  } ${selected ? "bg-surface-2/70 border-l-2 border-l-glow" : ""}`}
+                >
                   <td className="px-3 py-3 font-medium">
                     <div className="flex items-center gap-2">
                       <span>{r.label}</span>
