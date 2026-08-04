@@ -70,21 +70,31 @@ export async function deleteNote(id: string) {
 }
 
 /**
- * Walks a Tiptap JSON document and concatenates its text nodes into a
- * plain-text preview snippet for the notes list — the list shouldn't have
- * to know anything about Tiptap's node shape beyond "text lives in `text`
- * fields, nested under `content` arrays".
+ * Walks a Tiptap JSON document and concatenates every text node into one
+ * plain-text string, with no length cap — used where the full body matters
+ * (Phase 3 part 2's search), as opposed to extractPreviewText's truncated
+ * list-card snippet below. Kept as the shared "how do we get plain text out
+ * of a Tiptap doc" primitive so the list preview and search stay in sync
+ * with each other whenever the editor's node shape changes.
  */
-export function extractPreviewText(content: JSONContent, maxLen = 140): string {
+export function extractFullText(content: JSONContent): string {
   const parts: string[] = [];
 
   function walk(node: JSONContent) {
-    if (parts.join(" ").length >= maxLen) return;
     if (typeof node.text === "string") parts.push(node.text);
     node.content?.forEach(walk);
   }
 
   walk(content);
-  const joined = parts.join(" ").replace(/\s+/g, " ").trim();
-  return joined.length > maxLen ? `${joined.slice(0, maxLen).trimEnd()}…` : joined;
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Truncated plain-text preview snippet for the notes list — the list
+ * shouldn't have to know anything about Tiptap's node shape beyond what
+ * extractFullText already handles.
+ */
+export function extractPreviewText(content: JSONContent, maxLen = 140): string {
+  const full = extractFullText(content);
+  return full.length > maxLen ? `${full.slice(0, maxLen).trimEnd()}…` : full;
 }
