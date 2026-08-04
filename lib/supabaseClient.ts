@@ -25,12 +25,15 @@ export type Account = {
   created_at: string;
 };
 
-/** Notes/diary row — Phase 1. Content is Tiptap's JSON document format. */
+/** Notes/diary row. Content is Tiptap JSON. Phase 3 adds tags + optional links. */
 export type Note = {
   id: string;
   account_id: string;
   title: string;
   content: JSONContent;
+  tags: string[];
+  linked_trade_id: string | null;
+  linked_strategy: string | null;
   created_at: string;
   updated_at: string;
 };
