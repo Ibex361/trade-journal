@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { JSONContent } from "@tiptap/react";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -22,4 +23,17 @@ export type Account = {
   target_monthly_pnl: number | null;
   target_monthly_winrate: number | null;
   created_at: string;
+};
+
+/** Notes/diary row. Content is Tiptap JSON. Phase 3 adds tags + optional links. */
+export type Note = {
+  id: string;
+  account_id: string;
+  title: string;
+  content: JSONContent;
+  tags: string[];
+  linked_trade_id: string | null;
+  linked_strategy: string | null;
+  created_at: string;
+  updated_at: string;
 };

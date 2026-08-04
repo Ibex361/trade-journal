@@ -1,11 +1,18 @@
 "use client";
 
 import Button from "@/components/shared/Button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /**
- * A styled stand-in for window.confirm() — same job (ask before doing
- * something risky), but rendered in the app's own glass/blur language
- * instead of the browser's native, unstyleable popup.
+ * Confirm dialog — same API as before, now on shadcn/Radix Dialog
+ * (focus trap, Escape, scroll lock).
  */
 export default function ConfirmDialog({
   open,
@@ -26,23 +33,27 @@ export default function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 motion-safe:animate-fade-in" onClick={onCancel} />
-      <div className="relative w-full max-w-sm bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in">
-        <h3 className="font-display text-base font-medium text-ink-primary">{title}</h3>
-        {description && <p className="text-sm text-ink-secondary mt-2 leading-relaxed">{description}</p>}
-        <div className="flex items-center justify-end gap-3 mt-6">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description ? <DialogDescription>{description}</DialogDescription> : null}
+        </DialogHeader>
+        <DialogFooter>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             {cancelLabel}
           </Button>
           <Button variant={destructive ? "danger" : "primary"} size="sm" onClick={onConfirm}>
             {confirmLabel}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
