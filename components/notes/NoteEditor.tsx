@@ -12,9 +12,11 @@ import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import type { JSONContent } from "@tiptap/react";
+import BubbleToolbar from "./BubbleToolbar";
+import SlashCommand from "./slashCommand";
 
 /**
- * Notes/diary — Phase 1a, extended in Phase 2 parts 1 and 2.
+ * Notes/diary — Phase 1a, extended through Phase 2.
  *
  * The editor itself, isolated from any page, list, or persistence layer —
  * those are Phase 1b/1c. This is the riskiest, least-familiar piece of the
@@ -22,9 +24,9 @@ import type { JSONContent } from "@tiptap/react";
  * contenteditable), so it gets built and proven out on its own first.
  *
  * Phase 1a shipped StarterKit's default set only. Phase 2 part 1 added
- * Link and Highlight. Phase 2 part 2 adds checklists (TaskList/TaskItem)
- * and tables — structural block content, vs. part 1's inline marks. Bubble
- * toolbar and slash-command menu are part 3.
+ * Link and Highlight. Phase 2 part 2 added checklists (TaskList/TaskItem)
+ * and tables. Phase 2 part 3 (this) adds a floating BubbleToolbar for
+ * text selections and a "/" slash-command menu for inserting block types.
  */
 
 type NoteEditorProps = {
@@ -302,6 +304,7 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
       TableRow,
       TableHeader,
       TableCell,
+      SlashCommand,
     ],
     content: content ?? DEFAULT_DOC,
     editable,
@@ -332,6 +335,7 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   return (
     <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass overflow-hidden">
       {editable && <Toolbar editor={editor} />}
+      {editable && <BubbleToolbar editor={editor} />}
       <EditorContent editor={editor} />
     </div>
   );
