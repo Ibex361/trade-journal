@@ -251,8 +251,10 @@ body {
   cursor: pointer;
 }
 .prose-notes mark {
-  background: color-mix(in srgb, var(--glow) 35%, transparent);
-  color: var(--ink);
+  background: #ffd43b;
+  color: #241d03;
   border-radius: 3px;
-  padding: 0 0.15em;
+  padding: 0.05em 0.25em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
