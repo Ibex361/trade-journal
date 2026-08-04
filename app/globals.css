@@ -154,3 +154,93 @@ body {
     box-shadow: none !important;
   }
 }
+
+/*
+ * Notes/diary editor (Phase 1a). Tiptap/StarterKit renders plain h1-h3,
+ * ul/ol, blockquote, and pre/code elements with no default styling — the
+ * app has no typography plugin installed, so this hand-rolls just enough
+ * rules for those tags to read correctly inside .prose-notes, in the same
+ * ink/glow palette as the rest of the app rather than pulling in
+ * @tailwindcss/typography for a handful of elements.
+ */
+.prose-notes h1,
+.prose-notes h2,
+.prose-notes h3 {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.prose-notes h1 {
+  font-size: 1.5rem;
+  margin: 1.2em 0 0.5em;
+}
+.prose-notes h2 {
+  font-size: 1.25rem;
+  margin: 1.1em 0 0.5em;
+}
+.prose-notes h3 {
+  font-size: 1.05rem;
+  margin: 1em 0 0.4em;
+}
+.prose-notes h1:first-child,
+.prose-notes h2:first-child,
+.prose-notes h3:first-child,
+.prose-notes p:first-child {
+  margin-top: 0;
+}
+.prose-notes p {
+  margin: 0.6em 0;
+}
+.prose-notes ul,
+.prose-notes ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.prose-notes ul {
+  list-style: disc;
+}
+.prose-notes ol {
+  list-style: decimal;
+}
+.prose-notes li {
+  margin: 0.2em 0;
+}
+.prose-notes li p {
+  margin: 0;
+}
+.prose-notes blockquote {
+  border-left: 2px solid var(--glow);
+  padding-left: 0.9em;
+  margin: 0.8em 0;
+  color: var(--ink-2);
+}
+.prose-notes pre {
+  background: var(--panel);
+  border: 1px solid var(--panel-b);
+  border-radius: 10px;
+  padding: 0.75em 1em;
+  margin: 0.8em 0;
+  overflow-x: auto;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.85em;
+}
+.prose-notes code {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.9em;
+}
+.prose-notes p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--ink-3);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.prose-notes .ProseMirror {
+  min-height: inherit;
+}
+.prose-notes hr {
+  border: none;
+  border-top: 1px solid var(--panel-b);
+  margin: 1.2em 0;
+}
