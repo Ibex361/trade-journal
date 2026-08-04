@@ -156,12 +156,9 @@ body {
 }
 
 /*
- * Notes/diary editor (Phase 1a). Tiptap/StarterKit renders plain h1-h3,
- * ul/ol, blockquote, and pre/code elements with no default styling — the
- * app has no typography plugin installed, so this hand-rolls just enough
- * rules for those tags to read correctly inside .prose-notes, in the same
- * ink/glow palette as the rest of the app rather than pulling in
- * @tailwindcss/typography for a handful of elements.
+ * Notes/diary editor (Phase 1a + Phase 2). Tiptap renders plain structural
+ * tags with no default styling — the app has no typography plugin, so this
+ * hand-rolls just enough rules in the ink/glow palette.
  */
 .prose-notes h1,
 .prose-notes h2,
@@ -243,4 +240,106 @@ body {
   border: none;
   border-top: 1px solid var(--panel-b);
   margin: 1.2em 0;
+}
+
+/* Phase 2: links */
+.prose-notes a.note-link,
+.prose-notes a {
+  color: var(--glow);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.prose-notes a.note-link:hover,
+.prose-notes a:hover {
+  color: var(--glow-2);
+}
+
+/* Phase 2: highlight mark */
+.prose-notes mark {
+  background: rgba(92, 230, 200, 0.28);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.15em;
+}
+
+/* Phase 2: task lists */
+.prose-notes ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.15em;
+}
+.prose-notes ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+.prose-notes ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.2em;
+  user-select: none;
+}
+.prose-notes ul[data-type="taskList"] li > label input[type="checkbox"] {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 1.5px solid var(--panel-b);
+  border-radius: 4px;
+  background: var(--panel);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+}
+.prose-notes ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+  background: var(--glow);
+  border-color: var(--glow);
+}
+.prose-notes ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
+  content: "";
+  width: 0.35rem;
+  height: 0.6rem;
+  border: solid #090a11;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 0.1rem;
+}
+.prose-notes ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+.prose-notes ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--ink-2);
+  text-decoration: line-through;
+}
+
+/* Phase 2: tables */
+.prose-notes table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.9em 0;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--panel-b);
+}
+.prose-notes th,
+.prose-notes td {
+  border: 1px solid var(--panel-b);
+  padding: 0.45em 0.65em;
+  vertical-align: top;
+  text-align: left;
+  min-width: 4rem;
+}
+.prose-notes th {
+  background: var(--panel);
+  font-weight: 500;
+  color: var(--ink);
+}
+.prose-notes td {
+  background: transparent;
+}
+.prose-notes .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(92, 230, 200, 0.12);
+  pointer-events: none;
+  z-index: 1;
 }
