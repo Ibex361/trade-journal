@@ -28,11 +28,11 @@ function PnlText({ value }: { value: number }) {
  * Phase 3 part 3: lets a note optionally link to one or more trades it's
  * about. `trades` is the full account trade list (from TradesDataContext —
  * already scoped to the selected account, so nothing extra to fetch here).
- * Linking is display-only for now (chips show instrument/date/P&L but
- * don't navigate into the Trades page) — wiring "click a linked trade to
- * open it in Trades" would mean threading an "open this specific trade"
- * hook through TradesPageStateContext, which nothing in the app does yet;
- * left for later if it turns out to be wanted.
+ * When `onOpenTrade` is provided (NoteEditPanel always passes it), clicking
+ * an already-linked chip's label jumps to that trade in the Trades page —
+ * see app/notes/page.tsx's handleOpenTrade for the actual navigation, which
+ * mirrors the Trades→Notes "diary" shortcut's pendingTradeId/activeNoteId
+ * hand-off pattern in reverse.
  *
  * Search matches instrument only (not date/strategy) — trades don't have
  * enough of a natural-language identity for a broader fuzzy match to be
@@ -43,10 +43,12 @@ export default function LinkedTradesPicker({
   trades,
   linkedTradeIds,
   onChange,
+  onOpenTrade,
 }: {
   trades: Trade[];
   linkedTradeIds: string[];
   onChange: (ids: string[]) => void;
+  onOpenTrade?: (trade: Trade) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -86,9 +88,24 @@ export default function LinkedTradesPicker({
               key={t.id}
               className="flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs border border-surface-border bg-surface-2 text-ink-secondary"
             >
-              <span className="text-ink-primary font-medium">{t.instrument}</span>
-              <span className="text-ink-muted">{formatDate(t.entry_date)}</span>
-              <PnlText value={t.pnl} />
+              {onOpenTrade ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenTrade(t)}
+                  title="Open this trade in Trades"
+                  className="flex items-center gap-2 hover:text-glow transition-colors"
+                >
+                  <span className="text-ink-primary font-medium">{t.instrument}</span>
+                  <span className="text-ink-muted">{formatDate(t.entry_date)}</span>
+                  <PnlText value={t.pnl} />
+                </button>
+              ) : (
+                <>
+                  <span className="text-ink-primary font-medium">{t.instrument}</span>
+                  <span className="text-ink-muted">{formatDate(t.entry_date)}</span>
+                  <PnlText value={t.pnl} />
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => removeTrade(t.id)}

@@ -43,6 +43,7 @@ export default function NoteEditPanel({
   onSave,
   onDelete,
   onClose,
+  onOpenTrade,
 }: {
   note: Note;
   trades: Trade[];
@@ -51,6 +52,9 @@ export default function NoteEditPanel({
   onSave: (title: string, content: JSONContent, tags: string[], linkedTradeIds: string[], linkedStrategy: string | null) => void;
   onDelete: () => void;
   onClose: () => void;
+  // Jumps to a linked trade in the Trades page (via LinkedTradesPicker's
+  // clickable chips) — see app/notes/page.tsx's handleOpenTrade.
+  onOpenTrade?: (trade: Trade) => void;
 }) {
   const { selectedAccount } = useAccount();
   const [title, setTitle] = useState(note.title);
@@ -124,6 +128,16 @@ export default function NoteEditPanel({
   function handleClose() {
     if (dirty && !window.confirm("You have unsaved changes. Close without saving?")) return;
     onClose();
+  }
+
+  // Same dirty guard as handleClose, for jumping to a linked trade —
+  // matches this component's own existing window.confirm convention
+  // (rather than TradeFormPanel's separate styled ConfirmDialog, which is
+  // that component's own established pattern) so the two dirty-checks
+  // already in this file stay consistent with each other.
+  function handleOpenTrade(t: Trade) {
+    if (dirty && !window.confirm("You have unsaved changes. Open this trade without saving?")) return;
+    onOpenTrade?.(t);
   }
 
   return (
@@ -204,7 +218,12 @@ export default function NoteEditPanel({
             </select>
           </div>
 
-          <LinkedTradesPicker trades={trades} linkedTradeIds={linkedTradeIds} onChange={handleLinkedTradeIdsChange} />
+          <LinkedTradesPicker
+            trades={trades}
+            linkedTradeIds={linkedTradeIds}
+            onChange={handleLinkedTradeIdsChange}
+            onOpenTrade={onOpenTrade ? handleOpenTrade : undefined}
+          />
         </div>
 
         <NoteEditor content={content} onChange={handleContentChange} placeholder="Start writing…" />

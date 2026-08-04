@@ -11,6 +11,8 @@ type TradesPageStateContextType = {
   sort: SortState;
   setSort: (sort: SortState) => void;
   resetFilters: () => void;
+  pendingTradeId: string | null;
+  setPendingTradeId: (id: string | null) => void;
 };
 
 const TradesPageStateContext = createContext<TradesPageStateContextType | null>(null);
@@ -24,6 +26,14 @@ export function TradesPageStateProvider({ children }: { children: ReactNode }) {
   const { selectedAccount } = useAccount();
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
+  // Set by the Notes page's "jump to this trade" action (a linked-trade
+  // chip in NoteEditPanel) before navigating here — same "store just the
+  // key, root-mounted context" approach the Trades→Notes diary shortcut
+  // uses via NotesPageStateContext.activeNoteId. app/trades/page.tsx picks
+  // this up in an effect once its own trades list has loaded, opens that
+  // trade in TradeFormPanel, then clears it so it doesn't reopen on a
+  // later, unrelated visit to Trades.
+  const [pendingTradeId, setPendingTradeId] = useState<string | null>(null);
 
   // Filters should reset when the user actually switches accounts, but not
   // just because the Trades page happens to remount (e.g. navigating back
@@ -38,6 +48,7 @@ export function TradesPageStateProvider({ children }: { children: ReactNode }) {
     if (prevAccountId.current !== selectedAccount?.id) {
       prevAccountId.current = selectedAccount?.id;
       setFilters(EMPTY_FILTERS);
+      setPendingTradeId(null);
     }
   }, [selectedAccount?.id]);
 
@@ -46,7 +57,9 @@ export function TradesPageStateProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <TradesPageStateContext.Provider value={{ filters, setFilters, sort, setSort, resetFilters }}>
+    <TradesPageStateContext.Provider
+      value={{ filters, setFilters, sort, setSort, resetFilters, pendingTradeId, setPendingTradeId }}
+    >
       {children}
     </TradesPageStateContext.Provider>
   );

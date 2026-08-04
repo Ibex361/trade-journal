@@ -1,9 +1,11 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/react";
 import { useAccount } from "@/lib/AccountContext";
 import { useTradesData } from "@/lib/TradesDataContext";
+import { useTradesPageState } from "@/lib/TradesPageStateContext";
 import { useNotesPageState } from "@/lib/NotesPageStateContext";
 import { fetchNotes, createNote, updateNote, deleteNote, extractFullText, type Note } from "@/lib/notes";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
@@ -12,6 +14,7 @@ import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import NoteEditPanel from "@/components/notes/NoteEditPanel";
 import NotesFilterBar, { NoteFilters, isNoteFiltersActive } from "@/components/notes/NotesFilterBar";
 import Button from "@/components/shared/Button";
+import type { Trade } from "@/lib/trades";
 
 /**
  * Phase 3 part 2: search (title + full body text) and tag filtering.
@@ -48,6 +51,8 @@ export default function NotesPage() {
   // TradesDataProvider in the root layout — threaded down into
   // NoteEditPanel's LinkedTradesPicker rather than re-fetched here.
   const { trades } = useTradesData();
+  const router = useRouter();
+  const { setPendingTradeId } = useTradesPageState();
   const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId } = useNotesPageState();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,6 +160,19 @@ export default function NotesPage() {
     setActiveNoteId(null);
   }
 
+  /**
+   * The reverse of Trades' "Diary" button: clicking a linked-trade chip in
+   * NoteEditPanel jumps to that trade in the Trades page. Sets
+   * TradesPageStateContext.pendingTradeId (root-mounted, so it's already
+   * set by the time Trades mounts) and navigates — app/trades/page.tsx
+   * picks it up once its own trades list has loaded and opens
+   * TradeFormPanel for it.
+   */
+  function handleOpenTrade(trade: Trade) {
+    setPendingTradeId(trade.id);
+    router.push("/trades");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -188,6 +206,7 @@ export default function NotesPage() {
               onSave={handleSaveNote}
               onDelete={handleDeleteNote}
               onClose={() => setActiveNoteId(null)}
+              onOpenTrade={handleOpenTrade}
             />
           )}
           {notes.length === 0 ? (

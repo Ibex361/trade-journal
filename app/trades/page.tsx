@@ -75,7 +75,7 @@ export default function TradesPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
-  const { filters, setFilters, sort, setSort } = useTradesPageState();
+  const { filters, setFilters, sort, setSort, pendingTradeId, setPendingTradeId } = useTradesPageState();
   // Typing in the filter bar or changing sort updates `filters`/`sort` (and
   // their controls) immediately; this combined, deferred copy is what
   // actually drives the filter+sort+row-render pipeline below, so neither
@@ -157,6 +157,21 @@ export default function TradesPage() {
     setDuplicateSource(null);
     setPanelOpen(true);
   }, []);
+
+  // Picks up a "jump to this trade" request set by the Notes page (a
+  // linked-trade chip click, via TradesPageStateContext.pendingTradeId —
+  // see lib/TradesPageStateContext.tsx). Waits for trades to finish
+  // loading so the lookup isn't run against an empty list on a fresh
+  // navigation, then opens it in TradeFormPanel exactly like clicking the
+  // row would. Clears pendingTradeId either way (found or not — e.g. the
+  // trade was since deleted) so it doesn't fire again on a later, unrelated
+  // visit to this page.
+  useEffect(() => {
+    if (!pendingTradeId || tradesLoading) return;
+    const target = trades.find((t) => t.id === pendingTradeId);
+    if (target) openEdit(target);
+    setPendingTradeId(null);
+  }, [pendingTradeId, tradesLoading, trades, openEdit, setPendingTradeId]);
 
   const openDuplicate = useCallback((trade: Trade) => {
     setEditingTrade(null);
