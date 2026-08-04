@@ -60,6 +60,13 @@ export async function updateNote(id: string, title: string, content: JSONContent
   return result;
 }
 
+/** Phase 1c part 2 — used by the notes list's delete confirmation flow. */
+export async function deleteNote(id: string) {
+  const result = await supabase.from("notes").delete().eq("id", id);
+  if (result.error) console.error("deleteNote failed:", result.error);
+  return result;
+}
+
 /**
  * Walks a Tiptap JSON document and concatenates its text nodes into a
  * plain-text preview snippet for the notes list — the list shouldn't have

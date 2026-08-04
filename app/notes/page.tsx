@@ -3,18 +3,18 @@
 import { useEffect, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchNotes, createNote, updateNote, type Note } from "@/lib/notes";
+import { fetchNotes, createNote, updateNote, deleteNote, type Note } from "@/lib/notes";
 import NotesList from "@/components/notes/NotesList";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import NoteEditPanel from "@/components/notes/NoteEditPanel";
 import Button from "@/components/shared/Button";
 
 /**
- * Phase 1c part 1: notes are now fully open/edit/save-able. Clicking a
+ * Phase 1c: notes are now fully open/edit/save/delete-able. Clicking a
  * list card or "New note" both open the same NoteEditPanel; saving persists
  * via updateNote and patches the note into local list state (no refetch
  * needed — same "update in place" approach TradesDataContext's mutation
- * paths use). Delete is part 2.
+ * paths use). Deleting removes it from local state the same way.
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -22,6 +22,7 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
 
   useEffect(() => {
@@ -79,6 +80,16 @@ export default function NotesPage() {
     });
   }
 
+  async function handleDeleteNote() {
+    if (!activeNote || deleting) return;
+    setDeleting(true);
+    const { error } = await deleteNote(activeNote.id);
+    setDeleting(false);
+    if (error) return;
+    setNotes((current) => current.filter((n) => n.id !== activeNote.id));
+    setActiveNote(null);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -107,7 +118,9 @@ export default function NotesPage() {
             <NoteEditPanel
               note={activeNote}
               saving={saving}
+              deleting={deleting}
               onSave={handleSaveNote}
+              onDelete={handleDeleteNote}
               onClose={() => setActiveNote(null)}
             />
           )}
