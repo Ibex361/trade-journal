@@ -27,15 +27,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing file or account." }, { status: 400 });
   }
 
+  // Optional namespace within the account's folder — trade chart screenshots
+  // and note-embedded images are kept in separate ImageKit folders so the
+  // media library stays organized. Whitelisted rather than accepting an
+  // arbitrary client-supplied path.
+  const rawContext = incoming.get("context");
+  const context = rawContext === "note-images" ? "note-images" : "trade-screenshots";
+
   const ext = file.name.split(".").pop()?.toLowerCase() || "png";
   const fileName = `${crypto.randomUUID()}.${ext}`;
 
   // Namespaced by account, same as the old Supabase Storage layout, so
-  // screenshots never mix between accounts in the ImageKit media library.
+  // uploads never mix between accounts (or between trades and notes) in
+  // the ImageKit media library.
   const outgoing = new FormData();
   outgoing.append("file", file, fileName);
   outgoing.append("fileName", fileName);
-  outgoing.append("folder", `/trade-screenshots/${accountId}`);
+  outgoing.append("folder", `/${context}/${accountId}`);
   outgoing.append("useUniqueFileName", "false");
 
   let res: Response;

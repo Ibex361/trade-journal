@@ -319,3 +319,16 @@ body {
   background: color-mix(in srgb, var(--glow) 20%, transparent);
   pointer-events: none;
 }
+/* Phase 4 Part 1 — images pasted/dropped/inserted into a note. */
+.prose-notes img.note-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--panel-b);
+  margin: 0.8em 0;
+}
+.prose-notes img.note-image.ProseMirror-selectednode {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
+}

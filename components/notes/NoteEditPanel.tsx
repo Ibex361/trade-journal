@@ -226,7 +226,12 @@ export default function NoteEditPanel({
           />
         </div>
 
-        <NoteEditor content={content} onChange={handleContentChange} placeholder="Start writing…" />
+        <NoteEditor
+          content={content}
+          onChange={handleContentChange}
+          placeholder="Start writing…"
+          accountId={selectedAccount?.id ?? null}
+        />
       </Card>
 
       <ConfirmDialog

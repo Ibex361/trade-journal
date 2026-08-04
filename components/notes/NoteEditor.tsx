@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -14,9 +15,12 @@ import TableCell from "@tiptap/extension-table-cell";
 import type { JSONContent } from "@tiptap/react";
 import BubbleToolbar from "./BubbleToolbar";
 import SlashCommand from "./slashCommand";
+import NoteImage from "./NoteImage";
+import { uploadNoteImage } from "@/lib/noteImages";
+import { validateScreenshotFile } from "@/lib/screenshots";
 
 /**
- * Notes/diary — Phase 1a, extended through Phase 2.
+ * Notes/diary — Phase 1a, extended through Phase 2 and Phase 4 Part 1.
  *
  * The editor itself, isolated from any page, list, or persistence layer —
  * those are Phase 1b/1c. This is the riskiest, least-familiar piece of the
@@ -25,8 +29,14 @@ import SlashCommand from "./slashCommand";
  *
  * Phase 1a shipped StarterKit's default set only. Phase 2 part 1 added
  * Link and Highlight. Phase 2 part 2 added checklists (TaskList/TaskItem)
- * and tables. Phase 2 part 3 (this) adds a floating BubbleToolbar for
- * text selections and a "/" slash-command menu for inserting block types.
+ * and tables. Phase 2 part 3 added a floating BubbleToolbar for text
+ * selections and a "/" slash-command menu for inserting block types.
+ * Phase 4 Part 1 (this) adds image support: paste-from-clipboard,
+ * drag-and-drop, and a manual toolbar button, all uploading to ImageKit
+ * via lib/noteImages.ts and inserting a NoteImage node. Embedding an
+ * *existing* trade screenshot (browsing rather than uploading) is Phase 4
+ * Part 2; deleting orphaned images is Phase 4 Part 3 — this part only
+ * covers getting new images into the doc.
  */
 
 type NoteEditorProps = {
@@ -34,6 +44,10 @@ type NoteEditorProps = {
   onChange?: (content: JSONContent) => void;
   editable?: boolean;
   placeholder?: string;
+  // Needed to namespace uploaded images in ImageKit (see lib/noteImages.ts).
+  // Image upload is disabled (paste/drop ignored, toolbar button hidden)
+  // when this is null, e.g. before an account has loaded.
+  accountId?: string | null;
 };
 
 function ToolbarButton({
@@ -69,7 +83,15 @@ function Divider() {
   return <span className="w-px h-5 bg-surface-border mx-1 shrink-0" />;
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({
+  editor,
+  onInsertImageClick,
+  imagesEnabled,
+}: {
+  editor: Editor;
+  onInsertImageClick?: () => void;
+  imagesEnabled?: boolean;
+}) {
   function handleSetLink() {
     const previousUrl = editor.getAttributes("link").href as string | undefined;
     const url = window.prompt("Link URL", previousUrl ?? "https://");
@@ -117,6 +139,15 @@ function Toolbar({ editor }: { editor: Editor }) {
           <path d="M13 18l-1 1a3.5 3.5 0 01-5-5l1-1" />
         </svg>
       </ToolbarButton>
+      {imagesEnabled && (
+        <ToolbarButton label="Insert image" onClick={() => onInsertImageClick?.()}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <rect x="3" y="4" width="18" height="16" rx="1.5" />
+            <circle cx="8.5" cy="9.5" r="1.5" />
+            <path d="M3 16l5-5 4 4 3-3 6 6" />
+          </svg>
+        </ToolbarButton>
+      )}
 
       <Divider />
 
@@ -285,7 +316,25 @@ function Toolbar({ editor }: { editor: Editor }) {
 
 const DEFAULT_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
 
-export default function NoteEditor({ content, onChange, editable = true, placeholder }: NoteEditorProps) {
+export default function NoteEditor({ content, onChange, editable = true, placeholder, accountId }: NoteEditorProps) {
+  // Number of images currently uploading (supports pasting/dropping more
+  // than one at once) and the most recent upload error, if any. Kept
+  // outside the editor doc itself — an in-progress upload has no node in
+  // the doc yet, it's inserted only once the URL comes back.
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Ref mirror of accountId/editor so the paste/drop handlers (registered
+  // once via editorProps, not re-created per render) always see the
+  // current values instead of closing over stale ones.
+  const accountIdRef = useRef(accountId);
+  accountIdRef.current = accountId;
+  // editorProps below is only read at editor-creation time by Tiptap, so
+  // handlePaste/handleDrop go through this ref rather than calling
+  // insertImageFile directly — it's defined further down (it needs the
+  // editor instance itself), and the ref sidesteps any ordering issue.
+  const insertImageFileRef = useRef<(file: File) => void>(() => {});
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -304,6 +353,7 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
       TableRow,
       TableHeader,
       TableCell,
+      NoteImage.configure({ inline: false, HTMLAttributes: { class: "note-image" } }),
       SlashCommand,
     ],
     content: content ?? DEFAULT_DOC,
@@ -318,11 +368,68 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         class:
           "prose-notes min-h-[240px] px-4 py-4 focus:outline-none text-ink-primary text-sm leading-relaxed",
       },
+      // Clipboard image paste (e.g. a copied chart or screenshot).
+      handlePaste: (view, event) => {
+        const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+        if (files.length === 0) return false;
+        event.preventDefault();
+        files.forEach((file) => insertImageFileRef.current(file));
+        return true;
+      },
+      // Drag-and-drop from the OS file browser or another app/tab.
+      handleDrop: (view, event) => {
+        const files = Array.from(event.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
+        if (files.length === 0) return false;
+        event.preventDefault();
+        files.forEach((file) => insertImageFileRef.current(file));
+        return true;
+      },
     },
     onUpdate: ({ editor }) => {
       onChange?.(editor.getJSON());
     },
   });
+
+  const insertImageFile = useCallback(
+    async (file: File) => {
+      const currentAccountId = accountIdRef.current;
+      if (!currentAccountId) {
+        setImageError("Can't upload an image right now — no account selected.");
+        return;
+      }
+      const invalid = validateScreenshotFile(file);
+      if (invalid) {
+        setImageError(invalid);
+        return;
+      }
+      setImageError(null);
+      setUploadingCount((n) => n + 1);
+      try {
+        const { url, fileId, error } = await uploadNoteImage(currentAccountId, file);
+        if (error || !url) {
+          setImageError(error || "Image upload failed. Please try again.");
+          return;
+        }
+        // Node type name is still "image" — NoteImage extends Image's
+        // schema (adding the fileId attribute) without renaming it.
+        editor?.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
+      } finally {
+        setUploadingCount((n) => n - 1);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor]
+  );
+
+  useEffect(() => {
+    insertImageFileRef.current = insertImageFile;
+  }, [insertImageFile]);
+
+  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    files.forEach((file) => insertImageFile(file));
+    event.target.value = ""; // allow re-selecting the same file later
+  }
 
   if (!editor) {
     return (
@@ -334,7 +441,28 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
 
   return (
     <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass overflow-hidden">
-      {editable && <Toolbar editor={editor} />}
+      {editable && (
+        <Toolbar
+          editor={editor}
+          imagesEnabled={!!accountId}
+          onInsertImageClick={() => fileInputRef.current?.click()}
+        />
+      )}
+      {editable && accountId && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          className="hidden"
+          onChange={handleFileInputChange}
+        />
+      )}
+      {editable && (uploadingCount > 0 || imageError) && (
+        <p className={`px-4 pt-1.5 text-[11px] ${imageError ? "text-loss" : "text-ink-muted"}`}>
+          {imageError ?? (uploadingCount === 1 ? "Uploading image…" : `Uploading ${uploadingCount} images…`)}
+        </p>
+      )}
       {editable && <BubbleToolbar editor={editor} />}
       <EditorContent editor={editor} />
     </div>
