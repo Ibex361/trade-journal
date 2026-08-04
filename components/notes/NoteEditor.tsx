@@ -5,20 +5,26 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import Highlight from "@tiptap/extension-highlight";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableHeader from "@tiptap/extension-table-header";
+import TableCell from "@tiptap/extension-table-cell";
 import type { JSONContent } from "@tiptap/react";
 
 /**
- * Notes/diary — Phase 1a, extended in Phase 2 part 1.
+ * Notes/diary — Phase 1a, extended in Phase 2 parts 1 and 2.
  *
  * The editor itself, isolated from any page, list, or persistence layer —
  * those are Phase 1b/1c. This is the riskiest, least-familiar piece of the
  * whole notes feature (nothing else in the app touches Tiptap or
  * contenteditable), so it gets built and proven out on its own first.
  *
- * Phase 1a shipped StarterKit's default set only. Phase 2 part 1 adds
- * Link and Highlight — the two simplest marks to layer in, since neither
- * needs new block-level UI (checklists/tables are part 2, bubble
- * toolbar/slash-menu are part 3).
+ * Phase 1a shipped StarterKit's default set only. Phase 2 part 1 added
+ * Link and Highlight. Phase 2 part 2 adds checklists (TaskList/TaskItem)
+ * and tables — structural block content, vs. part 1's inline marks. Bubble
+ * toolbar and slash-command menu are part 3.
  */
 
 type NoteEditorProps = {
@@ -159,6 +165,19 @@ function Toolbar({ editor }: { editor: Editor }) {
         </svg>
       </ToolbarButton>
       <ToolbarButton
+        label="Checklist"
+        active={editor.isActive("taskList")}
+        onClick={() => editor.chain().focus().toggleTaskList().run()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <rect x="3.5" y="4" width="6" height="6" rx="1.5" />
+          <path d="M5 7l1 1 2-2" />
+          <path d="M12 7h9" />
+          <rect x="3.5" y="14" width="6" height="6" rx="1.5" />
+          <path d="M12 17h9" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton
         label="Blockquote"
         active={editor.isActive("blockquote")}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
@@ -177,6 +196,46 @@ function Toolbar({ editor }: { editor: Editor }) {
           <path d="M9 18l-6-6 6-6M15 6l6 6-6 6" />
         </svg>
       </ToolbarButton>
+
+      <Divider />
+
+      {editor.isActive("table") ? (
+        <>
+          <ToolbarButton label="Add column" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M12 4v16" />
+              <path d="M17 9v6M14 12h6" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton label="Add row" onClick={() => editor.chain().focus().addRowAfter().run()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M3 12h18" />
+              <path d="M9 17v6M6 20h6" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Delete table"
+            onClick={() => editor.chain().focus().deleteTable().run()}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M8 9l8 8M16 9l-8 8" />
+            </svg>
+          </ToolbarButton>
+        </>
+      ) : (
+        <ToolbarButton
+          label="Insert table"
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <rect x="3" y="4" width="18" height="16" rx="1.5" />
+            <path d="M3 10h18M9 4v16" />
+          </svg>
+        </ToolbarButton>
+      )}
 
       <Divider />
 
@@ -217,6 +276,12 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
       }),
       Highlight,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: content ?? DEFAULT_DOC,
     editable,
