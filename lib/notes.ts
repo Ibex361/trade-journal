@@ -1,0 +1,63 @@
+import { supabase } from "./supabaseClient";
+import type { JSONContent } from "@tiptap/react";
+
+export type Note = {
+  id: string;
+  account_id: string;
+  title: string;
+  content: JSONContent;
+  created_at: string;
+  updated_at: string;
+};
+
+const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
+
+/**
+ * Newest-first by updated_at, matching the "most recently touched note
+ * first" ordering a diary/notes list should have (as opposed to trades,
+ * which sort by when the trade happened).
+ */
+export async function fetchNotes(accountId: string) {
+  return supabase
+    .from("notes")
+    .select("*")
+    .eq("account_id", accountId)
+    .order("updated_at", { ascending: false });
+}
+
+/**
+ * Phase 1b's create-note flow: inserts a blank note and returns the new
+ * row so the caller can navigate straight into it. Title/content default
+ * to the same values the phase10 migration gives the column, kept explicit
+ * here rather than relying on the DB default so the returned row is
+ * immediately usable without a refetch.
+ */
+export async function createNote(accountId: string) {
+  const result = await supabase
+    .from("notes")
+    .insert({ account_id: accountId, title: "Untitled", content: EMPTY_DOC })
+    .select()
+    .single();
+  if (result.error) console.error("createNote failed:", result.error);
+  return result;
+}
+
+/**
+ * Walks a Tiptap JSON document and concatenates its text nodes into a
+ * plain-text preview snippet for the notes list — the list shouldn't have
+ * to know anything about Tiptap's node shape beyond "text lives in `text`
+ * fields, nested under `content` arrays".
+ */
+export function extractPreviewText(content: JSONContent, maxLen = 140): string {
+  const parts: string[] = [];
+
+  function walk(node: JSONContent) {
+    if (parts.join(" ").length >= maxLen) return;
+    if (typeof node.text === "string") parts.push(node.text);
+    node.content?.forEach(walk);
+  }
+
+  walk(content);
+  const joined = parts.join(" ").replace(/\s+/g, " ").trim();
+  return joined.length > maxLen ? `${joined.slice(0, maxLen).trimEnd()}…` : joined;
+}
