@@ -274,12 +274,59 @@ export type StrategyLeaderboardRow = {
 };
 
 /**
+ * Builds one full metrics row (the shared shape used by both the strategy
+ * leaderboard and the per-strategy asset/direction breakdown) for an
+ * arbitrary group of trades. Built directly off summarizeTrades /
+ * getExpectancy / getProfitFactor / buildEquityCurve / getDrawdown so
+ * nothing here can drift from the equivalent numbers shown elsewhere in
+ * the app.
+ */
+function buildStrategyMetricRow(key: string, label: string, groupTrades: Trade[]): StrategyLeaderboardRow {
+  const summary = summarizeTrades(groupTrades);
+  const expectancy = getExpectancy(groupTrades);
+  const profitFactor = getProfitFactor(groupTrades);
+
+  const rValues = groupTrades
+    .map((t) => t.r_multiple)
+    .filter((r): r is number => r != null && !Number.isNaN(r));
+  const winningR = rValues.filter((r) => r > 0);
+  const losingR = rValues.filter((r) => r < 0);
+  const avgWinR = winningR.length > 0 ? winningR.reduce((s, r) => s + r, 0) / winningR.length : null;
+  const avgLossR =
+    losingR.length > 0 ? Math.abs(losingR.reduce((s, r) => s + r, 0) / losingR.length) : null;
+  const payoffRatio = avgWinR != null && avgLossR != null && avgLossR !== 0 ? avgWinR / avgLossR : null;
+
+  let stdDevR: number | null = null;
+  if (rValues.length > 1 && expectancy.perR != null) {
+    const mean = expectancy.perR;
+    const variance = rValues.reduce((s, r) => s + (r - mean) ** 2, 0) / rValues.length;
+    stdDevR = Math.sqrt(variance);
+  }
+
+  const drawdown = getDrawdown(buildEquityCurve(groupTrades, 0));
+
+  return {
+    key,
+    label,
+    count: summary.count,
+    totalPnl: summary.totalPnl,
+    winRateStrict: summary.winRateStrict,
+    winRateDecided: summary.winRateDecided,
+    expectancyR: expectancy.perR,
+    expectancyPnl: expectancy.perTrade,
+    profitFactor,
+    payoffRatio,
+    stdDevR,
+    maxDrawdownAmount: drawdown.maxAmount,
+    maxDrawdownPct: drawdown.maxPct,
+    lowSample: summary.count < STRATEGY_MIN_SAMPLE_SIZE,
+  };
+}
+
+/**
  * One row per strategy tag, covering every figure the Strategies
- * leaderboard needs. Built directly off summarizeTrades / getExpectancy /
- * getProfitFactor / buildEquityCurve / getDrawdown so nothing here can drift
- * from the equivalent numbers shown elsewhere in the app. Sorted by
- * expectancyR descending (best edge first); strategies with no R data sort
- * last.
+ * leaderboard needs. Sorted by expectancyR descending (best edge first);
+ * strategies with no R data sort last.
  */
 export function getStrategyLeaderboard(trades: Trade[]): StrategyLeaderboardRow[] {
   const groups = new Map<string, Trade[]>();
@@ -292,45 +339,7 @@ export function getStrategyLeaderboard(trades: Trade[]): StrategyLeaderboardRow[
 
   const rows: StrategyLeaderboardRow[] = [];
   for (const [key, groupTrades] of groups.entries()) {
-    const summary = summarizeTrades(groupTrades);
-    const expectancy = getExpectancy(groupTrades);
-    const profitFactor = getProfitFactor(groupTrades);
-
-    const rValues = groupTrades
-      .map((t) => t.r_multiple)
-      .filter((r): r is number => r != null && !Number.isNaN(r));
-    const winningR = rValues.filter((r) => r > 0);
-    const losingR = rValues.filter((r) => r < 0);
-    const avgWinR = winningR.length > 0 ? winningR.reduce((s, r) => s + r, 0) / winningR.length : null;
-    const avgLossR =
-      losingR.length > 0 ? Math.abs(losingR.reduce((s, r) => s + r, 0) / losingR.length) : null;
-    const payoffRatio = avgWinR != null && avgLossR != null && avgLossR !== 0 ? avgWinR / avgLossR : null;
-
-    let stdDevR: number | null = null;
-    if (rValues.length > 1 && expectancy.perR != null) {
-      const mean = expectancy.perR;
-      const variance = rValues.reduce((s, r) => s + (r - mean) ** 2, 0) / rValues.length;
-      stdDevR = Math.sqrt(variance);
-    }
-
-    const drawdown = getDrawdown(buildEquityCurve(groupTrades, 0));
-
-    rows.push({
-      key,
-      label: key === "unspecified" ? "No strategy tagged" : key,
-      count: summary.count,
-      totalPnl: summary.totalPnl,
-      winRateStrict: summary.winRateStrict,
-      winRateDecided: summary.winRateDecided,
-      expectancyR: expectancy.perR,
-      expectancyPnl: expectancy.perTrade,
-      profitFactor,
-      payoffRatio,
-      stdDevR,
-      maxDrawdownAmount: drawdown.maxAmount,
-      maxDrawdownPct: drawdown.maxPct,
-      lowSample: summary.count < STRATEGY_MIN_SAMPLE_SIZE,
-    });
+    rows.push(buildStrategyMetricRow(key, key === "unspecified" ? "No strategy tagged" : key, groupTrades));
   }
 
   return rows.sort((a, b) => {
@@ -339,6 +348,45 @@ export function getStrategyLeaderboard(trades: Trade[]): StrategyLeaderboardRow[
     if (b.expectancyR == null) return -1;
     return b.expectancyR - a.expectancyR;
   });
+}
+
+/**
+ * One row per instrument × direction combination within a single strategy
+ * — "which assets and which side (long/short) is this strategy actually
+ * working on". Grouped by exact instrument/symbol (not asset class) per
+ * the same full metric set as the leaderboard, so a strategy's row and its
+ * breakdown rows are always directly comparable. strategyKey should be a
+ * `key` from getStrategyLeaderboard (including "unspecified"). Sorted by
+ * total P&L descending — this is "where does this strategy's P&L come
+ * from", not a ranking of separate systems.
+ */
+export type StrategyAssetDirectionRow = StrategyLeaderboardRow & {
+  instrument: string;
+  direction: Direction | null;
+};
+
+export function getStrategyAssetDirectionBreakdown(
+  trades: Trade[],
+  strategyKey: string
+): StrategyAssetDirectionRow[] {
+  const strategyTrades = trades.filter((t) => (t.strategy ?? "unspecified") === strategyKey);
+
+  const groups = new Map<string, { instrument: string; direction: Direction | null; trades: Trade[] }>();
+  for (const t of strategyTrades) {
+    const key = `${t.instrument}::${t.direction ?? "unspecified"}`;
+    const existing = groups.get(key);
+    if (existing) existing.trades.push(t);
+    else groups.set(key, { instrument: t.instrument, direction: t.direction, trades: [t] });
+  }
+
+  const rows: StrategyAssetDirectionRow[] = [];
+  for (const [key, group] of groups.entries()) {
+    const dirLabel = group.direction === "long" ? "Long" : group.direction === "short" ? "Short" : "No direction";
+    const row = buildStrategyMetricRow(key, `${group.instrument} · ${dirLabel}`, group.trades);
+    rows.push({ ...row, instrument: group.instrument, direction: group.direction });
+  }
+
+  return rows.sort((a, b) => b.totalPnl - a.totalPnl);
 }
 
 /** Trades whose entry_date falls in the current calendar month (local time). */
