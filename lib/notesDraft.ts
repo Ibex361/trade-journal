@@ -2,9 +2,9 @@ import type { JSONContent } from "@tiptap/react";
 
 /**
  * Local draft persistence for notes while editing.
- * This is NOT server autosave — it only protects against mobile browser
- * background/kill, accidental tab discard, and full reloads. Explicit Save
- * still writes to Supabase.
+ * Uses localStorage (not sessionStorage) so Samsung Internet / Chrome
+ * backgrounding or process death still keep the draft.
+ * This is NOT server autosave — explicit Save still writes to Supabase.
  */
 
 const OPEN_KEY = "trade-journal:notes:open-id";
@@ -16,35 +16,51 @@ export type NoteDraft = {
   updatedAt: number;
 };
 
-export function setOpenNoteId(id: string | null) {
+function storage(): Storage | null {
   try {
-    if (id) sessionStorage.setItem(OPEN_KEY, id);
-    else sessionStorage.removeItem(OPEN_KEY);
+    return typeof window !== "undefined" ? window.localStorage : null;
   } catch {
-    /* private mode etc. */
+    return null;
+  }
+}
+
+export function setOpenNoteId(id: string | null) {
+  const s = storage();
+  if (!s) return;
+  try {
+    if (id) s.setItem(OPEN_KEY, id);
+    else s.removeItem(OPEN_KEY);
+  } catch {
+    /* private mode / quota */
   }
 }
 
 export function getOpenNoteId(): string | null {
+  const s = storage();
+  if (!s) return null;
   try {
-    return sessionStorage.getItem(OPEN_KEY);
+    return s.getItem(OPEN_KEY);
   } catch {
     return null;
   }
 }
 
 export function writeDraft(id: string, title: string, content: JSONContent) {
+  const s = storage();
+  if (!s) return;
   try {
     const payload: NoteDraft = { title, content, updatedAt: Date.now() };
-    sessionStorage.setItem(draftKey(id), JSON.stringify(payload));
+    s.setItem(draftKey(id), JSON.stringify(payload));
   } catch {
     /* quota / private mode */
   }
 }
 
 export function readDraft(id: string): NoteDraft | null {
+  const s = storage();
+  if (!s) return null;
   try {
-    const raw = sessionStorage.getItem(draftKey(id));
+    const raw = s.getItem(draftKey(id));
     if (!raw) return null;
     return JSON.parse(raw) as NoteDraft;
   } catch {
@@ -53,8 +69,10 @@ export function readDraft(id: string): NoteDraft | null {
 }
 
 export function clearDraft(id: string) {
+  const s = storage();
+  if (!s) return;
   try {
-    sessionStorage.removeItem(draftKey(id));
+    s.removeItem(draftKey(id));
   } catch {
     /* ignore */
   }
