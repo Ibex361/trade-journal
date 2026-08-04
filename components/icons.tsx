@@ -1,7 +1,7 @@
 // Small line-icon set for the mobile tab bar. Hand-rolled in the same
 // stroke="currentColor" strokeWidth="2" style already used by SignOutButton
 // and the nav dropdown chevrons, rather than pulling in an icon library for
-// five glyphs.
+// a handful of glyphs.
 type IconProps = { className?: string };
 
 export function DashboardIcon({ className }: IconProps) {
@@ -47,6 +47,16 @@ export function StrategiesIcon({ className }: IconProps) {
       <circle cx="12" cy="12" r="9" />
       <circle cx="12" cy="12" r="4.5" />
       <circle cx="12" cy="12" r="0.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function NotesIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8M8 17h8M8 9h2" />
     </svg>
   );
 }

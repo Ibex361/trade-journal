@@ -11,6 +11,7 @@ export const NAV_TABS: NavTab[] = [
   { href: "/trades", label: "Trades" },
   { href: "/analytics", label: "Analytics" },
   { href: "/strategies", label: "Strategies" },
+  { href: "/notes", label: "Notes" },
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
 ];
