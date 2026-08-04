@@ -43,14 +43,22 @@ function applyFilters(notes: Note[], filters: NoteFilters): Note[] {
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const { filters, setFilters, resetFilters } = useNotesPageState();
+  const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId } = useNotesPageState();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
+
+  // Which note is open lives in NotesPageStateContext (see the comment
+  // there) rather than local state, so navigating away mid-edit and back
+  // reopens the same note instead of dropping back to the list — derived
+  // from the fetched notes array + the persisted id, rather than storing
+  // the Note object itself, so it can't go stale relative to what's in
+  // `notes`. Note: this restores *which note was open*, not any unsaved
+  // keystrokes typed into it — those still need Save before leaving.
+  const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
 
   useEffect(() => {
     if (!selectedAccount) {
@@ -81,10 +89,6 @@ export default function NotesPage() {
     };
   }, [selectedAccount]);
 
-  useEffect(() => {
-    setActiveNote(null);
-  }, [selectedAccount]);
-
   const deferredFilters = useDeferredValue(filters);
   const visibleNotes = useMemo(() => applyFilters(notes, deferredFilters), [notes, deferredFilters]);
 
@@ -106,11 +110,11 @@ export default function NotesPage() {
     if (error || !data) return;
     const newNote = data as Note;
     setNotes((current) => [newNote, ...current]);
-    setActiveNote(newNote);
+    setActiveNoteId(newNote.id);
   }
 
   function handleSelectNote(note: Note) {
-    setActiveNote(note);
+    setActiveNoteId(note.id);
   }
 
   async function handleSaveNote(title: string, content: JSONContent, tags: string[]) {
@@ -120,10 +124,10 @@ export default function NotesPage() {
     setSaving(false);
     if (error || !data) return;
     const updated = data as Note;
-    setActiveNote(updated);
     // Re-sort to the top on save, matching fetchNotes' updated_at-desc
     // order, rather than leaving a just-edited note stranded wherever it
-    // was before.
+    // was before. activeNoteId doesn't need updating — it's already
+    // `updated.id`, and activeNote re-derives from the patched `notes` array.
     setNotes((current) => {
       const rest = current.filter((n) => n.id !== updated.id);
       return [updated, ...rest];
@@ -137,7 +141,7 @@ export default function NotesPage() {
     setDeleting(false);
     if (error) return;
     setNotes((current) => current.filter((n) => n.id !== activeNote.id));
-    setActiveNote(null);
+    setActiveNoteId(null);
   }
 
   return (
@@ -171,7 +175,7 @@ export default function NotesPage() {
               deleting={deleting}
               onSave={handleSaveNote}
               onDelete={handleDeleteNote}
-              onClose={() => setActiveNote(null)}
+              onClose={() => setActiveNoteId(null)}
             />
           )}
           {notes.length === 0 ? (
