@@ -6,8 +6,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * shadcn Dialog, themed to Concept C (glass / surface-solid).
- * Used for notes link + unsaved-change flows so focus trap, Escape, and
- * scroll-lock are handled by Radix instead of hand-rolled overlays.
+ *
+ * Centering uses a flex wrapper — NOT transform translate on the content —
+ * because `animate-scale-in` sets `transform: scale(...)` and would override
+ * `-translate-x/y-1/2`, parking the modal in the bottom-right on mobile.
  */
 
 const Dialog = DialogPrimitive.Root;
@@ -36,18 +38,20 @@ const DialogContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-1/2 top-1/2 z-[70] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2",
-        "bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6",
-        "data-[state=open]:animate-scale-in focus:outline-none",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </DialogPrimitive.Content>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "pointer-events-auto relative w-full max-w-sm",
+          "bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6",
+          "data-[state=open]:animate-scale-in focus:outline-none",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </DialogPrimitive.Content>
+    </div>
   </DialogPortal>
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
@@ -58,10 +62,7 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div
-      className={cn("flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6", className)}
-      {...props}
-    />
+    <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6", className)} {...props} />
   );
 }
 
@@ -83,7 +84,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-ink-secondary leading-relaxed", className)}
+    className={cn("text-sm text-ink-secondary leading-relaxed mt-1.5", className)}
     {...props}
   />
 ));
