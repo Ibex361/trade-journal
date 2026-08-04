@@ -2,9 +2,8 @@ import type { JSONContent } from "@tiptap/react";
 
 /**
  * Local draft persistence for notes while editing.
- * Uses localStorage (not sessionStorage) so Samsung Internet / Chrome
- * backgrounding or process death still keep the draft.
- * This is NOT server autosave — explicit Save still writes to Supabase.
+ * Uses localStorage so backgrounding still keeps the draft.
+ * NOT server autosave — explicit Save writes to Supabase.
  */
 
 const OPEN_KEY = "trade-journal:notes:open-id";
@@ -13,6 +12,9 @@ const draftKey = (id: string) => `trade-journal:notes:draft:${id}`;
 export type NoteDraft = {
   title: string;
   content: JSONContent;
+  tags?: string[];
+  linked_trade_id?: string | null;
+  linked_strategy?: string | null;
   updatedAt: number;
 };
 
@@ -45,11 +47,27 @@ export function getOpenNoteId(): string | null {
   }
 }
 
-export function writeDraft(id: string, title: string, content: JSONContent) {
+export function writeDraft(
+  id: string,
+  title: string,
+  content: JSONContent,
+  extra?: {
+    tags?: string[];
+    linked_trade_id?: string | null;
+    linked_strategy?: string | null;
+  }
+) {
   const s = storage();
   if (!s) return;
   try {
-    const payload: NoteDraft = { title, content, updatedAt: Date.now() };
+    const payload: NoteDraft = {
+      title,
+      content,
+      tags: extra?.tags,
+      linked_trade_id: extra?.linked_trade_id,
+      linked_strategy: extra?.linked_strategy,
+      updatedAt: Date.now(),
+    };
     s.setItem(draftKey(id), JSON.stringify(payload));
   } catch {
     /* quota / private mode */
