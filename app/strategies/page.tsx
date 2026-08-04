@@ -6,6 +6,7 @@ import { useTradesData } from "@/lib/TradesDataContext";
 import { getStrategyLeaderboard, getStrategyAssetDirectionBreakdown } from "@/lib/metrics";
 import StrategyLeaderboard from "@/components/strategies/StrategyLeaderboard";
 import StrategyAssetBreakdown from "@/components/strategies/StrategyAssetBreakdown";
+import StrategyChartsPanel from "@/components/strategies/StrategyChartsPanel";
 import StrategiesSkeleton from "@/components/strategies/StrategiesSkeleton";
 
 export default function StrategiesPage() {
@@ -22,6 +23,17 @@ export default function StrategiesPage() {
 
   const breakdownRows = useMemo(
     () => (selectedStrategyKey == null ? [] : getStrategyAssetDirectionBreakdown(trades, selectedStrategyKey)),
+    [trades, selectedStrategyKey]
+  );
+
+  // Phase 3: same trades, filtered down to the selected strategy, feeds
+  // StrategyChartsPanel — which reuses the existing Analytics charts as-is
+  // against this narrower set.
+  const strategyTrades = useMemo(
+    () =>
+      selectedStrategyKey == null
+        ? []
+        : trades.filter((t) => (t.strategy ?? "unspecified") === selectedStrategyKey),
     [trades, selectedStrategyKey]
   );
 
@@ -64,6 +76,14 @@ export default function StrategiesPage() {
               rows={breakdownRows}
               currency={selectedAccount.currency}
               onClose={() => setSelectedStrategyKey(null)}
+            />
+          )}
+          {selectedRow && (
+            <StrategyChartsPanel
+              strategyKey={selectedRow.key}
+              strategyLabel={selectedRow.label}
+              trades={strategyTrades}
+              currency={selectedAccount.currency}
             />
           )}
         </>
