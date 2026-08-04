@@ -17,6 +17,7 @@ import {
   getTradesInBreakdownGroup,
   getRMultipleDistribution,
   getTradesInRMultipleBucket,
+  countMissingRMultiple,
   getPerformanceByHour,
   getTradesInHourBucket,
   countMissingTimeOfDay,
@@ -161,6 +162,7 @@ export default function AnalyticsPage() {
   );
 
   const rBuckets = useMemo(() => getRMultipleDistribution(rangeTrades), [rangeTrades]);
+  const missingRMultipleCount = useMemo(() => countMissingRMultiple(rangeTrades), [rangeTrades]);
   const rDrilldownTrades = useMemo(
     () => (selectedRBucketKey ? getTradesInRMultipleBucket(rangeTrades, selectedRBucketKey) : []),
     [rangeTrades, selectedRBucketKey]
@@ -347,6 +349,7 @@ export default function AnalyticsPage() {
               <RMultipleHistogram
                 buckets={rBuckets}
                 currency={selectedAccount.currency}
+                missingCount={missingRMultipleCount}
                 selectedKey={selectedRBucketKey}
                 onSelectBucket={setSelectedRBucketKey}
               />

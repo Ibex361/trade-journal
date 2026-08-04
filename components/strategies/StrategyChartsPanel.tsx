@@ -5,6 +5,7 @@ import { Trade, ExitReason, StopMovement } from "@/lib/trades";
 import {
   getRMultipleDistribution,
   getTradesInRMultipleBucket,
+  countMissingRMultiple,
   getPlannedVsRealizedR,
   summarizePlannedVsRealizedR,
   countMissingPlannedR,
@@ -65,6 +66,7 @@ export default function StrategyChartsPanel({
   const [selectedPlannedRId, setSelectedPlannedRId] = useState<string | null>(null);
 
   const rBuckets = useMemo(() => getRMultipleDistribution(trades), [trades]);
+  const missingRMultipleCount = useMemo(() => countMissingRMultiple(trades), [trades]);
   const rDrilldownTrades = useMemo(
     () => (selectedRBucketKey ? getTradesInRMultipleBucket(trades, selectedRBucketKey) : []),
     [trades, selectedRBucketKey]
@@ -179,6 +181,7 @@ export default function StrategyChartsPanel({
       <RMultipleHistogram
         buckets={rBuckets}
         currency={currency}
+        missingCount={missingRMultipleCount}
         selectedKey={selectedRBucketKey}
         onSelectBucket={setSelectedRBucketKey}
       />

@@ -855,6 +855,19 @@ export function getTradesInRMultipleBucket(trades: Trade[], bucketKey: string): 
 }
 
 /**
+ * Trades excluded from the R-multiple distribution — no r_multiple was
+ * ever computed for them, almost always because no stop-loss price was
+ * logged (calculateRMultiple also returns null for a zero-risk stop, but
+ * that's rare). Same convention as countMissingTimeOfDay/
+ * countMissingHoldingTime/countMissingPlannedR — surfaced as a note under
+ * the chart so a strategy or range with a lot of untagged trades doesn't
+ * silently look thinner than it is.
+ */
+export function countMissingRMultiple(trades: Trade[]): number {
+  return trades.filter((t) => t.r_multiple == null || Number.isNaN(t.r_multiple)).length;
+}
+
+/**
  * Planned R-multiple = reward / risk using the take-profit price as the
  * reward target instead of the actual exit price — i.e. the R the trade was
  * set up to capture before it got managed. Same direction-aware risk
