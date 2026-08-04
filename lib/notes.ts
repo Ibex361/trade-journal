@@ -43,6 +43,24 @@ export async function createNote(accountId: string) {
 }
 
 /**
+ * Phase 1c: persists title/content edits for an existing note. The notes
+ * table has no updated_at trigger (unlike trades, which doesn't track this
+ * at all), so updated_at is set explicitly here rather than relying on the
+ * DB — this is also what the notes list sorts by, so it has to actually
+ * change on every save for the list ordering to make sense.
+ */
+export async function updateNote(id: string, title: string, content: JSONContent) {
+  const result = await supabase
+    .from("notes")
+    .update({ title, content, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (result.error) console.error("updateNote failed:", result.error);
+  return result;
+}
+
+/**
  * Walks a Tiptap JSON document and concatenates its text nodes into a
  * plain-text preview snippet for the notes list — the list shouldn't have
  * to know anything about Tiptap's node shape beyond "text lives in `text`
