@@ -1,4 +1,5 @@
 import Card from "@/components/shared/Card";
+import Badge from "@/components/shared/Badge";
 import type { Note } from "@/lib/notes";
 import { extractPreviewText } from "@/lib/notes";
 
@@ -33,6 +34,15 @@ export default function NotesList({
               <p className="text-ink-secondary text-sm line-clamp-2 min-h-[2.5rem]">
                 {preview || <span className="text-ink-muted italic">No content yet</span>}
               </p>
+              {note.tags && note.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {note.tags.map((tag) => (
+                    <Badge key={tag} tone="neutral">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <p className="text-ink-muted text-xs">Updated {formatUpdated(note.updated_at)}</p>
             </Card>
           </button>

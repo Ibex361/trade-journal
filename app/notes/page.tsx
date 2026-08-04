@@ -63,10 +63,10 @@ export default function NotesPage() {
     setActiveNote(note);
   }
 
-  async function handleSaveNote(title: string, content: JSONContent) {
+  async function handleSaveNote(title: string, content: JSONContent, tags: string[]) {
     if (!activeNote || saving) return;
     setSaving(true);
-    const { data, error } = await updateNote(activeNote.id, title, content);
+    const { data, error } = await updateNote(activeNote.id, title, content, tags);
     setSaving(false);
     if (error || !data) return;
     const updated = data as Note;

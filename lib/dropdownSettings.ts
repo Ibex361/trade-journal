@@ -12,7 +12,8 @@ export type DropdownItem = {
 
 // Starter values for every new account. "tag" is deliberately excluded —
 // tags are freeform per-account labels, not a fixed reference list, so a
-// new account should start with an empty tag list.
+// new account should start with an empty tag list. Since Notes Phase 3
+// part 1, this same "tag" vocabulary is shared by both trades and notes.
 export const DEFAULT_DROPDOWN_ITEMS: { category: DropdownCategory; value: string }[] = [
   { category: "asset_class", value: "Forex" },
   { category: "asset_class", value: "Indices" },
@@ -74,29 +75,44 @@ export async function deleteDropdownItem(id: string) {
 }
 
 /**
- * How many trades on this account currently have this value set, for the
- * given category — used to warn before deleting a dropdown option that's
- * still in use. "tag" is stored as an array column on trades, so it needs
- * a containment check instead of a plain equality match.
+ * How many trades/notes on this account currently have this value set, for
+ * the given category — used to warn before deleting a dropdown option
+ * that's still in use. "tag" is stored as an array column (on both trades
+ * and, since Notes Phase 3 part 1, notes too — they share one account-wide
+ * tag vocabulary), so it needs a containment check instead of a plain
+ * equality match, and for "tag" specifically the count spans both tables.
  */
 export async function getDropdownItemUsageCount(
   accountId: string,
   category: DropdownCategory,
   value: string
 ): Promise<number> {
-  let query = supabase
+  let tradesQuery = supabase
     .from("trades")
     .select("id", { count: "exact", head: true })
     .eq("account_id", accountId);
 
-  query = category === "tag" ? query.contains("tags", [value]) : query.eq(category, value);
+  tradesQuery = category === "tag" ? tradesQuery.contains("tags", [value]) : tradesQuery.eq(category, value);
 
-  const { count, error } = await query;
-  if (error) {
-    console.error("getDropdownItemUsageCount failed:", error);
-    return 0;
+  const { count: tradesCount, error: tradesError } = await tradesQuery;
+  if (tradesError) {
+    console.error("getDropdownItemUsageCount (trades) failed:", tradesError);
   }
-  return count ?? 0;
+
+  if (category !== "tag") {
+    return tradesCount ?? 0;
+  }
+
+  const { count: notesCount, error: notesError } = await supabase
+    .from("notes")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", accountId)
+    .contains("tags", [value]);
+  if (notesError) {
+    console.error("getDropdownItemUsageCount (notes) failed:", notesError);
+  }
+
+  return (tradesCount ?? 0) + (notesCount ?? 0);
 }
 
 export async function reorderDropdownItem(id: string, newSortOrder: number) {

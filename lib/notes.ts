@@ -6,6 +6,7 @@ export type Note = {
   account_id: string;
   title: string;
   content: JSONContent;
+  tags: string[];
   created_at: string;
   updated_at: string;
 };
@@ -43,16 +44,17 @@ export async function createNote(accountId: string) {
 }
 
 /**
- * Phase 1c: persists title/content edits for an existing note. The notes
- * table has no updated_at trigger (unlike trades, which doesn't track this
- * at all), so updated_at is set explicitly here rather than relying on the
- * DB — this is also what the notes list sorts by, so it has to actually
- * change on every save for the list ordering to make sense.
+ * Phase 1c: persists title/content edits for an existing note. Phase 3
+ * part 1 adds tags to what gets saved. The notes table has no updated_at
+ * trigger (unlike trades, which doesn't track this at all), so updated_at
+ * is set explicitly here rather than relying on the DB — this is also what
+ * the notes list sorts by, so it has to actually change on every save for
+ * the list ordering to make sense.
  */
-export async function updateNote(id: string, title: string, content: JSONContent) {
+export async function updateNote(id: string, title: string, content: JSONContent, tags: string[]) {
   const result = await supabase
     .from("notes")
-    .update({ title, content, updated_at: new Date().toISOString() })
+    .update({ title, content, tags, updated_at: new Date().toISOString() })
     .eq("id", id)
     .select()
     .single();
