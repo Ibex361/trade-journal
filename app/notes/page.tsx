@@ -15,29 +15,55 @@ const EMPTY_DOC: JSONContent = {
   content: [{ type: "paragraph" }],
 };
 
-function formatUpdated(iso: string) {
+function stableJson(value: unknown) {
+  return JSON.stringify(value ?? null);
+}
+
+/** Plain-text preview from Tiptap JSON for the notes list. */
+function notePreview(content: JSONContent | null | undefined, max = 100): string {
+  if (!content) return "";
+  const parts: string[] = [];
+  function walk(node: JSONContent) {
+    if (parts.join(" ").length >= max) return;
+    if (node.type === "text" && node.text) parts.push(node.text);
+    if (Array.isArray(node.content)) node.content.forEach(walk);
+  }
+  walk(content);
+  const text = parts.join(" ").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+}
+
+function relativeUpdated(iso: string) {
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    const then = new Date(iso).getTime();
+    const now = Date.now();
+    const sec = Math.round((now - then) / 1000);
+    if (sec < 45) return "Just now";
+    if (sec < 3600) {
+      const m = Math.round(sec / 60);
+      return `${m}m ago`;
+    }
+    if (sec < 86400) {
+      const h = Math.round(sec / 3600);
+      return `${h}h ago`;
+    }
+    if (sec < 86400 * 7) {
+      const d = Math.round(sec / 86400);
+      return `${d}d ago`;
+    }
+    return new Date(iso).toLocaleDateString(undefined, {
       month: "short",
       day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+      year: new Date(iso).getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
     });
   } catch {
     return iso;
   }
 }
 
-function stableJson(value: unknown) {
-  return JSON.stringify(value ?? null);
-}
-
 /**
- * Notes — Phase 1c + polish.
- *
- * Full list CRUD with unsaved-changes guard on Close and on mobile browser
- * Back (history.popstate). Save-status indicator + dirty tracking.
+ * Notes — Phase 1–2 + 2.5 polish (no autosave).
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -60,8 +86,6 @@ export default function NotesPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [unsavedOpen, setUnsavedOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // When the user hits browser Back while editing, we intercept and show the
-  // unsaved dialog instead of leaving the page.
   const interceptBackRef = useRef(false);
 
   useEffect(() => {
@@ -106,9 +130,6 @@ export default function NotesPage() {
     };
   }, []);
 
-  // History guard: while a note is open, push a dummy state so Android/iOS
-  // browser Back lands here instead of leaving /notes. If dirty, show the
-  // unsaved dialog; otherwise close the editor.
   useEffect(() => {
     if (!selectedId) return;
 
@@ -117,13 +138,11 @@ export default function NotesPage() {
 
     function onPopState() {
       if (!interceptBackRef.current) return;
-      // Re-push so another Back doesn't leave the app until they confirm
       window.history.pushState({ notesEditor: true }, "");
       if (dirtyRef.current) {
         setUnsavedOpen(true);
       } else {
         interceptBackRef.current = false;
-        // Drop the extra history entry we added, then close
         window.history.back();
         forceCloseNote();
       }
@@ -134,7 +153,6 @@ export default function NotesPage() {
       interceptBackRef.current = false;
       window.removeEventListener("popstate", onPopState);
     };
-    // forceCloseNote is stable enough via setState; avoid re-binding every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -282,7 +300,7 @@ export default function NotesPage() {
   if (selectedId) {
     return (
       <>
-        <div className="space-y-6 max-w-3xl">
+        <div className="space-y-5 max-w-3xl">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <button
@@ -356,13 +374,15 @@ export default function NotesPage() {
             placeholder="Note title"
           />
 
+          {/* key forces a clean editor per note — no cross-note content bleed */}
           <NoteEditor
+            key={selectedId}
             content={content}
             onChange={(next) => {
               setContent(next);
               recomputeDirty(title, next);
             }}
-            placeholder="Start writing…"
+            placeholder="Start writing… Type / for commands"
           />
         </div>
 
@@ -473,35 +493,47 @@ export default function NotesPage() {
         ) : (
           <Card padding="none" className="overflow-hidden">
             <ul className="divide-y divide-surface-border">
-              {notes.map((note) => (
-                <li key={note.id} className="group flex items-stretch">
-                  <button
-                    type="button"
-                    onClick={() => openNote(note)}
-                    className="flex-1 text-left px-4 sm:px-5 py-4 hover:bg-surface-2/50 transition-colors duration-fast"
-                  >
-                    <div className="font-medium text-ink-primary truncate">
-                      {note.title || "Untitled"}
-                    </div>
-                    <div className="text-xs text-ink-muted mt-1 font-mono">
-                      Updated {formatUpdated(note.updated_at)}
-                    </div>
-                  </button>
-                  <div className="flex items-center pr-3 sm:pr-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-fast">
+              {notes.map((note) => {
+                const preview = notePreview(note.content);
+                return (
+                  <li key={note.id} className="group flex items-stretch">
                     <button
                       type="button"
-                      aria-label={`Delete ${note.title || "Untitled"}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTargetId(note.id);
-                      }}
-                      className="text-xs text-ink-muted hover:text-loss px-2 py-1.5 rounded-md hover:bg-loss/10 transition-colors duration-fast"
+                      onClick={() => openNote(note)}
+                      className="flex-1 text-left px-4 sm:px-5 py-3.5 hover:bg-surface-2/50 transition-colors duration-fast min-w-0"
                     >
-                      Delete
+                      <div className="flex items-baseline justify-between gap-3">
+                        <div className="font-medium text-ink-primary truncate">
+                          {note.title || "Untitled"}
+                        </div>
+                        <div className="text-[11px] text-ink-muted shrink-0 tabular-nums">
+                          {relativeUpdated(note.updated_at)}
+                        </div>
+                      </div>
+                      {preview ? (
+                        <div className="text-sm text-ink-secondary mt-1 line-clamp-2 leading-snug">
+                          {preview}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-ink-muted mt-1 italic">Empty note</div>
+                      )}
                     </button>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex items-center pr-3 sm:pr-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-fast">
+                      <button
+                        type="button"
+                        aria-label={`Delete ${note.title || "Untitled"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTargetId(note.id);
+                        }}
+                        className="text-xs text-ink-muted hover:text-loss px-2 py-1.5 rounded-md hover:bg-loss/10 transition-colors duration-fast"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </Card>
         )}
