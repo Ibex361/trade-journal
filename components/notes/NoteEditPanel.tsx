@@ -6,6 +6,7 @@ import Card from "@/components/shared/Card";
 import Button from "@/components/shared/Button";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import NoteEditor from "@/components/notes/NoteEditor";
+import NoteEditorErrorBoundary from "@/components/notes/NoteEditorErrorBoundary";
 import LinkedTradesPicker from "@/components/notes/LinkedTradesPicker";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
@@ -226,12 +227,14 @@ export default function NoteEditPanel({
           />
         </div>
 
-        <NoteEditor
-          content={content}
-          onChange={handleContentChange}
-          placeholder="Start writing…"
-          accountId={selectedAccount?.id ?? null}
-        />
+        <NoteEditorErrorBoundary>
+          <NoteEditor
+            content={content}
+            onChange={handleContentChange}
+            placeholder="Start writing…"
+            accountId={selectedAccount?.id ?? null}
+          />
+        </NoteEditorErrorBoundary>
       </Card>
 
       <ConfirmDialog

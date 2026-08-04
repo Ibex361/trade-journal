@@ -412,7 +412,17 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         }
         // Node type name is still "image" — NoteImage extends Image's
         // schema (adding the fileId attribute) without renaming it.
-        editor?.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
+        // insertContent can throw (e.g. if the current selection can't
+        // hold a block-level node) — caught here so a failed insert shows
+        // a friendly message instead of an uncaught exception taking down
+        // the whole app.
+        try {
+          editor?.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
+        } catch {
+          setImageError("Uploaded, but couldn't insert the image here. Try placing your cursor on its own line and pasting again.");
+        }
+      } catch {
+        setImageError("Image upload failed. Please try again.");
       } finally {
         setUploadingCount((n) => n - 1);
       }
