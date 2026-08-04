@@ -244,3 +244,15 @@ body {
   border-top: 1px solid var(--panel-b);
   margin: 1.2em 0;
 }
+.prose-notes a {
+  color: var(--glow);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.prose-notes mark {
+  background: color-mix(in srgb, var(--glow) 35%, transparent);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 0 0.15em;
+}

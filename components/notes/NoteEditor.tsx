@@ -3,20 +3,22 @@
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Link from "@tiptap/extension-link";
+import Highlight from "@tiptap/extension-highlight";
 import type { JSONContent } from "@tiptap/react";
 
 /**
- * Notes/diary — Phase 1a.
+ * Notes/diary — Phase 1a, extended in Phase 2 part 1.
  *
  * The editor itself, isolated from any page, list, or persistence layer —
  * those are Phase 1b/1c. This is the riskiest, least-familiar piece of the
  * whole notes feature (nothing else in the app touches Tiptap or
  * contenteditable), so it gets built and proven out on its own first.
  *
- * Deliberately minimal: StarterKit's default set only (bold, italic,
- * strike, headings, lists, blockquote, code block, horizontal rule,
- * undo/redo). No links, tables, checklists, slash-menu, or image paste yet
- * — those are Phase 2+ per the approved 5-phase plan.
+ * Phase 1a shipped StarterKit's default set only. Phase 2 part 1 adds
+ * Link and Highlight — the two simplest marks to layer in, since neither
+ * needs new block-level UI (checklists/tables are part 2, bubble
+ * toolbar/slash-menu are part 3).
  */
 
 type NoteEditorProps = {
@@ -60,6 +62,17 @@ function Divider() {
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
+  function handleSetLink() {
+    const previousUrl = editor.getAttributes("link").href as string | undefined;
+    const url = window.prompt("Link URL", previousUrl ?? "https://");
+    if (url === null) return; // cancelled
+    if (url.trim() === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
+  }
+
   return (
     <div className="flex items-center gap-0.5 flex-wrap px-2 py-1.5 border-b border-surface-border">
       <ToolbarButton
@@ -82,6 +95,19 @@ function Toolbar({ editor }: { editor: Editor }) {
         onClick={() => editor.chain().focus().toggleStrike().run()}
       >
         <span className="line-through">S</span>
+      </ToolbarButton>
+      <ToolbarButton label="Highlight" active={editor.isActive("highlight")} onClick={() => editor.chain().focus().toggleHighlight().run()}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M9 11l6-6 4 4-6 6H9v-4z" />
+          <path d="M5 21l3-3" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton label="Link" active={editor.isActive("link")} onClick={handleSetLink}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M9 15l6-6" />
+          <path d="M11 6l1-1a3.5 3.5 0 015 5l-1 1" />
+          <path d="M13 18l-1 1a3.5 3.5 0 01-5-5l1-1" />
+        </svg>
       </ToolbarButton>
 
       <Divider />
@@ -185,6 +211,12 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
       Placeholder.configure({
         placeholder: placeholder ?? "Start writing…",
       }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+      }),
+      Highlight,
     ],
     content: content ?? DEFAULT_DOC,
     editable,
