@@ -4,18 +4,31 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
 import { useAccount } from "@/lib/AccountContext";
 import { supabase, type Note } from "@/lib/supabaseClient";
+import {
+  clearDraft,
+  getOpenNoteId,
+  readDraft,
+  setOpenNoteId,
+  writeDraft,
+} from "@/lib/notesDraft";
 import NoteEditor from "@/components/notes/NoteEditor";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const EMPTY_DOC: JSONContent = {
   type: "doc",
   content: [{ type: "paragraph" }],
 };
-
-const NOTES_OPEN_KEY = "trade-journal:notes:open-id";
 
 function stableJson(value: unknown) {
   return JSON.stringify(value ?? null);
@@ -55,8 +68,12 @@ function relativeUpdated(iso: string) {
 }
 
 /**
- * Notes — gap fill complete (manual save only; no autosave).
- * Session restores the last open note id when returning to /notes.
+ * Notes page.
+ *
+ * Mobile-critical: local draft persistence on every edit + pagehide so
+ * backgrounding the browser never wipes in-progress work. History back-guard
+ * ignores events while the document is hidden (Samsung/Chrome quirk).
+ * Server write is still explicit Save only — no autosave.
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -71,6 +88,9 @@ export default function NotesPage() {
   });
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
+  const titleRef = useRef("");
+  const contentRef = useRef<JSONContent | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,11 +100,27 @@ export default function NotesPage() {
   const [unsavedOpen, setUnsavedOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const interceptBackRef = useRef(false);
+  const editorOpenedAtRef = useRef(0);
   const restoredRef = useRef(false);
 
   useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  const persistDraftNow = useCallback(() => {
+    const id = selectedIdRef.current;
+    if (!id || !dirtyRef.current) return;
+    writeDraft(id, titleRef.current, contentRef.current ?? EMPTY_DOC);
+  }, []);
 
   const fetchNotes = useCallback(async (accountId: string) => {
     setLoading(true);
@@ -112,6 +148,7 @@ export default function NotesPage() {
       restoredRef.current = false;
       return;
     }
+    // Account change: leave editor, reload list
     setSelectedId(null);
     setTitle("");
     setContent(null);
@@ -120,34 +157,45 @@ export default function NotesPage() {
     fetchNotes(selectedAccount.id);
   }, [selectedAccount, fetchNotes]);
 
-  // Restore last open note once the list has loaded (same account session)
+  // Restore open note + any local draft after list loads
   useEffect(() => {
     if (loading || restoredRef.current || selectedId || !notes.length) return;
-    try {
-      const saved = sessionStorage.getItem(NOTES_OPEN_KEY);
-      if (!saved) {
-        restoredRef.current = true;
-        return;
-      }
-      const note = notes.find((n) => n.id === saved);
-      if (note) {
-        openNote(note);
-      }
-    } catch {
-      /* ignore */
+    const savedId = getOpenNoteId();
+    if (!savedId) {
+      restoredRef.current = true;
+      return;
     }
+    const note = notes.find((n) => n.id === savedId);
+    if (note) openNote(note, { preferDraft: true });
     restoredRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, notes, selectedId]);
 
   useEffect(() => {
-    try {
-      if (selectedId) sessionStorage.setItem(NOTES_OPEN_KEY, selectedId);
-      else sessionStorage.removeItem(NOTES_OPEN_KEY);
-    } catch {
-      /* ignore */
-    }
+    setOpenNoteId(selectedId);
   }, [selectedId]);
+
+  // Keep a local draft while dirty so backgrounding the browser is safe
+  useEffect(() => {
+    if (!selectedId || !dirty) return;
+    writeDraft(selectedId, title, content ?? EMPTY_DOC);
+  }, [selectedId, title, content, dirty]);
+
+  // pagehide / visibilitychange — flush draft; never close the editor
+  useEffect(() => {
+    function onHide() {
+      persistDraftNow();
+    }
+    function onVisibility() {
+      if (document.visibilityState === "hidden") persistDraftNow();
+    }
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [persistDraftNow]);
 
   useEffect(() => {
     return () => {
@@ -155,30 +203,49 @@ export default function NotesPage() {
     };
   }, []);
 
-  // Cmd/Ctrl+S from editor
   useEffect(() => {
     function onSaveEvent() {
-      if (selectedId) void handleSave();
+      if (selectedIdRef.current) void handleSave();
     }
     window.addEventListener("notes:save", onSaveEvent);
     return () => window.removeEventListener("notes:save", onSaveEvent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, title, content, saving]);
+  }, []);
 
+  /**
+   * Mobile browser Back only — NOT app minimize.
+   * Samsung Internet / Chrome can fire popstate while backgrounding when we
+   * pushState on open. Ignore while document is hidden, and ignore for a short
+   * window after open.
+   */
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId) {
+      interceptBackRef.current = false;
+      return;
+    }
 
     interceptBackRef.current = true;
-    window.history.pushState({ notesEditor: true }, "");
+    editorOpenedAtRef.current = Date.now();
+    window.history.pushState({ notesEditor: selectedId }, "");
 
     function onPopState() {
       if (!interceptBackRef.current) return;
-      window.history.pushState({ notesEditor: true }, "");
+      // Backgrounding / tab switch — do not treat as Back
+      if (document.visibilityState === "hidden") {
+        window.history.pushState({ notesEditor: selectedIdRef.current }, "");
+        return;
+      }
+      // Ignore spurious popstate right after open
+      if (Date.now() - editorOpenedAtRef.current < 400) {
+        window.history.pushState({ notesEditor: selectedIdRef.current }, "");
+        return;
+      }
+
+      window.history.pushState({ notesEditor: selectedIdRef.current }, "");
       if (dirtyRef.current) {
         setUnsavedOpen(true);
       } else {
         interceptBackRef.current = false;
-        window.history.back();
         forceCloseNote();
       }
     }
@@ -207,13 +274,33 @@ export default function NotesPage() {
     if (isDirty) setSavedFlash(false);
   }
 
-  function openNote(note: Note) {
-    const t = note.title || "Untitled";
-    const c = note.content ?? EMPTY_DOC;
+  function openNote(note: Note, opts?: { preferDraft?: boolean }) {
+    let t = note.title || "Untitled";
+    let c = note.content ?? EMPTY_DOC;
+    let fromDraft = false;
+
+    if (opts?.preferDraft) {
+      const draft = readDraft(note.id);
+      if (draft) {
+        t = draft.title || t;
+        c = draft.content ?? c;
+        fromDraft = true;
+      }
+    }
+
     setSelectedId(note.id);
     setTitle(t);
     setContent(c);
-    markClean(t, c);
+    // Snapshot is always the server version so draft-restored content stays dirty
+    savedSnapshot.current = {
+      title: note.title || "Untitled",
+      content: stableJson(note.content ?? EMPTY_DOC),
+    };
+    setDirty(
+      fromDraft &&
+        (t !== (note.title || "Untitled") ||
+          stableJson(c) !== stableJson(note.content ?? EMPTY_DOC))
+    );
     setSavedFlash(false);
     setError(null);
     setUnsavedOpen(false);
@@ -221,6 +308,8 @@ export default function NotesPage() {
 
   function forceCloseNote() {
     interceptBackRef.current = false;
+    // Keep draft in sessionStorage so accidental close can still be recovered
+    // via open id + preferDraft on next visit; clear only after successful save.
     setSelectedId(null);
     setTitle("");
     setContent(null);
@@ -285,6 +374,7 @@ export default function NotesPage() {
     }
     setTitle(nextTitle);
     markClean(nextTitle, nextContent);
+    clearDraft(selectedId);
     setNotes((prev) =>
       prev
         .map((n) =>
@@ -318,6 +408,7 @@ export default function NotesPage() {
       setError(delErr.message);
       return;
     }
+    clearDraft(id);
     setNotes((prev) => prev.filter((n) => n.id !== id));
     if (selectedId === id) {
       forceCloseNote();
@@ -437,38 +528,35 @@ export default function NotesPage() {
           onCancel={() => setDeleteTargetId(null)}
         />
 
-        {unsavedOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/70 motion-safe:animate-fade-in"
-              onClick={() => setUnsavedOpen(false)}
-            />
-            <div
-              className="relative w-full max-w-sm bg-surface-solid backdrop-blur-xl border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in"
-              role="dialog"
-              aria-modal="true"
-            >
-              <h3 className="font-display text-base font-medium text-ink-primary">
-                Unsaved changes
-              </h3>
-              <p className="text-sm text-ink-secondary mt-2 leading-relaxed">
+        <Dialog open={unsavedOpen} onOpenChange={(o) => !o && setUnsavedOpen(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unsaved changes</DialogTitle>
+              <DialogDescription>
                 You have edits that haven’t been saved. Save them, discard them, or keep
                 editing.
-              </p>
-              <div className="flex items-center justify-end gap-2 mt-6 flex-wrap">
-                <Button variant="ghost" size="sm" onClick={() => setUnsavedOpen(false)}>
-                  Keep editing
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => forceCloseNote()}>
-                  Discard
-                </Button>
-                <Button size="sm" onClick={handleSaveAndClose} disabled={saving}>
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="ghost" size="sm" onClick={() => setUnsavedOpen(false)}>
+                Keep editing
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (selectedId) clearDraft(selectedId);
+                  forceCloseNote();
+                }}
+              >
+                Discard
+              </Button>
+              <Button size="sm" onClick={handleSaveAndClose} disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     );
   }
@@ -541,7 +629,7 @@ export default function NotesPage() {
                   <li key={note.id} className="group flex items-stretch">
                     <button
                       type="button"
-                      onClick={() => openNote(note)}
+                      onClick={() => openNote(note, { preferDraft: true })}
                       className="flex-1 text-left px-4 sm:px-5 py-3.5 hover:bg-surface-2/50 transition-colors duration-fast min-w-0"
                     >
                       <div className="flex items-baseline justify-between gap-3">
