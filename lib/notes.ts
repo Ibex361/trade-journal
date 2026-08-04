@@ -39,15 +39,42 @@ export async function fetchNotes(accountId: string) {
  * to the same values the phase10 migration gives the column, kept explicit
  * here rather than relying on the DB default so the returned row is
  * immediately usable without a refetch.
+ *
+ * `linkedTradeIds` (added for the "open/create diary from a trade" flow —
+ * see findNoteLinkedToTrade below) lets a note be created already linked
+ * to a trade, so the note that opens in the Notes page after redirecting
+ * from Trades is the same one the link check will find next time. Defaults
+ * to none for the plain "New note" button on the Notes page itself.
  */
-export async function createNote(accountId: string) {
+export async function createNote(accountId: string, linkedTradeIds: string[] = []) {
   const result = await supabase
     .from("notes")
-    .insert({ account_id: accountId, title: "Untitled", content: EMPTY_DOC })
+    .insert({ account_id: accountId, title: "Untitled", content: EMPTY_DOC, linked_trade_ids: linkedTradeIds })
     .select()
     .single();
   if (result.error) console.error("createNote failed:", result.error);
   return result;
+}
+
+/**
+ * Finds the note (if any) already linked to a given trade, for the Trades
+ * page's "open diary entry" action — at most one note is meant to exist
+ * per trade (a convention the create-flow enforces by checking here
+ * first, not a DB constraint: linked_trade_ids is a general-purpose array,
+ * nothing stops it holding more than one trade per note or a trade
+ * appearing on two notes if edited directly in the Notes page's own
+ * picker). `.contains` performs the array `@>` containment check, so this
+ * matches any note whose linked_trade_ids includes tradeId regardless of
+ * what else is linked on it.
+ */
+export async function findNoteLinkedToTrade(accountId: string, tradeId: string) {
+  return supabase
+    .from("notes")
+    .select("*")
+    .eq("account_id", accountId)
+    .contains("linked_trade_ids", [tradeId])
+    .limit(1)
+    .maybeSingle();
 }
 
 /**

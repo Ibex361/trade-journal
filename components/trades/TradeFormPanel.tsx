@@ -8,6 +8,7 @@ import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
 import { uploadScreenshot, deleteScreenshot, validateScreenshotFile } from "@/lib/screenshots";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import { NotesIcon } from "@/components/icons";
 
 const emptyForm = {
   entry_date: localDateString(),
@@ -149,11 +150,19 @@ export default function TradeFormPanel({
   duplicateFrom,
   onClose,
   onSaved,
+  onOpenDiary,
+  openingDiary,
 }: {
   trade: Trade | null;
   duplicateFrom?: Trade | null;
   onClose: () => void;
   onSaved: () => void;
+  // Only meaningful for an existing trade (a brand-new/duplicated trade
+  // has no id yet to link a diary entry to) — see app/trades/page.tsx's
+  // handleOpenDiary for what this actually does (find-or-create the
+  // linked note, then redirect to Notes).
+  onOpenDiary?: (trade: Trade) => void;
+  openingDiary?: boolean;
 }) {
   const { selectedAccount } = useAccount();
   const [form, setForm] = useState<FormState>(() => {
@@ -566,13 +575,31 @@ export default function TradeFormPanel({
               {trade ? "Edit trade" : duplicateFrom ? "Duplicate trade" : "New trade"}
             </h2>
           </div>
-          <button
-            onClick={requestClose}
-            className="text-ink-muted hover:text-ink-primary text-sm px-2 py-1"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {trade && onOpenDiary && (
+              <button
+                onClick={() => {
+                  if (hasUnsavedChanges() && !window.confirm("You have unsaved changes to this trade. Open the diary entry anyway and discard them?")) {
+                    return;
+                  }
+                  onOpenDiary(trade);
+                }}
+                disabled={openingDiary}
+                title="Open this trade's diary entry — creates one if it doesn't exist yet"
+                className="flex items-center gap-1.5 text-xs text-ink-secondary hover:text-brass border border-surface-border rounded-full px-3 py-1.5 disabled:opacity-60"
+              >
+                <NotesIcon className="w-3.5 h-3.5" />
+                {openingDiary ? "Opening…" : "Diary"}
+              </button>
+            )}
+            <button
+              onClick={requestClose}
+              className="text-ink-muted hover:text-ink-primary text-sm px-2 py-1"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-5">

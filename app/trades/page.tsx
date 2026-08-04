@@ -1,14 +1,17 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAccount } from "@/lib/AccountContext";
 import { useTradesPageState } from "@/lib/TradesPageStateContext";
+import { useNotesPageState } from "@/lib/NotesPageStateContext";
 import { deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
 import { useTradesData } from "@/lib/TradesDataContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { deleteScreenshot } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
+import { createNote, findNoteLinkedToTrade } from "@/lib/notes";
 import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
 import TradesFilterBar, { TradeFilters } from "@/components/trades/TradesFilterBar";
@@ -63,6 +66,9 @@ function applySort(trades: Trade[], sort: SortState): Trade[] {
 export default function TradesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
   const { trades, loading: tradesLoading, refreshTrades } = useTradesData();
+  const router = useRouter();
+  const { setActiveNoteId } = useNotesPageState();
+  const [openingDiaryId, setOpeningDiaryId] = useState<string | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [dropdownsLoading, setDropdownsLoading] = useState(true);
   const loading = tradesLoading || dropdownsLoading;
@@ -167,6 +173,34 @@ export default function TradesPage() {
   async function handleSaved() {
     closePanel();
     await refreshTrades();
+  }
+
+  /**
+   * "Diary" button in TradeFormPanel (only shown for an existing, saved
+   * trade). Finds the one note already linked to this trade and jumps to
+   * it, or — if none exists yet — creates a blank note pre-linked to this
+   * trade first. Either way, ends by handing off to the Notes page: sets
+   * NotesPageStateContext.activeNoteId (mounted at the root layout, so
+   * it's already the right value by the time Notes mounts and does its own
+   * fetch) and navigates there. No local trades-page state needs updating
+   * for this — nothing about the trade itself changed.
+   */
+  async function handleOpenDiary(trade: Trade) {
+    if (!selectedAccount || openingDiaryId) return;
+    setOpeningDiaryId(trade.id);
+    const { data: existing } = await findNoteLinkedToTrade(selectedAccount.id, trade.id);
+    let noteId = existing?.id ?? null;
+    if (!noteId) {
+      const { data: created, error } = await createNote(selectedAccount.id, [trade.id]);
+      if (error || !created) {
+        setOpeningDiaryId(null);
+        return;
+      }
+      noteId = created.id;
+    }
+    setActiveNoteId(noteId);
+    setOpeningDiaryId(null);
+    router.push("/notes");
   }
 
   const handleDelete = useCallback(async (id: string) => {
@@ -363,6 +397,8 @@ export default function TradesPage() {
           duplicateFrom={duplicateSource}
           onClose={closePanel}
           onSaved={handleSaved}
+          onOpenDiary={handleOpenDiary}
+          openingDiary={editingTrade != null && openingDiaryId === editingTrade.id}
         />
       )}
     </div>
