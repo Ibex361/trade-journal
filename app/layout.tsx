@@ -8,6 +8,7 @@ import { TradesDataProvider } from "@/lib/TradesDataContext";
 import { WinRateModeProvider } from "@/lib/WinRateModeContext";
 import { TradesPageStateProvider } from "@/lib/TradesPageStateContext";
 import { AnalyticsPageStateProvider } from "@/lib/AnalyticsPageStateContext";
+import { StrategiesPageStateProvider } from "@/lib/StrategiesPageStateContext";
 import ScrollRestoration from "@/components/ScrollRestoration";
 
 // Concept C's type pairing: Space Grotesk (display) + Inter (body) + JetBrains
@@ -55,12 +56,14 @@ export default function RootLayout({
           <WinRateModeProvider>
           <TradesPageStateProvider>
           <AnalyticsPageStateProvider>
+          <StrategiesPageStateProvider>
           <ScrollRestoration />
           <AppHeader />
           <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-24 md:pb-8 print:max-w-none print:px-0 print:py-0">
             {children}
           </main>
           <MobileTabBar />
+          </StrategiesPageStateProvider>
           </AnalyticsPageStateProvider>
           </TradesPageStateProvider>
           </WinRateModeProvider>

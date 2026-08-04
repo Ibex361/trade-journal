@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { useTradesData } from "@/lib/TradesDataContext";
+import { useStrategiesPageState } from "@/lib/StrategiesPageStateContext";
 import { getStrategyLeaderboard, getStrategyAssetDirectionBreakdown } from "@/lib/metrics";
 import StrategyLeaderboard from "@/components/strategies/StrategyLeaderboard";
 import StrategyAssetBreakdown from "@/components/strategies/StrategyAssetBreakdown";
@@ -12,7 +13,7 @@ import StrategiesSkeleton from "@/components/strategies/StrategiesSkeleton";
 export default function StrategiesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
   const { trades, loading } = useTradesData();
-  const [selectedStrategyKey, setSelectedStrategyKey] = useState<string | null>(null);
+  const { selectedStrategyKey, setSelectedStrategyKey } = useStrategiesPageState();
 
   const rows = useMemo(() => getStrategyLeaderboard(trades), [trades]);
 
@@ -37,11 +38,10 @@ export default function StrategiesPage() {
     [trades, selectedStrategyKey]
   );
 
-  // A strategy selected against one account's trades shouldn't carry over
-  // to another account after a switch.
-  useEffect(() => {
-    setSelectedStrategyKey(null);
-  }, [selectedAccount?.id]);
+  // Resetting selection on account switch (vs. a bare remount from
+  // navigating back to this page) is handled inside StrategiesPageState,
+  // the same way TradesPageState/AnalyticsPageState do it — see the comment
+  // there for why that logic has to live in the never-unmounting provider.
 
   function handleSelectRow(key: string) {
     setSelectedStrategyKey((current) => (current === key ? null : key));
