@@ -16,7 +16,6 @@ import type { JSONContent } from "@tiptap/react";
 import BubbleToolbar from "./BubbleToolbar";
 import SlashCommand from "./slashCommand";
 import NoteImage from "./NoteImage";
-import ImageLightbox from "./ImageLightbox";
 import { uploadNoteImage } from "@/lib/noteImages";
 import { validateScreenshotFile } from "@/lib/screenshots";
 
@@ -324,9 +323,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   // the doc yet, it's inserted only once the URL comes back.
   const [uploadingCount, setUploadingCount] = useState(0);
   const [imageError, setImageError] = useState<string | null>(null);
-  // Phase 4 Part 3: click-to-expand. Holds the clicked image's src/alt, or
-  // null when no lightbox is open.
-  const [lightbox, setLightbox] = useState<{ src: string; alt?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Ref mirror of accountId/editor so the paste/drop handlers (registered
   // once via editorProps, not re-created per render) always see the
@@ -387,18 +383,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         event.preventDefault();
         files.forEach((file) => insertImageFileRef.current(file));
         return true;
-      },
-      // Phase 4 Part 3: click-to-expand — opens the clicked image full-size
-      // in a lightbox. Returns false so ProseMirror still runs its normal
-      // node-selection behavior on the same click (e.g. so Backspace still
-      // deletes a selected image); the setState setter's identity is
-      // stable across renders, so closing over it here is safe even though
-      // editorProps is only read once at editor creation.
-      handleClickOn: (_view, _pos, node) => {
-        if (node.type.name === "image") {
-          setLightbox({ src: node.attrs.src, alt: node.attrs.alt });
-        }
-        return false;
       },
     },
     onUpdate: ({ editor }) => {
@@ -499,7 +483,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
       )}
       {editable && <BubbleToolbar editor={editor} />}
       <EditorContent editor={editor} />
-      {lightbox && <ImageLightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
