@@ -18,6 +18,7 @@ import LinkDialog from "./LinkDialog";
 import SlashCommand from "./slashCommand";
 import NoteImage from "./NoteImage";
 import ImageLightbox from "./ImageLightbox";
+import { Toolbar as ToolbarRoot, ToolbarGroup, ToolbarSeparator } from "./Toolbar";
 import { uploadNoteImage } from "@/lib/noteImages";
 import { validateScreenshotFile } from "@/lib/screenshots";
 
@@ -85,13 +86,8 @@ function ToolbarButton({
   );
 }
 
-// A thin hairline between clusters of related buttons — this is the only
-// grouping cue now (no boxed pills): a single sliding row reads as more
-// professional/toolbar-like than button clusters boxed into their own
-// little cards, per reference (template.tiptap.dev's Simple Editor).
-function Divider() {
-  return <span className="w-px h-5 bg-surface-border mx-1 shrink-0" />;
-}
+// (Divider/grouping is now handled by the Toolbar primitives imported
+// above — see Toolbar.tsx.)
 
 function Toolbar({
   editor,
@@ -122,7 +118,8 @@ function Toolbar({
 
   return (
     <>
-    <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar">
+    <ToolbarRoot>
+      <ToolbarGroup>
       <ToolbarButton
         label="Undo"
         disabled={!editor.can().undo()}
@@ -141,9 +138,11 @@ function Toolbar({
           <path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h2" />
         </svg>
       </ToolbarButton>
+      </ToolbarGroup>
 
-      <Divider />
+      <ToolbarSeparator />
 
+      <ToolbarGroup>
       <ToolbarButton
         label="Heading 1"
         active={editor.isActive("heading", { level: 1 })}
@@ -165,9 +164,11 @@ function Toolbar({
       >
         H3
       </ToolbarButton>
+      </ToolbarGroup>
 
-      <Divider />
+      <ToolbarSeparator />
 
+      <ToolbarGroup>
       <ToolbarButton
         label="Bullet list"
         active={editor.isActive("bulletList")}
@@ -222,9 +223,11 @@ function Toolbar({
           <path d="M9 18l-6-6 6-6M15 6l6 6-6 6" />
         </svg>
       </ToolbarButton>
+      </ToolbarGroup>
 
-      <Divider />
+      <ToolbarSeparator />
 
+      <ToolbarGroup>
       <ToolbarButton
         label="Bold"
         active={editor.isActive("bold")}
@@ -268,9 +271,11 @@ function Toolbar({
           </svg>
         </ToolbarButton>
       )}
+      </ToolbarGroup>
 
-      <Divider />
+      <ToolbarSeparator />
 
+      <ToolbarGroup>
       {editor.isActive("table") ? (
         <>
           <ToolbarButton label="Add column" onClick={() => editor.chain().focus().addColumnAfter().run()}>
@@ -328,7 +333,8 @@ function Toolbar({
           </svg>
         </ToolbarButton>
       )}
-    </div>
+      </ToolbarGroup>
+    </ToolbarRoot>
     <LinkDialog
       open={linkDialogOpen}
       initialUrl={editor.getAttributes("link").href as string | undefined}
