@@ -416,11 +416,19 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         // hold a block-level node) — caught here so a failed insert shows
         // a friendly message instead of an uncaught exception taking down
         // the whole app.
-        try {
-          editor?.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
-        } catch {
-          setImageError("Uploaded, but couldn't insert the image here. Try placing your cursor on its own line and pasting again.");
-        }
+        // Deferred to the next animation frame: this insert changes the
+        // document structure and collapses/moves the selection, which can
+        // land in the same React commit as an unrelated DOM update already
+        // in flight (e.g. the bubble toolbar hiding) and corrupt React's
+        // view of the DOM (NotFoundError on insertBefore). Waiting a frame
+        // lets any in-flight DOM/React updates finish first.
+        requestAnimationFrame(() => {
+          try {
+            editor?.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
+          } catch {
+            setImageError("Uploaded, but couldn't insert the image here. Try placing your cursor on its own line and pasting again.");
+          }
+        });
       } catch {
         setImageError("Image upload failed. Please try again.");
       } finally {

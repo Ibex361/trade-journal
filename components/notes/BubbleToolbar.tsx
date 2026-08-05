@@ -53,7 +53,13 @@ export default function BubbleToolbar({ editor }: { editor: Editor }) {
   return (
     <BubbleMenu
       editor={editor}
-      tippyOptions={{ duration: 120, placement: "top" }}
+      // duration: 0 — the default animated show/hide removes the tippy
+      // popup DOM node asynchronously (on a CSS-transition-end callback),
+      // which can land in the middle of an unrelated React commit (e.g.
+      // the doc-structure change from inserting an image) and corrupt
+      // React's view of the DOM, throwing a NotFoundError on insertBefore.
+      // An instant, synchronous show/hide removes that race entirely.
+      tippyOptions={{ duration: 0, placement: "top" }}
       shouldShow={({ editor, state }) => {
         const { selection } = state;
         const { empty, from, to } = selection;
