@@ -1,37 +1,36 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import * as React from "react";
 
 /**
  * Toolbar primitives — ported from Tiptap's own UI Components library
  * (tiptap-ui-primitive/toolbar, MIT licensed: github.com/ueberdosis/
- * tiptap-ui-components), adapted from their SCSS-based component into this
- * app's Tailwind/design-token idiom rather than pulled in as a separate
- * styling system.
- *
- * What's replicated from the original:
- * - The same composition pattern: <Toolbar><ToolbarGroup>...buttons...
- *   </ToolbarGroup><ToolbarSeparator /><ToolbarGroup>...</ToolbarGroup>
- *   <Spacer /><ToolbarGroup>...</ToolbarGroup></Toolbar>
- * - Horizontal roving-focus keyboard navigation: ArrowLeft/ArrowRight/Home/
- *   End move focus between controls in the toolbar; disabled controls are
- *   skipped; Tab/Shift+Tab leave the toolbar rather than being trapped in
- *   it. This is the one piece of real, testable "professional editor"
- *   behavior a flat row of plain <button>s doesn't have at all — every
- *   native rich-text toolbar (Google Docs, Notion, the Tiptap reference
- *   itself) behaves this way, so it's the highest-value single thing to
- *   port over first.
- * - `variant` prop ("default" | "floating") from the original API, though
- *   only "default" (the fixed top toolbar) is used here for now —
- *   BubbleToolbar.tsx is a separate, already-floating implementation and
- *   isn't rebuilt on top of this component in this pass.
- *
- * What's intentionally left out for now (not needed by this app yet, can
- * be added later if useful): vertical orientation, `data-plain` styling
- * variant, and the separate Tooltip primitive that normally wraps each
- * Button — this app already shows a native `title` attribute per button,
- * which was judged good enough for now rather than adding a whole new
- * floating-tooltip component in the same pass.
+ * tiptap-ui-components). This version was corrected against the actual
+ * source files (toolbar.tsx + toolbar.scss, user-supplied) after an
+ * earlier pass had reconstructed the primitive from documentation alone.
+ * Known real differences from the upstream source, since this app doesn't
+ * have their `useMenuNavigation`/`useComposedRef` hooks or their
+ * `Separator` primitive to import as-is:
+ * - Roving focus is done here with plain useEffect + manual tabIndex
+ *   assignment instead of their shared `useMenuNavigation` hook (which
+ *   also backs their dropdown/menu components) and a MutationObserver.
+ *   Same end behavior (arrow keys move a single tab stop, Home/End jump
+ *   to the ends, disabled items are skipped), different mechanism.
+ * - No `data-focus-visible` attribute tracking — relying on the browser's
+ *   native `:focus-visible` instead of their explicit focus/blur
+ *   listeners that set it by hand.
+ * - `ToolbarSeparator` is a self-contained `<span>` here rather than
+ *   re-exporting a shared `Separator` primitive component (this app
+ *   doesn't have one yet).
+ * Fixed in this pass to match the real source: `variant` prop is now
+ * "fixed" | "floating" (was wrongly "default" | "floating"); both
+ * `Toolbar` and `ToolbarGroup` forward refs via `React.forwardRef`;
+ * `ToolbarGroup` has `role="group"`; an empty `ToolbarGroup` collapses to
+ * nothing (and hides an adjacent separator) instead of leaving a stray
+ * gap — matters for NoteEditor's table group, which renders empty except
+ * when the cursor is inside a table; horizontal scroll containment
+ * (`overscroll-behavior-x: contain`) added so sliding the toolbar
+ * sideways can't bubble into scrolling the page behind it.
  */
 
 function isFocusable(el: Element): el is HTMLElement {
@@ -42,82 +41,135 @@ function isFocusable(el: Element): el is HTMLElement {
   );
 }
 
-export function Toolbar({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement | null>(null);
+type BaseProps = React.HTMLAttributes<HTMLDivElement>;
 
-  // Single-tab-stop roving focus, same pattern as the original primitive
-  // (and any native toolbar — Google Docs, Notion, etc.): only one button
-  // in the whole toolbar sits in the page's normal Tab order at a time
-  // (tabIndex 0), every other button is tabIndex -1 so Tab skips straight
-  // over the toolbar to whatever's next on the page. Arrow keys move which
-  // button holds that single tab stop. Runs after every render (not just
-  // once) so it stays correct as buttons come and go — e.g. the table
-  // toolbar swapping from "Insert table" to the five contextual
-  // add/delete-row/column buttons when the cursor moves into a table.
-  useEffect(() => {
-    const container = ref.current;
-    if (!container) return;
-    const items = Array.from(container.querySelectorAll<HTMLElement>("button")).filter(isFocusable);
-    if (items.length === 0) return;
-    const alreadyHasTabStop = items.some((item) => item.tabIndex === 0);
-    items.forEach((item, index) => {
-      item.tabIndex = !alreadyHasTabStop && index === 0 ? 0 : item.tabIndex === 0 ? 0 : -1;
+interface ToolbarProps extends BaseProps {
+  variant?: "fixed" | "floating";
+}
+
+export const Toolbar = React.forwardRef<HTMLDivElement, ToolbarProps>(
+  ({ children, className, variant = "fixed", ...props }, forwardedRef) => {
+    const innerRef = React.useRef<HTMLDivElement | null>(null);
+    // Merges the caller's ref (if any) with the local one this component
+    // needs for its own DOM queries — same purpose as the original's
+    // useComposedRef, inlined here since this app doesn't have that hook.
+    const setRefs = React.useCallback(
+      (node: HTMLDivElement | null) => {
+        innerRef.current = node;
+        if (typeof forwardedRef === "function") forwardedRef(node);
+        else if (forwardedRef) (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      },
+      [forwardedRef]
+    );
+
+    // Single-tab-stop roving focus, same pattern as the original primitive
+    // (and any native toolbar — Google Docs, Notion, etc.): only one
+    // button in the whole toolbar sits in the page's normal Tab order at a
+    // time (tabIndex 0), every other button is tabIndex -1 so Tab skips
+    // straight over the toolbar to whatever's next on the page. Arrow
+    // keys move which button holds that single tab stop. Runs after every
+    // render (not just once) so it stays correct as buttons come and go —
+    // e.g. the table toolbar swapping from "Insert table" to the five
+    // contextual add/delete-row/column buttons when the cursor moves into
+    // a table.
+    React.useEffect(() => {
+      const container = innerRef.current;
+      if (!container) return;
+      const items = Array.from(container.querySelectorAll<HTMLElement>("button")).filter(isFocusable);
+      if (items.length === 0) return;
+      const alreadyHasTabStop = items.some((item) => item.tabIndex === 0);
+      items.forEach((item, index) => {
+        item.tabIndex = !alreadyHasTabStop && index === 0 ? 0 : item.tabIndex === 0 ? 0 : -1;
+      });
     });
-  });
 
-  // Roving focus: arrow keys move between the toolbar's own focusable
-  // controls (buttons), Home/End jump to the first/last, and disabled
-  // buttons are skipped over rather than landing focus on a dead control.
-  // Tab/Shift+Tab are left alone entirely (no keydown handling for them)
-  // so focus moves on to the next thing on the page, matching the
-  // documented behavior of the original primitive.
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    const container = ref.current;
-    if (!container) return;
-    const items = Array.from(container.querySelectorAll<HTMLElement>("button")).filter(isFocusable);
-    if (items.length === 0) return;
+    // Roving focus: arrow keys move between the toolbar's own focusable
+    // controls (buttons), Home/End jump to the first/last, and disabled
+    // buttons are skipped over rather than landing focus on a dead
+    // control. Tab/Shift+Tab are left alone entirely (no keydown handling
+    // for them) so focus moves on to the next thing on the page, matching
+    // the documented behavior of the original primitive.
+    function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const container = innerRef.current;
+      if (!container) return;
+      const items = Array.from(container.querySelectorAll<HTMLElement>("button")).filter(isFocusable);
+      if (items.length === 0) return;
 
-    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-    let nextIndex: number;
-    if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = items.length - 1;
-    } else {
-      const delta = event.key === "ArrowRight" ? 1 : -1;
-      // Wraps around either end, and falls back to the first item when
-      // focus isn't currently on a toolbar button at all (e.g. arrow key
-      // pressed right after a click moved focus elsewhere).
-      nextIndex = currentIndex === -1 ? 0 : (currentIndex + delta + items.length) % items.length;
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+      let nextIndex: number;
+      if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = items.length - 1;
+      } else {
+        const delta = event.key === "ArrowRight" ? 1 : -1;
+        // Wraps around either end, and falls back to the first item when
+        // focus isn't currently on a toolbar button at all (e.g. arrow
+        // key pressed right after a click moved focus elsewhere).
+        nextIndex = currentIndex === -1 ? 0 : (currentIndex + delta + items.length) % items.length;
+      }
+      event.preventDefault();
+      items.forEach((item, index) => {
+        item.tabIndex = index === nextIndex ? 0 : -1;
+      });
+      items[nextIndex]?.focus();
     }
-    event.preventDefault();
-    items.forEach((item, index) => {
-      item.tabIndex = index === nextIndex ? 0 : -1;
-    });
-    items[nextIndex]?.focus();
-  }
 
-  return (
+    return (
+      <div
+        ref={setRefs}
+        role="toolbar"
+        aria-label="toolbar"
+        aria-orientation="horizontal"
+        data-variant={variant}
+        onKeyDown={handleKeyDown}
+        className={[
+          "flex items-center gap-1",
+          variant === "fixed" ? "overflow-x-auto no-scrollbar overscroll-x-contain" : "",
+          className ?? "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+Toolbar.displayName = "Toolbar";
+
+export const ToolbarGroup = React.forwardRef<HTMLDivElement, BaseProps>(
+  ({ children, className, ...props }, ref) => (
     <div
       ref={ref}
-      role="toolbar"
-      aria-orientation="horizontal"
-      onKeyDown={handleKeyDown}
-      className="flex items-center gap-0.5 overflow-x-auto no-scrollbar"
+      role="group"
+      // Collapses to nothing when it has no children — e.g. NoteEditor's
+      // table group renders empty except when the cursor is inside a
+      // table, and this stops it (and its neighboring separator) from
+      // leaving a stray double-gap in the row the rest of the time.
+      className={["flex items-center gap-0.5 shrink-0 empty:hidden empty:gap-0", className ?? ""].filter(Boolean).join(" ")}
+      {...props}
     >
       {children}
     </div>
-  );
-}
+  )
+);
+ToolbarGroup.displayName = "ToolbarGroup";
 
-export function ToolbarGroup({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center gap-0.5 shrink-0">{children}</div>;
-}
-
-export function ToolbarSeparator() {
-  return <span role="separator" aria-orientation="vertical" className="w-px h-5 bg-surface-border mx-1 shrink-0" />;
-}
+export const ToolbarSeparator = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(
+  ({ className, ...props }, ref) => (
+    <span
+      ref={ref}
+      role="separator"
+      aria-orientation="vertical"
+      className={["w-px h-5 bg-surface-border mx-1 shrink-0", className ?? ""].filter(Boolean).join(" ")}
+      {...props}
+    />
+  )
+);
+ToolbarSeparator.displayName = "ToolbarSeparator";
 
 // Pushes everything after it to the far end of the row — same role as the
 // original primitive's <Spacer />, used e.g. to pin a "Save" button to the
