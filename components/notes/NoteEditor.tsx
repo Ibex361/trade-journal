@@ -461,6 +461,14 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
 
   function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
+    // Some mobile browsers (notably Android Files via a strict accept=)
+    // fire change with an empty FileList when the picked file's reported
+    // MIME doesn't match. Surface that so it isn't a silent no-op.
+    if (files.length === 0) {
+      setImageError("No image received from the file picker. Try the gallery, or a PNG/JPG/WEBP file.");
+      event.target.value = "";
+      return;
+    }
     files.forEach((file) => insertImageFile(file));
     event.target.value = ""; // allow re-selecting the same file later
   }
@@ -486,14 +494,23 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          // image/* so Android's Files app still offers real images even
+          // when their reported MIME is blank/octet-stream. Validation
+          // (lib/screenshots.ts) still enforces PNG/JPG/WEBP by type or
+          // extension after the pick.
+          accept="image/png,image/jpeg,image/jpg,image/webp,image/*"
           multiple
           className="hidden"
           onChange={handleFileInputChange}
         />
       )}
       {editable && (uploadingCount > 0 || imageError) && (
-        <p className={`px-4 pt-1.5 text-[11px] ${imageError ? "text-loss" : "text-ink-muted"}`}>
+        <p
+          className={`px-4 py-1.5 text-xs ${
+            imageError ? "text-loss bg-loss/10 border-b border-loss/20" : "text-ink-muted"
+          }`}
+          role={imageError ? "alert" : undefined}
+        >
           {imageError ?? (uploadingCount === 1 ? "Uploading image…" : `Uploading ${uploadingCount} images…`)}
         </p>
       )}

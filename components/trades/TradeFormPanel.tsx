@@ -961,7 +961,11 @@ export default function TradeFormPanel({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              // image/* so Android's Files app still offers real images even
+              // when their reported MIME is blank/octet-stream. Validation
+              // (lib/screenshots.ts) still enforces PNG/JPG/WEBP by type or
+              // extension after the pick.
+              accept="image/png,image/jpeg,image/jpg,image/webp,image/*"
               onChange={handleScreenshotSelect}
               className="hidden"
             />
