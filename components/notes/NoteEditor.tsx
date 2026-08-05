@@ -14,6 +14,7 @@ import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import type { JSONContent } from "@tiptap/react";
 import BubbleToolbar from "./BubbleToolbar";
+import LinkDialog from "./LinkDialog";
 import SlashCommand from "./slashCommand";
 import NoteImage from "./NoteImage";
 import ImageLightbox from "./ImageLightbox";
@@ -93,18 +94,26 @@ function Toolbar({
   onInsertImageClick?: () => void;
   imagesEnabled?: boolean;
 }) {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+
   function handleSetLink() {
-    const previousUrl = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", previousUrl ?? "https://");
-    if (url === null) return; // cancelled
-    if (url.trim() === "") {
+    // Opening focuses the dialog's input, which would collapse the
+    // selection before a prompt-style synchronous read could use it — so
+    // the edit itself happens in handleLinkSubmit, on submit.
+    setLinkDialogOpen(true);
+  }
+
+  function handleLinkSubmit(url: string) {
+    setLinkDialogOpen(false);
+    if (url === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }
 
   return (
+    <>
     <div className="flex items-center gap-0.5 flex-wrap px-2 py-1.5 border-b border-surface-border">
       <ToolbarButton
         label="Bold"
@@ -312,6 +321,13 @@ function Toolbar({
         </svg>
       </ToolbarButton>
     </div>
+    <LinkDialog
+      open={linkDialogOpen}
+      initialUrl={editor.getAttributes("link").href as string | undefined}
+      onSubmit={handleLinkSubmit}
+      onCancel={() => setLinkDialogOpen(false)}
+    />
+    </>
   );
 }
 

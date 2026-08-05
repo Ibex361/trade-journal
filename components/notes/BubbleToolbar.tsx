@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
+import LinkDialog from "./LinkDialog";
 
 /**
  * Notes/diary — Phase 2 part 3, rewritten in Notes Phase 4 as a crash fix.
@@ -88,6 +89,7 @@ function computePosition(editor: Editor): Position {
 export default function BubbleToolbar({ editor }: { editor: Editor }) {
   const [mounted, setMounted] = useState(false);
   const [position, setPosition] = useState<Position>(null);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -116,19 +118,28 @@ export default function BubbleToolbar({ editor }: { editor: Editor }) {
   }, [editor]);
 
   function handleSetLink() {
-    const previousUrl = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", previousUrl ?? "https://");
-    if (url === null) return; // cancelled
-    if (url.trim() === "") {
+    // Selection would otherwise collapse once focus moves to the dialog's
+    // input, losing the range extendMarkRange needs on submit — so the
+    // dialog just opens here, and the actual edit happens on submit below.
+    setLinkDialogOpen(true);
+  }
+
+  function handleLinkSubmit(url: string) {
+    setLinkDialogOpen(false);
+    if (url === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }
 
-  if (!mounted || !position) return null;
+  if (!mounted) return null;
+
+  const previousUrl = editor.getAttributes("link").href as string | undefined;
 
   return createPortal(
+    <>
+    {position && (
     <div
       // translateX centers on the selection midpoint; translateY lifts the
       // menu above the selection with a small gap, mirroring the old
@@ -164,7 +175,15 @@ export default function BubbleToolbar({ editor }: { editor: Editor }) {
           <path d="M13 18l-1 1a3.5 3.5 0 01-5-5l1-1" />
         </svg>
       </BubbleButton>
-    </div>,
+    </div>
+    )}
+    <LinkDialog
+      open={linkDialogOpen}
+      initialUrl={previousUrl}
+      onSubmit={handleLinkSubmit}
+      onCancel={() => setLinkDialogOpen(false)}
+    />
+    </>,
     document.body
   );
 }
