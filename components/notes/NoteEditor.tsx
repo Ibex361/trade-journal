@@ -217,7 +217,20 @@ function Toolbar({
       <ToolbarButton
         label="Code block"
         active={editor.isActive("codeBlock")}
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        onClick={() => {
+          // Clicking this while already inside a code block used to call
+          // toggleCodeBlock() again, which un-formats the block you're
+          // in — there was no way to just "leave" it and keep typing
+          // plain text below. exitCode inserts a paragraph after the
+          // code block and moves the cursor there, matching what
+          // Mod-Enter already does inside a code block, and leaves the
+          // code content untouched.
+          if (editor.isActive("codeBlock")) {
+            editor.chain().focus().exitCode().run();
+          } else {
+            editor.chain().focus().toggleCodeBlock().run();
+          }
+        }}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
           <path d="M9 18l-6-6 6-6M15 6l6 6-6 6" />
