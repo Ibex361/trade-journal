@@ -328,6 +328,13 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   // null when no lightbox is open.
   const [lightbox, setLightbox] = useState<{ src: string; alt?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Stable ref to the editor instance, updated every render. Samsung Internet
+  // opens a separate OS file-picker activity which can suspend the page long
+  // enough for a React re-render, making any editor value captured in a
+  // useCallback closure stale by the time the upload resolves. Using a ref
+  // means insertImageFile always writes to the *current* editor, not the one
+  // that was alive when the callback was first memoised.
+  const editorRef = useRef<Editor | null>(null);
   // Ref mirror of accountId/editor so the paste/drop handlers (registered
   // once via editorProps, not re-created per render) always see the
   // current values instead of closing over stale ones.
@@ -405,6 +412,12 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
       onChange?.(editor.getJSON());
     },
   });
+  // Keep editorRef in sync with the current editor instance on every render.
+  // This must come *after* useEditor so editor is the just-resolved value,
+  // not undefined.  Using a ref (rather than closing over `editor` directly)
+  // means insertImageFile always reaches the live instance even when Samsung
+  // Internet suspends the page during file picking and React re-renders.
+  editorRef.current = editor ?? null;
 
   const insertImageFile = useCallback(
     async (file: File) => {
@@ -426,21 +439,24 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
           setImageError(error || "Image upload failed. Please try again.");
           return;
         }
-        // Node type name is still "image" — NoteImage extends Image's
-        // schema (adding the fileId attribute) without renaming it.
-        // insertContent can throw (e.g. if the current selection can't
-        // hold a block-level node) — caught here so a failed insert shows
-        // a friendly message instead of an uncaught exception taking down
-        // the whole app.
-        // Deferred to the next animation frame: this insert changes the
-        // document structure and collapses/moves the selection, which can
-        // land in the same React commit as an unrelated DOM update already
-        // in flight (e.g. the bubble toolbar hiding) and corrupt React's
-        // view of the DOM (NotFoundError on insertBefore). Waiting a frame
-        // lets any in-flight DOM/React updates finish first.
+        // insertContent can throw if the current selection can't hold a
+        // block-level node — caught so a failed insert shows a friendly
+        // message instead of an uncaught exception.
+        //
+        // Samsung Internet fix: always read the editor via editorRef.current
+        // (never from the closure) so we get the live instance even after
+        // Samsung's OS file-picker suspends and resumes the page. rAF still
+        // defers the DOM mutation to let any in-flight React updates finish,
+        // but we no longer depend on a closure-captured `editor` value that
+        // may have gone stale during the suspension.
         requestAnimationFrame(() => {
           try {
-            editor?.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
+            const currentEditor = editorRef.current;
+            if (!currentEditor) {
+              setImageError("Uploaded, but the editor isn't ready. Please try again.");
+              return;
+            }
+            currentEditor.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
           } catch {
             setImageError("Uploaded, but couldn't insert the image here. Try placing your cursor on its own line and pasting again.");
           }
@@ -451,16 +467,48 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         setUploadingCount((n) => n - 1);
       }
     },
+    // No dependency on `editor` — we read it via editorRef.current at call
+    // time so the callback never goes stale when the editor instance changes
+    // (which happens when Samsung Internet's file picker suspends the page).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor]
+    []
   );
 
   useEffect(() => {
     insertImageFileRef.current = insertImageFile;
   }, [insertImageFile]);
 
+  // Samsung Internet fix: attach a native DOM "change" listener directly on
+  // the file input in addition to React's synthetic onChange. Samsung Internet
+  // sometimes fails to fire the synthetic onChange when the user selects a
+  // file through the *file manager* path (as opposed to the native media
+  // picker sheet) — a known quirk of Samsung Internet's hidden-input + .click()
+  // flow. The native listener fires reliably on both paths. Both handlers guard
+  // against double-processing by checking files.length > 0 and by clearing
+  // event.target.value after reading files (so the same file can be re-selected
+  // and the second selection doesn't process an already-cleared file list).
+  useEffect(() => {
+    const input = fileInputRef.current;
+    if (!input) return;
+
+    function handleNativeChange() {
+      const files = Array.from(input!.files ?? []);
+      if (files.length === 0) return;
+      files.forEach((file) => insertImageFileRef.current(file));
+      // Reset so the same file can be re-selected in the future.
+      input!.value = "";
+    }
+
+    input.addEventListener("change", handleNativeChange);
+    return () => input.removeEventListener("change", handleNativeChange);
+    // Re-register whenever the input element itself changes (e.g. if the
+    // component re-mounts). insertImageFileRef is always current so it
+    // doesn't need to be in the dep array.
+  }, [fileInputRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return; // native listener may have already cleared the list
     files.forEach((file) => insertImageFile(file));
     event.target.value = ""; // allow re-selecting the same file later
   }
