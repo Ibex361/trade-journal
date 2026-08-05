@@ -93,6 +93,13 @@ export default function NoteEditPanel({
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [dirty, setDirty] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Details (tags/linked strategy/linked trades) start collapsed so
+  // opening a note goes straight into writing, like a real document
+  // rather than a form. Auto-opens if the note already has any of that
+  // metadata set, so existing links/tags aren't hidden by default.
+  const [detailsOpen, setDetailsOpen] = useState(
+    () => (note.tags?.length ?? 0) > 0 || Boolean(note.linked_strategy) || (note.linked_trade_ids?.length ?? 0) > 0
+  );
 
   // Autosave machinery. Field values are mirrored into a ref (updated by
   // the effect just below, which runs well before the 1.5s debounce could
@@ -279,25 +286,35 @@ export default function NoteEditPanel({
     error: "text-loss",
   };
 
+  const hasLinkedMeta = tags.length > 0 || linkedStrategy !== "" || linkedTradeIds.length > 0;
+
   return (
     <>
-      {/* Notes polish (2nd round): was a Card rendered inline in the page
-         flow, sandwiched between the page header and the notes list below
-         it — cramped on mobile and not a real "open this note" moment.
-         Rewritten as a fixed full-viewport overlay (own scroll container,
-         sticky header) matching TradeFormPanel's overlay conventions, but
-         full-width rather than a side slide-over — a rich-text/table/image
-         editor needs the width a lot more than a quick trade-fields form
-         does. */}
+      {/* Notes polish (3rd round): the editor is now treated as the page
+         itself rather than a form with an editor field at the bottom.
+         Title flows directly into body copy with no divider between them;
+         tags/linked strategy/linked trades — previously three stacked form
+         rows above the editor — collapse into a single "Details"
+         disclosure so opening a note goes straight into writing. Wider
+         column (max-w-4xl vs 3xl) and no bordered/boxed editor surface —
+         borderless content sitting on the page background, matching how
+         Tiptap's own reference editor reads. */}
       <div className="fixed inset-0 z-40 bg-surface-0 overflow-y-auto motion-safe:animate-fade-in">
-        <div className="max-w-3xl mx-auto min-h-full p-4 sm:p-6">
-          <div className="sticky top-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-4 bg-surface-0/95 backdrop-blur-md border-b border-surface-border flex items-start justify-between gap-3 z-10">
-            <input
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              className="flex-1 bg-transparent font-display text-lg font-medium text-ink-primary placeholder:text-ink-muted focus:outline-none border-b border-surface-border pb-2"
-              placeholder="Note title"
-            />
+        <div className="max-w-4xl mx-auto min-h-full px-4 sm:px-10">
+          <div className="sticky top-0 -mx-4 sm:-mx-10 px-4 sm:px-10 py-3 bg-surface-0/95 backdrop-blur-md border-b border-surface-border flex items-center justify-between gap-3 z-10">
+            {saveStatus === "error" ? (
+              <button
+                type="button"
+                onClick={handleSave}
+                className={`text-xs text-left underline decoration-dotted shrink-0 ${saveStatusClass[saveStatus]}`}
+              >
+                {saveStatusLabel[saveStatus]} — tap to retry
+              </button>
+            ) : (
+              <p className={`text-xs shrink-0 ${saveStatusClass[saveStatus]}`} aria-live="polite">
+                {saveStatusLabel[saveStatus]}
+              </p>
+            )}
             <div className="flex items-center gap-2 shrink-0">
               <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)} disabled={saving || deleting}>
                 {deleting ? "Deleting…" : "Delete"}
@@ -311,93 +328,111 @@ export default function NoteEditPanel({
             </div>
           </div>
 
-          <div className="space-y-4 pb-6">
+          <div className="pb-24 pt-8 sm:pt-10">
+            <input
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              className="w-full bg-transparent font-display text-3xl sm:text-4xl font-medium text-ink-primary placeholder:text-ink-muted/60 focus:outline-none"
+              placeholder="Untitled"
+            />
 
-          {saveStatus === "error" ? (
-            <button
-              type="button"
-              onClick={handleSave}
-              className={`text-[11px] -mt-2 text-left underline decoration-dotted ${saveStatusClass[saveStatus]}`}
-            >
-              {saveStatusLabel[saveStatus]} — tap to retry
-            </button>
-          ) : (
-            <p className={`text-[11px] -mt-2 ${saveStatusClass[saveStatus]}`} aria-live="polite">
-              {saveStatusLabel[saveStatus]}
-            </p>
-          )}
-
-          {(tagOptions.length > 0 || orphanedTags.length > 0) && (
-            <div>
-              <span className="text-[11px] uppercase tracking-wide text-ink-muted">Tags</span>
-              <div className="mt-1.5 flex flex-wrap gap-2">
-                {tagOptions.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => toggleTag(o.value)}
-                    className={`px-3 py-1 rounded-full text-xs border transition-colors duration-fast ${
-                      tags.includes(o.value)
-                        ? "bg-glow/15 border-glow text-glow"
-                        : "border-surface-border text-ink-secondary hover:text-ink-primary"
-                    }`}
-                  >
-                    {o.value}
-                  </button>
-                ))}
-                {orphanedTags.map((t) => (
-                  <button
-                    key={`orphan-${t}`}
-                    type="button"
-                    onClick={() => toggleTag(t)}
-                    title="Removed from Settings — click to remove it from this note"
-                    className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
-                  >
-                    {t} (removed from list)
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <span className="text-[11px] uppercase tracking-wide text-ink-muted">Linked strategy</span>
-              <select
-                value={linkedStrategy}
-                onChange={(e) => handleLinkedStrategyChange(e.target.value)}
-                className="mt-1.5 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-glow/60 focus:ring-2 focus:ring-glow/20 transition-colors"
+            <div className="mt-3 mb-6 flex items-center gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setDetailsOpen((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-ink-muted hover:text-ink-primary transition-colors"
               >
-                <option value="">—</option>
-                {strategyOptions.map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.value}
-                  </option>
-                ))}
-                {strategyIsOrphaned && (
-                  <option value={linkedStrategy} style={{ color: "#8a8f98" }}>
-                    {linkedStrategy} (removed from list)
-                  </option>
-                )}
-              </select>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`w-3.5 h-3.5 transition-transform duration-fast ${detailsOpen ? "rotate-90" : ""}`}
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+                Details
+                {!detailsOpen && hasLinkedMeta && <span className="w-1.5 h-1.5 rounded-full bg-glow" />}
+              </button>
             </div>
 
-            <LinkedTradesPicker
-              trades={trades}
-              linkedTradeIds={linkedTradeIds}
-              onChange={handleLinkedTradeIdsChange}
-              onOpenTrade={onOpenTrade ? handleOpenTrade : undefined}
-            />
-          </div>
+            {detailsOpen && (
+              <div className="mb-8 space-y-4 pb-6 border-b border-surface-border">
+                {(tagOptions.length > 0 || orphanedTags.length > 0) && (
+                  <div>
+                    <span className="text-[11px] uppercase tracking-wide text-ink-muted">Tags</span>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {tagOptions.map((o) => (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => toggleTag(o.value)}
+                          className={`px-3 py-1 rounded-full text-xs border transition-colors duration-fast ${
+                            tags.includes(o.value)
+                              ? "bg-glow/15 border-glow text-glow"
+                              : "border-surface-border text-ink-secondary hover:text-ink-primary"
+                          }`}
+                        >
+                          {o.value}
+                        </button>
+                      ))}
+                      {orphanedTags.map((t) => (
+                        <button
+                          key={`orphan-${t}`}
+                          type="button"
+                          onClick={() => toggleTag(t)}
+                          title="Removed from Settings — click to remove it from this note"
+                          className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
+                        >
+                          {t} (removed from list)
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-          <NoteEditorErrorBoundary>
-            <NoteEditor
-              content={content}
-              onChange={handleContentChange}
-              placeholder="Start writing…"
-              accountId={selectedAccount?.id ?? null}
-            />
-          </NoteEditorErrorBoundary>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-[11px] uppercase tracking-wide text-ink-muted">Linked strategy</span>
+                    <select
+                      value={linkedStrategy}
+                      onChange={(e) => handleLinkedStrategyChange(e.target.value)}
+                      className="mt-1.5 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-glow/60 focus:ring-2 focus:ring-glow/20 transition-colors"
+                    >
+                      <option value="">—</option>
+                      {strategyOptions.map((o) => (
+                        <option key={o.id} value={o.value}>
+                          {o.value}
+                        </option>
+                      ))}
+                      {strategyIsOrphaned && (
+                        <option value={linkedStrategy} style={{ color: "#8a8f98" }}>
+                          {linkedStrategy} (removed from list)
+                        </option>
+                      )}
+                    </select>
+                  </div>
+
+                  <LinkedTradesPicker
+                    trades={trades}
+                    linkedTradeIds={linkedTradeIds}
+                    onChange={handleLinkedTradeIdsChange}
+                    onOpenTrade={onOpenTrade ? handleOpenTrade : undefined}
+                  />
+                </div>
+              </div>
+            )}
+
+            <NoteEditorErrorBoundary>
+              <NoteEditor
+                content={content}
+                onChange={handleContentChange}
+                placeholder="Start writing…"
+                accountId={selectedAccount?.id ?? null}
+              />
+            </NoteEditorErrorBoundary>
           </div>
         </div>
       </div>

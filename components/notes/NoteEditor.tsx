@@ -72,7 +72,7 @@ function ToolbarButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-md text-sm font-medium transition-colors duration-fast
+      className={`inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-md text-sm font-medium transition-colors duration-fast
         disabled:opacity-30 disabled:pointer-events-none
         ${active ? "bg-glow/15 text-glow" : "text-ink-secondary hover:text-ink-primary hover:bg-surface-2"}`}
     >
@@ -114,7 +114,7 @@ function Toolbar({
 
   return (
     <>
-    <div className="flex items-center gap-0.5 flex-wrap px-2 py-1.5 border-b border-surface-border">
+    <div className="flex items-center gap-0.5 flex-wrap">
       <ToolbarButton
         label="Bold"
         active={editor.isActive("bold")}
@@ -386,7 +386,7 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
     editorProps: {
       attributes: {
         class:
-          "prose-notes min-h-[240px] px-4 py-4 focus:outline-none text-ink-primary text-sm leading-relaxed",
+          "prose-notes min-h-[60vh] py-6 focus:outline-none text-ink-primary text-[15px] leading-[1.75]",
       },
       // Clipboard image paste (e.g. a copied chart or screenshot).
       handlePaste: (view, event) => {
@@ -492,21 +492,24 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   }
 
   if (!editor) {
-    return (
-      <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass overflow-hidden">
-        <div className="min-h-[280px] animate-pulse bg-surface-2/40" />
-      </div>
-    );
+    return <div className="min-h-[280px] animate-pulse bg-surface-2/30 rounded-lg" />;
   }
 
   return (
-    <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass overflow-hidden">
+    <div>
       {editable && (
-        <Toolbar
-          editor={editor}
-          imagesEnabled={!!accountId}
-          onInsertImageClick={() => fileInputRef.current?.click()}
-        />
+        // Sticky so the toolbar stays reachable while scrolling a long
+        // note — sits directly under NoteEditPanel's own sticky header
+        // (top offset matches that header's height), borderless except for
+        // the hairline underneath: reads as page chrome, not a boxed
+        // widget bolted onto the text.
+        <div className="sticky top-[49px] z-[5] -mx-4 sm:-mx-10 px-4 sm:px-10 py-2 bg-surface-0/95 backdrop-blur-md border-b border-surface-border">
+          <Toolbar
+            editor={editor}
+            imagesEnabled={!!accountId}
+            onInsertImageClick={() => fileInputRef.current?.click()}
+          />
+        </div>
       )}
       {editable && accountId && (
         <input
@@ -519,7 +522,7 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         />
       )}
       {editable && (uploadingCount > 0 || imageError) && (
-        <p className={`px-4 pt-1.5 text-[11px] ${imageError ? "text-loss" : "text-ink-muted"}`}>
+        <p className={`pt-2 text-[11px] ${imageError ? "text-loss" : "text-ink-muted"}`}>
           {imageError ?? (uploadingCount === 1 ? "Uploading image…" : `Uploading ${uploadingCount} images…`)}
         </p>
       )}
