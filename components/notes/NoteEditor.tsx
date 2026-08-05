@@ -328,6 +328,30 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   // null when no lightbox is open.
   const [lightbox, setLightbox] = useState<{ src: string; alt?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Samsung Internet (and some other mobile browsers) has a known bug where
+  // the React synthetic onChange event does NOT fire on a hidden file input
+  // that was triggered programmatically via .click() when the user navigates
+  // through the file manager path (vs the browser's native media picker sheet).
+  // The files are selected — the upload even reaches ImageKit — but React never
+  // sees the event. Fix: attach a real native DOM "change" listener, which fires
+  // reliably from both paths. We keep handleFileInputChange as the handler body
+  // so the logic stays in one place.
+  useEffect(() => {
+    const input = fileInputRef.current;
+    if (!input) return;
+    function handleNativeChange() {
+      const files = Array.from(input!.files ?? []);
+      files.forEach((file) => insertImageFileRef.current(file));
+      input!.value = ""; // allow re-selecting the same file later
+    }
+    input.addEventListener("change", handleNativeChange);
+    return () => {
+      input.removeEventListener("change", handleNativeChange);
+    };
+    // Re-bind whenever the input element itself changes (shouldn't happen in
+    // practice, but covers the case where React re-creates the DOM node).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileInputRef.current]);
   // Ref mirror of accountId/editor so the paste/drop handlers (registered
   // once via editorProps, not re-created per render) always see the
   // current values instead of closing over stale ones.
@@ -459,12 +483,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
     insertImageFileRef.current = insertImageFile;
   }, [insertImageFile]);
 
-  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    files.forEach((file) => insertImageFile(file));
-    event.target.value = ""; // allow re-selecting the same file later
-  }
-
   if (!editor) {
     return (
       <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass overflow-hidden">
@@ -489,7 +507,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
           accept="image/png,image/jpeg,image/webp"
           multiple
           className="hidden"
-          onChange={handleFileInputChange}
         />
       )}
       {editable && (uploadingCount > 0 || imageError) && (
