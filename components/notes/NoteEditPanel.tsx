@@ -46,15 +46,17 @@ import type { Trade } from "@/lib/trades";
  * Saving… / Save failed) replaces having to infer save state from whether
  * the Save button happens to be enabled.
  *
- * Deliberately NOT touched in this part: the Close/jump-to-trade
- * window.confirm "unsaved changes" guards below still key off `dirty` the
- * same as before Part 1. With autosave now saving ~1.5s after the last
- * keystroke in most cases, those guards will rarely trigger, but closing
- * (or jumping to a trade) inside that debounce window still can. Rewiring
- * those flows to flush-and-save instead of ask-to-discard is Phase 5
- * Part 2's job, along with save-retry-on-failure and any other polish —
- * kept as a separate part so this autosave mechanism itself lands and gets
- * used before changing how the surrounding confirm dialogs behave.
+ * Notes Phase 5 Part 2 (confirm-dialog rewiring + save-retry): the
+ * Close/jump-to-trade guards no longer ask "discard changes?" — with
+ * autosave in place, "discard" rarely makes sense (there's nothing to
+ * discard, just something not yet flushed). Both now flush any pending
+ * save immediately instead (same runSave() the debounce/manual button use)
+ * and proceed right away rather than blocking on it, since the parent's
+ * save continues independently of this panel unmounting. If the previous
+ * save attempt failed (saveStatus "error"), that also counts as reason to
+ * flush before leaving — one more attempt beats silently walking away from
+ * a failed save. The status label itself is now clickable when it reads
+ * "Save failed", as a manual retry.
  */
 const AUTOSAVE_DELAY_MS = 1500;
 
@@ -230,17 +232,14 @@ export default function NoteEditPanel({
   }
 
   function handleClose() {
-    if (dirty && !window.confirm("You have unsaved changes. Close without saving?")) return;
+    if (dirty || saveError) handleSave();
     onClose();
   }
 
-  // Same dirty guard as handleClose, for jumping to a linked trade —
-  // matches this component's own existing window.confirm convention
-  // (rather than TradeFormPanel's separate styled ConfirmDialog, which is
-  // that component's own established pattern) so the two dirty-checks
-  // already in this file stay consistent with each other.
+  // Same flush-before-leaving behavior as handleClose, for jumping to a
+  // linked trade.
   function handleOpenTrade(t: Trade) {
-    if (dirty && !window.confirm("You have unsaved changes. Open this trade without saving?")) return;
+    if (dirty || saveError) handleSave();
     onOpenTrade?.(t);
   }
 
@@ -287,9 +286,19 @@ export default function NoteEditPanel({
           </div>
         </div>
 
-        <p className={`text-[11px] -mt-2 ${saveStatusClass[saveStatus]}`} aria-live="polite">
-          {saveStatusLabel[saveStatus]}
-        </p>
+        {saveStatus === "error" ? (
+          <button
+            type="button"
+            onClick={handleSave}
+            className={`text-[11px] -mt-2 text-left underline decoration-dotted ${saveStatusClass[saveStatus]}`}
+          >
+            {saveStatusLabel[saveStatus]} — tap to retry
+          </button>
+        ) : (
+          <p className={`text-[11px] -mt-2 ${saveStatusClass[saveStatus]}`} aria-live="polite">
+            {saveStatusLabel[saveStatus]}
+          </p>
+        )}
 
         {(tagOptions.length > 0 || orphanedTags.length > 0) && (
           <div>
