@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
-import Card from "@/components/shared/Card";
 import Button from "@/components/shared/Button";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import NoteEditor from "@/components/notes/NoteEditor";
@@ -236,6 +235,23 @@ export default function NoteEditPanel({
     onClose();
   }
 
+  // Escape closes the panel the same way the Close button does (flush +
+  // leave, no discard-confirm — see the class comment above for why this
+  // panel doesn't need TradeFormPanel's separate confirm-dialog gating on
+  // its Escape handler). Set up once with an empty dependency array so a
+  // keystroke doesn't tear down/re-attach a window-level listener on every
+  // render; a ref keeps it reaching the *current* handleClose instead of
+  // closing over a stale one from the render it was attached in.
+  const handleCloseRef = useRef(handleClose);
+  handleCloseRef.current = handleClose;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") handleCloseRef.current();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Same flush-before-leaving behavior as handleClose, for jumping to a
   // linked trade.
   function handleOpenTrade(t: Trade) {
@@ -265,113 +281,126 @@ export default function NoteEditPanel({
 
   return (
     <>
-      <Card padding="tight" className="space-y-4 border-glow/40">
-        <div className="flex items-start justify-between gap-3">
-          <input
-            value={title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            className="flex-1 bg-transparent font-display text-lg font-medium text-ink-primary placeholder:text-ink-muted focus:outline-none border-b border-surface-border pb-2"
-            placeholder="Note title"
-          />
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)} disabled={saving || deleting}>
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={handleClose} disabled={deleting}>
-              Close
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={!dirty || saving || deleting}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </div>
-
-        {saveStatus === "error" ? (
-          <button
-            type="button"
-            onClick={handleSave}
-            className={`text-[11px] -mt-2 text-left underline decoration-dotted ${saveStatusClass[saveStatus]}`}
-          >
-            {saveStatusLabel[saveStatus]} — tap to retry
-          </button>
-        ) : (
-          <p className={`text-[11px] -mt-2 ${saveStatusClass[saveStatus]}`} aria-live="polite">
-            {saveStatusLabel[saveStatus]}
-          </p>
-        )}
-
-        {(tagOptions.length > 0 || orphanedTags.length > 0) && (
-          <div>
-            <span className="text-[11px] uppercase tracking-wide text-ink-muted">Tags</span>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {tagOptions.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => toggleTag(o.value)}
-                  className={`px-3 py-1 rounded-full text-xs border transition-colors duration-fast ${
-                    tags.includes(o.value)
-                      ? "bg-glow/15 border-glow text-glow"
-                      : "border-surface-border text-ink-secondary hover:text-ink-primary"
-                  }`}
-                >
-                  {o.value}
-                </button>
-              ))}
-              {orphanedTags.map((t) => (
-                <button
-                  key={`orphan-${t}`}
-                  type="button"
-                  onClick={() => toggleTag(t)}
-                  title="Removed from Settings — click to remove it from this note"
-                  className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
-                >
-                  {t} (removed from list)
-                </button>
-              ))}
+      {/* Notes polish (2nd round): was a Card rendered inline in the page
+         flow, sandwiched between the page header and the notes list below
+         it — cramped on mobile and not a real "open this note" moment.
+         Rewritten as a fixed full-viewport overlay (own scroll container,
+         sticky header) matching TradeFormPanel's overlay conventions, but
+         full-width rather than a side slide-over — a rich-text/table/image
+         editor needs the width a lot more than a quick trade-fields form
+         does. */}
+      <div className="fixed inset-0 z-40 bg-surface-0 overflow-y-auto motion-safe:animate-fade-in">
+        <div className="max-w-3xl mx-auto min-h-full p-4 sm:p-6">
+          <div className="sticky top-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-4 bg-surface-0/95 backdrop-blur-md border-b border-surface-border flex items-start justify-between gap-3 z-10">
+            <input
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              className="flex-1 bg-transparent font-display text-lg font-medium text-ink-primary placeholder:text-ink-muted focus:outline-none border-b border-surface-border pb-2"
+              placeholder="Note title"
+            />
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)} disabled={saving || deleting}>
+                {deleting ? "Deleting…" : "Delete"}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleClose} disabled={deleting}>
+                Close
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={!dirty || saving || deleting}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
             </div>
           </div>
-        )}
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <span className="text-[11px] uppercase tracking-wide text-ink-muted">Linked strategy</span>
-            <select
-              value={linkedStrategy}
-              onChange={(e) => handleLinkedStrategyChange(e.target.value)}
-              className="mt-1.5 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-glow/60 focus:ring-2 focus:ring-glow/20 transition-colors"
+          <div className="space-y-4 pb-6">
+
+          {saveStatus === "error" ? (
+            <button
+              type="button"
+              onClick={handleSave}
+              className={`text-[11px] -mt-2 text-left underline decoration-dotted ${saveStatusClass[saveStatus]}`}
             >
-              <option value="">—</option>
-              {strategyOptions.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.value}
-                </option>
-              ))}
-              {strategyIsOrphaned && (
-                <option value={linkedStrategy} style={{ color: "#8a8f98" }}>
-                  {linkedStrategy} (removed from list)
-                </option>
-              )}
-            </select>
+              {saveStatusLabel[saveStatus]} — tap to retry
+            </button>
+          ) : (
+            <p className={`text-[11px] -mt-2 ${saveStatusClass[saveStatus]}`} aria-live="polite">
+              {saveStatusLabel[saveStatus]}
+            </p>
+          )}
+
+          {(tagOptions.length > 0 || orphanedTags.length > 0) && (
+            <div>
+              <span className="text-[11px] uppercase tracking-wide text-ink-muted">Tags</span>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {tagOptions.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => toggleTag(o.value)}
+                    className={`px-3 py-1 rounded-full text-xs border transition-colors duration-fast ${
+                      tags.includes(o.value)
+                        ? "bg-glow/15 border-glow text-glow"
+                        : "border-surface-border text-ink-secondary hover:text-ink-primary"
+                    }`}
+                  >
+                    {o.value}
+                  </button>
+                ))}
+                {orphanedTags.map((t) => (
+                  <button
+                    key={`orphan-${t}`}
+                    type="button"
+                    onClick={() => toggleTag(t)}
+                    title="Removed from Settings — click to remove it from this note"
+                    className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
+                  >
+                    {t} (removed from list)
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <span className="text-[11px] uppercase tracking-wide text-ink-muted">Linked strategy</span>
+              <select
+                value={linkedStrategy}
+                onChange={(e) => handleLinkedStrategyChange(e.target.value)}
+                className="mt-1.5 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-glow/60 focus:ring-2 focus:ring-glow/20 transition-colors"
+              >
+                <option value="">—</option>
+                {strategyOptions.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.value}
+                  </option>
+                ))}
+                {strategyIsOrphaned && (
+                  <option value={linkedStrategy} style={{ color: "#8a8f98" }}>
+                    {linkedStrategy} (removed from list)
+                  </option>
+                )}
+              </select>
+            </div>
+
+            <LinkedTradesPicker
+              trades={trades}
+              linkedTradeIds={linkedTradeIds}
+              onChange={handleLinkedTradeIdsChange}
+              onOpenTrade={onOpenTrade ? handleOpenTrade : undefined}
+            />
           </div>
 
-          <LinkedTradesPicker
-            trades={trades}
-            linkedTradeIds={linkedTradeIds}
-            onChange={handleLinkedTradeIdsChange}
-            onOpenTrade={onOpenTrade ? handleOpenTrade : undefined}
-          />
+          <NoteEditorErrorBoundary>
+            <NoteEditor
+              content={content}
+              onChange={handleContentChange}
+              placeholder="Start writing…"
+              accountId={selectedAccount?.id ?? null}
+            />
+          </NoteEditorErrorBoundary>
+          </div>
         </div>
-
-        <NoteEditorErrorBoundary>
-          <NoteEditor
-            content={content}
-            onChange={handleContentChange}
-            placeholder="Start writing…"
-            accountId={selectedAccount?.id ?? null}
-          />
-        </NoteEditorErrorBoundary>
-      </Card>
+      </div>
 
       <ConfirmDialog
         open={confirmingDelete}
