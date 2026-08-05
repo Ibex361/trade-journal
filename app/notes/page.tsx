@@ -8,6 +8,7 @@ import { useTradesData } from "@/lib/TradesDataContext";
 import { useTradesPageState } from "@/lib/TradesPageStateContext";
 import { useNotesPageState } from "@/lib/NotesPageStateContext";
 import { fetchNotes, createNote, updateNote, deleteNote, extractFullText, type Note } from "@/lib/notes";
+import { extractImageFileIds, deleteNoteImages } from "@/lib/noteImages";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
 import NotesList from "@/components/notes/NotesList";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
@@ -136,6 +137,10 @@ export default function NotesPage() {
   ) {
     if (!activeNote || saving) return;
     setSaving(true);
+    // Captured before the update, since activeNote re-derives from `notes`
+    // (see the comment above) and would already reflect the new content
+    // by the time we compare below otherwise.
+    const previousContent = activeNote.content;
     const { data, error } = await updateNote(activeNote.id, title, content, tags, linkedTradeIds, linkedStrategy);
     setSaving(false);
     if (error || !data) return;
@@ -148,6 +153,17 @@ export default function NotesPage() {
       const rest = current.filter((n) => n.id !== updated.id);
       return [updated, ...rest];
     });
+    // Phase 4 Part 3: any image that was in the doc before this save but
+    // isn't anymore (deleted by the user while editing, or a whole
+    // paragraph/image removed) has no more references anywhere and its
+    // ImageKit file would otherwise sit there forever. Diffed against the
+    // now-saved content, not the local `content` param, so this can't
+    // fire on a stale comparison if the save itself failed. Fire-and-forget
+    // — doesn't block or affect the save the user is waiting on.
+    const removedFileIds = extractImageFileIds(previousContent).filter(
+      (id) => !extractImageFileIds(content).includes(id)
+    );
+    if (removedFileIds.length > 0) deleteNoteImages(removedFileIds);
   }
 
   async function handleDeleteNote() {
@@ -158,6 +174,11 @@ export default function NotesPage() {
     if (error) return;
     setNotes((current) => current.filter((n) => n.id !== activeNote.id));
     setActiveNoteId(null);
+    // Phase 4 Part 3: the note row is gone, so every image still in its
+    // content is now orphaned — clean all of them up. Best-effort, same
+    // as the save path above.
+    const fileIds = extractImageFileIds(activeNote.content);
+    if (fileIds.length > 0) deleteNoteImages(fileIds);
   }
 
   /**
