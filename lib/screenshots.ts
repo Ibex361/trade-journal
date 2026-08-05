@@ -1,34 +1,11 @@
 import { supabase } from "./supabaseClient";
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
-const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"];
-
-/**
- * True when the browser reported a usable image MIME, or when it reported
- * nothing useful (empty string / octet-stream — common when picking from
- * Android's Files app rather than the gallery) but the filename extension
- * still looks like a supported image. Gallery picks almost always arrive
- * with a clean image/* type; Files-app picks often don't.
- */
-function isAllowedImageFile(file: File): boolean {
-  const type = (file.type || "").toLowerCase().trim();
-  if (ALLOWED_TYPES.includes(type)) return true;
-  // Android Files / some desktop file managers leave type blank or set
-  // application/octet-stream even for real PNGs/JPEGs.
-  if (type === "" || type === "application/octet-stream") {
-    const name = (file.name || "").toLowerCase();
-    return ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext));
-  }
-  return false;
-}
+const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 export function validateScreenshotFile(file: File): string | null {
-  if (!isAllowedImageFile(file)) {
+  if (!ALLOWED_TYPES.includes(file.type)) {
     return "Only PNG, JPG, or WEBP images are supported.";
-  }
-  if (file.size === 0) {
-    return "That file looks empty — try picking it from the gallery instead of Files.";
   }
   if (file.size > MAX_SIZE_BYTES) {
     return "Image must be smaller than 5MB.";
