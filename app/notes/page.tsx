@@ -45,6 +45,14 @@ function applyFilters(notes: Note[], filters: NoteFilters): Note[] {
  * via updateNote and patches the note into local list state (no refetch
  * needed — same "update in place" approach TradesDataContext's mutation
  * paths use). Deleting removes it from local state the same way.
+ *
+ * Phase 5 Part 1: handleSaveNote is now called both by NoteEditPanel's
+ * manual Save button and by its internal debounced autosave — this page
+ * doesn't need to know which, it just tracks `saving`/`saveError` the same
+ * way either way. saveError is new: previously a failed save only logged
+ * to the console and left the user clicking a Save button that quietly did
+ * nothing; now it's surfaced back down so the panel's status label can
+ * show "Save failed" instead of silently discarding the edit.
  */
 export default function NotesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
@@ -59,6 +67,11 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Phase 5 Part 1: whether the most recent save attempt (manual or
+  // autosave) failed, surfaced by NoteEditPanel's status label. Cleared
+  // whenever a different note is opened so a stale error doesn't linger
+  // onto a note that hasn't failed to save.
+  const [saveError, setSaveError] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
 
@@ -70,6 +83,10 @@ export default function NotesPage() {
   // `notes`. Note: this restores *which note was open*, not any unsaved
   // keystrokes typed into it — those still need Save before leaving.
   const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
+
+  useEffect(() => {
+    setSaveError(false);
+  }, [activeNoteId]);
 
   useEffect(() => {
     if (!selectedAccount) {
@@ -150,13 +167,17 @@ export default function NotesPage() {
   ) {
     if (!activeNote || saving) return;
     setSaving(true);
+    setSaveError(false);
     // Captured before the update, since activeNote re-derives from `notes`
     // (see the comment above) and would already reflect the new content
     // by the time we compare below otherwise.
     const previousContent = activeNote.content;
     const { data, error } = await updateNote(activeNote.id, title, content, tags, linkedTradeIds, linkedStrategy);
     setSaving(false);
-    if (error || !data) return;
+    if (error || !data) {
+      setSaveError(true);
+      return;
+    }
     const updated = data as Note;
     // Re-sort to the top on save, matching fetchNotes' updated_at-desc
     // order, rather than leaving a just-edited note stranded wherever it
@@ -233,9 +254,19 @@ export default function NotesPage() {
         <div className="space-y-6">
           {activeNote && (
             <NoteEditPanel
+              // Keyed by note id so switching notes (e.g. clicking a
+              // different card while one is open, which bypasses Close's
+              // dirty guard) remounts this panel instead of reusing the
+              // previous instance's local state — otherwise a debounced
+              // autosave scheduled against note A could fire after note B
+              // is already open and overwrite it with A's content. This
+              // also fixes the same staleness for the manual Save button,
+              // which had the identical latent risk before Phase 5.
+              key={activeNote.id}
               note={activeNote}
               trades={trades}
               saving={saving}
+              saveError={saveError}
               deleting={deleting}
               onSave={handleSaveNote}
               onDelete={handleDeleteNote}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
 import Card from "@/components/shared/Card";
 import Button from "@/components/shared/Button";
@@ -35,11 +35,34 @@ import type { Trade } from "@/lib/trades";
  * Dirty tracking is intentionally simple (title/content/tags/links changed
  * since last save) rather than a full undo-aware diff — good enough to
  * decide whether "Close" should warn.
+ *
+ * Notes Phase 5 Part 1 (debounced autosave + status indicator): every field
+ * change now also schedules an autosave a short pause after the last edit,
+ * via the same onSave callback the manual Save button already used — so
+ * both paths funnel through one runSave(). The Save button is kept as an
+ * explicit "save right now" action (flushes the pending debounce) rather
+ * than removed, since it's cheap to keep and some users will still reach
+ * for it out of habit. A small status label (Saved / Unsaved changes /
+ * Saving… / Save failed) replaces having to infer save state from whether
+ * the Save button happens to be enabled.
+ *
+ * Deliberately NOT touched in this part: the Close/jump-to-trade
+ * window.confirm "unsaved changes" guards below still key off `dirty` the
+ * same as before Part 1. With autosave now saving ~1.5s after the last
+ * keystroke in most cases, those guards will rarely trigger, but closing
+ * (or jumping to a trade) inside that debounce window still can. Rewiring
+ * those flows to flush-and-save instead of ask-to-discard is Phase 5
+ * Part 2's job, along with save-retry-on-failure and any other polish —
+ * kept as a separate part so this autosave mechanism itself lands and gets
+ * used before changing how the surrounding confirm dialogs behave.
  */
+const AUTOSAVE_DELAY_MS = 1500;
+
 export default function NoteEditPanel({
   note,
   trades,
   saving,
+  saveError,
   deleting,
   onSave,
   onDelete,
@@ -49,6 +72,9 @@ export default function NoteEditPanel({
   note: Note;
   trades: Trade[];
   saving: boolean;
+  // True if the most recent save attempt (manual or auto) failed. Reset by
+  // the parent whenever a different note is opened.
+  saveError: boolean;
   deleting: boolean;
   onSave: (title: string, content: JSONContent, tags: string[], linkedTradeIds: string[], linkedStrategy: string | null) => void;
   onDelete: () => void;
@@ -66,6 +92,79 @@ export default function NoteEditPanel({
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [dirty, setDirty] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // Autosave machinery. Field values are mirrored into a ref (updated by
+  // the effect just below, which runs well before the 1.5s debounce could
+  // ever fire) so the debounced save always reads the latest values rather
+  // than whatever was captured in the closure at the moment the timer was
+  // scheduled — plain useState reads inside a setTimeout callback would
+  // otherwise be stale by one keystroke.
+  const fieldsRef = useRef({ title, content, tags, linkedTradeIds, linkedStrategy });
+  useEffect(() => {
+    fieldsRef.current = { title, content, tags, linkedTradeIds, linkedStrategy };
+  }, [title, content, tags, linkedTradeIds, linkedStrategy]);
+
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors the `saving` prop into a ref for the same stale-closure reason
+  // as fieldsRef above.
+  const savingRef = useRef(saving);
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
+  // Set when the debounce elapses while a save is already in flight (e.g.
+  // the manual Save button was clicked right as the timer was about to
+  // fire) — rather than dropping that change, it's picked up as soon as
+  // the in-flight save finishes.
+  const pendingAutosaveRef = useRef(false);
+
+  function buildSavePayload() {
+    const f = fieldsRef.current;
+    return {
+      title: f.title.trim() || "Untitled",
+      content: f.content ?? { type: "doc", content: [{ type: "paragraph" }] },
+      tags: f.tags,
+      linkedTradeIds: f.linkedTradeIds,
+      linkedStrategy: f.linkedStrategy || null,
+    };
+  }
+
+  function runSave() {
+    const payload = buildSavePayload();
+    onSave(payload.title, payload.content, payload.tags, payload.linkedTradeIds, payload.linkedStrategy);
+    setDirty(false);
+  }
+
+  function scheduleAutosave() {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      if (savingRef.current) {
+        pendingAutosaveRef.current = true;
+        return;
+      }
+      runSave();
+    }, AUTOSAVE_DELAY_MS);
+  }
+
+  // Catches up on an autosave that was deferred above because a save was
+  // already in flight when the debounce elapsed.
+  useEffect(() => {
+    if (!saving && pendingAutosaveRef.current) {
+      pendingAutosaveRef.current = false;
+      runSave();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saving]);
+
+  // This component is remounted per note (app/notes/page.tsx keys it by
+  // note.id — see that file's comment), so "switching notes" means this
+  // instance unmounts; clearing any pending timer here stops a debounced
+  // save for note A from ever firing after note B is already open.
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedAccount) return;
@@ -93,37 +192,41 @@ export default function NoteEditPanel({
   function handleTitleChange(value: string) {
     setTitle(value);
     setDirty(true);
+    scheduleAutosave();
   }
 
   function handleContentChange(value: JSONContent) {
     setContent(value);
     setDirty(true);
+    scheduleAutosave();
   }
 
   function toggleTag(value: string) {
     setTags((current) => (current.includes(value) ? current.filter((t) => t !== value) : [...current, value]));
     setDirty(true);
+    scheduleAutosave();
   }
 
   function handleLinkedTradeIdsChange(ids: string[]) {
     setLinkedTradeIds(ids);
     setDirty(true);
+    scheduleAutosave();
   }
 
   function handleLinkedStrategyChange(value: string) {
     setLinkedStrategy(value);
     setDirty(true);
+    scheduleAutosave();
   }
 
+  // Manual "Save" button: saves immediately rather than waiting out
+  // whatever's left of the debounce.
   function handleSave() {
-    onSave(
-      title.trim() || "Untitled",
-      content ?? { type: "doc", content: [{ type: "paragraph" }] },
-      tags,
-      linkedTradeIds,
-      linkedStrategy || null
-    );
-    setDirty(false);
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    runSave();
   }
 
   function handleClose() {
@@ -140,6 +243,26 @@ export default function NoteEditPanel({
     if (dirty && !window.confirm("You have unsaved changes. Open this trade without saving?")) return;
     onOpenTrade?.(t);
   }
+
+  const saveStatus: "saved" | "pending" | "saving" | "error" = saveError
+    ? "error"
+    : saving
+    ? "saving"
+    : dirty
+    ? "pending"
+    : "saved";
+  const saveStatusLabel: Record<typeof saveStatus, string> = {
+    saved: "Saved",
+    pending: "Unsaved changes",
+    saving: "Saving…",
+    error: "Save failed",
+  };
+  const saveStatusClass: Record<typeof saveStatus, string> = {
+    saved: "text-ink-muted",
+    pending: "text-ink-secondary",
+    saving: "text-ink-secondary",
+    error: "text-loss",
+  };
 
   return (
     <>
@@ -163,6 +286,10 @@ export default function NoteEditPanel({
             </Button>
           </div>
         </div>
+
+        <p className={`text-[11px] -mt-2 ${saveStatusClass[saveStatus]}`} aria-live="polite">
+          {saveStatusLabel[saveStatus]}
+        </p>
 
         {(tagOptions.length > 0 || orphanedTags.length > 0) && (
           <div>
