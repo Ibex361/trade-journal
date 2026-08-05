@@ -439,8 +439,18 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         // view of the DOM (NotFoundError on insertBefore). Waiting a frame
         // lets any in-flight DOM/React updates finish first.
         requestAnimationFrame(() => {
+          // The editor can be gone by the time this fires — e.g. if the
+          // component holding it was unmounted while the upload was in
+          // flight (see app/notes/page.tsx's note-fetch effect for one way
+          // that used to happen). Surface it instead of silently no-op'ing,
+          // since the file has already been uploaded to ImageKit at this
+          // point and would otherwise just vanish with no explanation.
+          if (!editor || editor.isDestroyed) {
+            setImageError("Uploaded, but the editor closed before it could be inserted. Please try again.");
+            return;
+          }
           try {
-            editor?.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
+            editor.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
           } catch {
             setImageError("Uploaded, but couldn't insert the image here. Try placing your cursor on its own line and pasting again.");
           }

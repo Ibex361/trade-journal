@@ -98,7 +98,20 @@ export default function NotesPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedAccount]);
+    // Deliberately keyed on the id, not the selectedAccount object itself.
+    // AccountContext hands back a brand-new object every time its accounts
+    // array is refreshed (e.g. on the auth token refresh Supabase fires
+    // when the tab regains visibility after being backgrounded — such as
+    // switching to the Files app to browse for an image to insert into a
+    // note) even when the selected account hasn't actually changed. Keying
+    // on the object was re-running this effect on those spurious refreshes,
+    // which flips `loading` back to true and unmounts/remounts
+    // NoteEditPanel (swapped for NotesSkeleton) mid-edit — destroying the
+    // live Tiptap editor instance and silently dropping any in-flight,
+    // not-yet-saved change (e.g. an image upload that had already
+    // completed and just needed to be inserted into the doc).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAccount?.id]);
 
   const deferredFilters = useDeferredValue(filters);
   const visibleNotes = useMemo(() => applyFilters(notes, deferredFilters), [notes, deferredFilters]);
