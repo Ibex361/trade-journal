@@ -74,15 +74,27 @@ function ToolbarButton({
       title={label}
       className={`inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-md text-sm font-medium transition-colors duration-fast
         disabled:opacity-30 disabled:pointer-events-none
-        ${active ? "bg-glow/15 text-glow" : "text-ink-secondary hover:text-ink-primary hover:bg-surface-2"}`}
+        ${
+          active
+            ? "bg-glow/15 text-glow shadow-[inset_0_0_0_1px_rgba(92,230,200,0.3)]"
+            : "text-ink-secondary hover:text-ink-primary hover:bg-surface-2"
+        }`}
     >
       {children}
     </button>
   );
 }
 
-function Divider() {
-  return <span className="w-px h-5 bg-surface-border mx-1 shrink-0" />;
+// Wraps a related run of buttons in a faint pill so the toolbar reads as
+// distinct groups (text style / headings / lists / insert / history) rather
+// than one undifferentiated row — the thin `Divider` alone wasn't enough
+// visual separation to make the grouping legible at a glance.
+function ToolbarGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-0.5 shrink-0 rounded-lg bg-surface-1/80 border border-surface-border/60 p-0.5">
+      {children}
+    </div>
+  );
 }
 
 function Toolbar({
@@ -114,7 +126,8 @@ function Toolbar({
 
   return (
     <>
-    <div className="flex items-center gap-0.5 flex-wrap">
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <ToolbarGroup>
       <ToolbarButton
         label="Bold"
         active={editor.isActive("bold")}
@@ -158,9 +171,9 @@ function Toolbar({
           </svg>
         </ToolbarButton>
       )}
+      </ToolbarGroup>
 
-      <Divider />
-
+      <ToolbarGroup>
       <ToolbarButton
         label="Heading 1"
         active={editor.isActive("heading", { level: 1 })}
@@ -182,9 +195,9 @@ function Toolbar({
       >
         H3
       </ToolbarButton>
+      </ToolbarGroup>
 
-      <Divider />
-
+      <ToolbarGroup>
       <ToolbarButton
         label="Bullet list"
         active={editor.isActive("bulletList")}
@@ -239,9 +252,9 @@ function Toolbar({
           <path d="M9 18l-6-6 6-6M15 6l6 6-6 6" />
         </svg>
       </ToolbarButton>
+      </ToolbarGroup>
 
-      <Divider />
-
+      <ToolbarGroup>
       {editor.isActive("table") ? (
         <>
           <ToolbarButton label="Add column" onClick={() => editor.chain().focus().addColumnAfter().run()}>
@@ -299,27 +312,32 @@ function Toolbar({
           </svg>
         </ToolbarButton>
       )}
+      </ToolbarGroup>
 
-      <Divider />
-
-      <ToolbarButton
-        label="Undo"
-        disabled={!editor.can().undo()}
-        onClick={() => editor.chain().focus().undo().run()}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-          <path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-2" />
-        </svg>
-      </ToolbarButton>
-      <ToolbarButton
-        label="Redo"
-        disabled={!editor.can().redo()}
-        onClick={() => editor.chain().focus().redo().run()}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-          <path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h2" />
-        </svg>
-      </ToolbarButton>
+      {/* Pushed to the far end with ml-auto and left unboxed — undo/redo are
+          a history utility, not a formatting choice, so they're kept visually
+          distinct from the grouped style/insert clusters rather than reading
+          as just more buttons in the same row. */}
+      <div className="flex items-center gap-0.5 ml-auto shrink-0">
+        <ToolbarButton
+          label="Undo"
+          disabled={!editor.can().undo()}
+          onClick={() => editor.chain().focus().undo().run()}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-2" />
+          </svg>
+        </ToolbarButton>
+        <ToolbarButton
+          label="Redo"
+          disabled={!editor.can().redo()}
+          onClick={() => editor.chain().focus().redo().run()}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h2" />
+          </svg>
+        </ToolbarButton>
+      </div>
     </div>
     <LinkDialog
       open={linkDialogOpen}
