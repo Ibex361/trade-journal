@@ -164,6 +164,56 @@ export default function NoteEditPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saving]);
 
+  // Notes Phase 5 Part 3 (auto-retry on reconnect + offline-aware label):
+  // a save that fails because the connection is down leaves saveError=true
+  // and just sits there — nothing was listening for the network coming
+  // back, so the only thing that ever retried was closing the panel
+  // (handleClose flushes on dirty || saveError) or typing again (which
+  // reschedules the debounce). If neither happened — network drops, comes
+  // back, user isn't actively typing — the note stayed stuck on "Save
+  // failed" until something else happened to call runSave(), which read
+  // as "saving is broken unless I close and reopen the note". This
+  // listens for the browser's `online` event directly and retries right
+  // then, same runSave() the manual button and autosave already use.
+  // Mirrors savingRef below it: reads saveError/saving from refs rather
+  // than the effect's own closure, since `online` can fire at any point
+  // and a plain useState read here would risk retrying with a stale
+  // saveError value from whenever this effect last re-ran.
+  //
+  // isOffline is separate plain state (not a ref) since — unlike
+  // saveErrorRef, only ever read inside a browser-event callback — this
+  // one drives the rendered label directly further down, so it needs to
+  // trigger a re-render when it changes. Initialized from
+  // `navigator.onLine` directly rather than assuming `false`, so a note
+  // opened while already offline shows the right label immediately
+  // instead of waiting for an `offline` event that already fired before
+  // this component mounted.
+  const [isOffline, setIsOffline] = useState(
+    () => typeof navigator !== "undefined" && !navigator.onLine
+  );
+  const saveErrorRef = useRef(saveError);
+  useEffect(() => {
+    saveErrorRef.current = saveError;
+  }, [saveError]);
+  useEffect(() => {
+    function handleOnline() {
+      setIsOffline(false);
+      if (saveErrorRef.current && !savingRef.current) {
+        runSave();
+      }
+    }
+    function handleOffline() {
+      setIsOffline(true);
+    }
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // This component is remounted per note (app/notes/page.tsx keys it by
   // note.id — see that file's comment), so "switching notes" means this
   // instance unmounts; clearing any pending timer here stops a debounced
@@ -266,24 +316,41 @@ export default function NoteEditPanel({
     onOpenTrade?.(t);
   }
 
-  const saveStatus: "saved" | "pending" | "saving" | "error" = saveError
-    ? "error"
-    : saving
-    ? "saving"
-    : dirty
-    ? "pending"
-    : "saved";
+  // "offline" is its own status, not folded into "error": a real save
+  // failure (bad request, server error, etc.) is something tapping
+  // "retry" can act on immediately, but a save failing purely because
+  // navigator.onLine is false has nothing to retry until the browser
+  // itself says the connection is back — the retry-on-`online` effect
+  // above already handles that automatically, so this state is
+  // informational only (not the clickable/underlined treatment "error"
+  // gets). Only shown when isOffline AND there's actually a save to
+  // report on (saveError, or dirty/saving) — otherwise a note with
+  // nothing unsaved would misleadingly flash "Offline" just because the
+  // wifi icon happens to be off, with nothing pending that's actually
+  // affected.
+  const saveStatus: "saved" | "pending" | "saving" | "error" | "offline" =
+    isOffline && (saveError || dirty || saving)
+      ? "offline"
+      : saveError
+      ? "error"
+      : saving
+      ? "saving"
+      : dirty
+      ? "pending"
+      : "saved";
   const saveStatusLabel: Record<typeof saveStatus, string> = {
     saved: "Saved",
     pending: "Unsaved changes",
     saving: "Saving…",
     error: "Save failed",
+    offline: "Offline — will retry",
   };
   const saveStatusClass: Record<typeof saveStatus, string> = {
     saved: "text-ink-muted",
     pending: "text-ink-secondary",
     saving: "text-ink-secondary",
     error: "text-loss",
+    offline: "text-ink-secondary",
   };
 
   const hasLinkedMeta = tags.length > 0 || linkedStrategy !== "" || linkedTradeIds.length > 0;
