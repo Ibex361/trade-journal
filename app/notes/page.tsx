@@ -7,10 +7,21 @@ import { useAccount } from "@/lib/AccountContext";
 import { useTradesData } from "@/lib/TradesDataContext";
 import { useTradesPageState } from "@/lib/TradesPageStateContext";
 import { useNotesPageState } from "@/lib/NotesPageStateContext";
-import { fetchNotes, createNote, updateNote, deleteNote, extractFullText, type Note } from "@/lib/notes";
+import {
+  fetchNotes,
+  createNote,
+  updateNote,
+  deleteNote,
+  extractFullText,
+  applyNoteView,
+  noteViewKey,
+  type Note,
+  type NoteView,
+} from "@/lib/notes";
 import { extractImageFileIds, deleteNoteImages } from "@/lib/noteImages";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
 import NotesList from "@/components/notes/NotesList";
+import NotesSidebar from "@/components/notes/NotesSidebar";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import NoteEditPanel from "@/components/notes/NoteEditPanel";
 import NotesFilterBar, { NoteFilters, isNoteFiltersActive } from "@/components/notes/NotesFilterBar";
@@ -40,6 +51,14 @@ function applyFilters(notes: Note[], filters: NoteFilters): Note[] {
 }
 
 /**
+ * Left-rail smart view (see NotesSidebar) is applied before search/tag
+ * filters, same layering as e.g. Trades' account scope + filter bar:
+ * narrow to the view first, then let NotesFilterBar's search/tag refine
+ * within it. Both operate on the same already-fetched `notes` array —
+ * no separate query per view.
+ */
+
+/**
  * Phase 1c: notes are now fully open/edit/save/delete-able. Clicking a
  * list card or "New note" both open the same NoteEditPanel; saving persists
  * via updateNote and patches the note into local list state (no refetch
@@ -62,7 +81,7 @@ export default function NotesPage() {
   const { trades } = useTradesData();
   const router = useRouter();
   const { setPendingTradeId } = useTradesPageState();
-  const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId } = useNotesPageState();
+  const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId, view, setView } = useNotesPageState();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -87,6 +106,17 @@ export default function NotesPage() {
   useEffect(() => {
     setSaveError(false);
   }, [activeNoteId]);
+
+  function handleSelectView(next: NoteView) {
+    setView(next);
+    // A tag filter left over from a previous view (e.g. still set to
+    // "FOMO" while browsing By strategy) would silently exclude notes the
+    // sidebar count promises are there — clearing it keeps the group's
+    // count and the list in sync. Search text is left alone since it's a
+    // free-text refinement the user typed deliberately, not tied to a
+    // specific group.
+    if (filters.tag) setFilters({ ...filters, tag: "" });
+  }
 
   useEffect(() => {
     if (!selectedAccount) {
@@ -131,7 +161,21 @@ export default function NotesPage() {
   }, [selectedAccount?.id]);
 
   const deferredFilters = useDeferredValue(filters);
-  const visibleNotes = useMemo(() => applyFilters(notes, deferredFilters), [notes, deferredFilters]);
+  const notesInView = useMemo(() => applyNoteView(notes, view), [notes, view]);
+  const visibleNotes = useMemo(() => applyFilters(notesInView, deferredFilters), [notesInView, deferredFilters]);
+
+  // If the selected view is a specific strategy/tag/month and the notes
+  // list changes underneath it (e.g. the last note in that group gets
+  // retagged, or an account switch clears `notes`) such that the group no
+  // longer exists, fall back to "All notes" rather than silently showing
+  // an empty list with no way to tell why. "all"/"linked-trades"/
+  // "untagged" never go stale this way, so only group-keyed views need
+  // the check.
+  useEffect(() => {
+    if (typeof view === "string") return;
+    if (notesInView.length === 0 && notes.length > 0) setView("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notesInView.length, notes.length]);
 
   // Tags actually used on notes but no longer present in Settings would
   // otherwise be impossible to filter by (and easy to lose track of) —
@@ -250,55 +294,56 @@ export default function NotesPage() {
         <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>
         </div>
+      ) : activeNote ? (
+        <NoteEditPanel
+          // Keyed by note id so switching notes (e.g. clicking a
+          // different card while one is open, which bypasses Close's
+          // dirty guard) remounts this panel instead of reusing the
+          // previous instance's local state — otherwise a debounced
+          // autosave scheduled against note A could fire after note B
+          // is already open and overwrite it with A's content. This
+          // also fixes the same staleness for the manual Save button,
+          // which had the identical latent risk before Phase 5.
+          key={activeNote.id}
+          note={activeNote}
+          trades={trades}
+          saving={saving}
+          saveError={saveError}
+          deleting={deleting}
+          onSave={handleSaveNote}
+          onDelete={handleDeleteNote}
+          onClose={() => setActiveNoteId(null)}
+          onOpenTrade={handleOpenTrade}
+        />
+      ) : notes.length === 0 ? (
+        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+          <p className="text-ink-muted text-sm">No notes yet.</p>
+        </div>
       ) : (
-        <div className="space-y-6">
-          {activeNote && (
-            <NoteEditPanel
-              // Keyed by note id so switching notes (e.g. clicking a
-              // different card while one is open, which bypasses Close's
-              // dirty guard) remounts this panel instead of reusing the
-              // previous instance's local state — otherwise a debounced
-              // autosave scheduled against note A could fire after note B
-              // is already open and overwrite it with A's content. This
-              // also fixes the same staleness for the manual Save button,
-              // which had the identical latent risk before Phase 5.
-              key={activeNote.id}
-              note={activeNote}
-              trades={trades}
-              saving={saving}
-              saveError={saveError}
-              deleting={deleting}
-              onSave={handleSaveNote}
-              onDelete={handleDeleteNote}
-              onClose={() => setActiveNoteId(null)}
-              onOpenTrade={handleOpenTrade}
-            />
-          )}
-          {notes.length === 0 ? (
-            <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
-              <p className="text-ink-muted text-sm">No notes yet.</p>
-            </div>
-          ) : (
-            <>
-              <NotesFilterBar filters={filters} onChange={setFilters} availableTags={availableTags} />
-              {visibleNotes.length === 0 ? (
-                <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center space-y-2">
-                  <p className="text-ink-muted text-sm">No notes match your filters.</p>
-                  {isNoteFiltersActive(filters) && (
-                    <button
-                      type="button"
-                      onClick={resetFilters}
-                      className="text-xs text-glow hover:underline"
-                    >
-                      Clear filters
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <NotesList notes={visibleNotes} onSelectNote={handleSelectNote} />
-              )}
-            </>
-          )}
+        // Sidebar + list side by side on desktop; sidebar stacks above the
+        // list on narrow screens (same md: breakpoint the rest of the app
+        // uses for its own responsive layout switches).
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+          <NotesSidebar notes={notes} view={view} onSelectView={handleSelectView} />
+          <div className="flex-1 min-w-0 w-full space-y-6">
+            <NotesFilterBar filters={filters} onChange={setFilters} availableTags={availableTags} />
+            {visibleNotes.length === 0 ? (
+              <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center space-y-2">
+                <p className="text-ink-muted text-sm">No notes match your filters.</p>
+                {isNoteFiltersActive(filters) && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="text-xs text-glow hover:underline"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            ) : (
+              <NotesList notes={visibleNotes} onSelectNote={handleSelectNote} />
+            )}
+          </div>
         </div>
       )}
     </div>
