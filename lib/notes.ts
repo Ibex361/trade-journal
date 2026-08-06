@@ -118,6 +118,13 @@ export async function deleteNote(id: string) {
   return result;
 }
 
+/** Deletes multiple notes in a single request — used by the Notes page's bulk-delete action. */
+export async function deleteNotes(ids: string[]) {
+  const result = await supabase.from("notes").delete().in("id", ids);
+  if (result.error) console.error("deleteNotes failed:", result.error);
+  return result;
+}
+
 /**
  * Walks a Tiptap JSON document and concatenates every text node into one
  * plain-text string, with no length cap — used where the full body matters

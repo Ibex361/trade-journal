@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/react";
 import { useAccount } from "@/lib/AccountContext";
@@ -12,6 +12,7 @@ import {
   createNote,
   updateNote,
   deleteNote,
+  deleteNotes,
   extractFullText,
   getUsedStrategies,
   type Note,
@@ -101,6 +102,14 @@ export default function NotesPage() {
   const [saveError, setSaveError] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
 
   // Which note is open lives in NotesPageStateContext (see the comment
   // there) rather than local state, so navigating away mid-edit and back
@@ -159,6 +168,24 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
+  useEffect(() => {
+    exitSelectionMode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
+  // Lets a keyboard user back out of selection mode quickly without hunting
+  // for the Cancel button — same convention as the Trades page.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectionMode((prev) => {
+        if (prev) setSelectedIds(new Set());
+        return false;
+      });
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const deferredFilters = useDeferredValue(filters);
   const visibleNotes = useMemo(() => applyFilters(notes, deferredFilters), [notes, deferredFilters]);
 
@@ -190,6 +217,42 @@ export default function NotesPage() {
 
   function handleSelectNote(note: Note) {
     setActiveNoteId(note.id);
+  }
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allCurrentlySelected =
+        visibleNotes.length > 0 && visibleNotes.every((n) => prev.has(n.id));
+      return allCurrentlySelected ? new Set() : new Set(visibleNotes.map((n) => n.id));
+    });
+  }, [visibleNotes]);
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    setBulkDeleteError(null);
+    const targets = notes.filter((n) => ids.includes(n.id));
+    const { error } = await deleteNotes(ids);
+    if (error) {
+      setBulkDeleteError("Couldn't delete the selected notes. Please try again.");
+      return;
+    }
+    // Same orphaned-image cleanup handleDeleteNote does for a single note,
+    // fire-and-forget, applied across every deleted note's content.
+    targets.forEach((n) => {
+      const fileIds = extractImageFileIds(n.content);
+      if (fileIds.length > 0) deleteNoteImages(fileIds);
+    });
+    setNotes((current) => current.filter((n) => !ids.includes(n.id)));
+    exitSelectionMode();
   }
 
   async function handleSaveNote(
@@ -268,15 +331,61 @@ export default function NotesPage() {
         <div>
           <h1 className="font-display text-2xl font-medium tracking-tight">Notes</h1>
           <p className="text-ink-secondary text-sm mt-1">
-            {selectedAccount ? `Diary entries for ${selectedAccount.name}` : "Your trading diary."}
+            {selectionMode
+              ? `${selectedIds.size} selected`
+              : selectedAccount
+              ? `Diary entries for ${selectedAccount.name}`
+              : "Your trading diary."}
           </p>
         </div>
-        {selectedAccount && (
-          <Button size="sm" onClick={handleNewNote} disabled={creating}>
-            {creating ? "Creating…" : "New note"}
-          </Button>
+        {selectionMode ? (
+          <button
+            onClick={exitSelectionMode}
+            className="shrink-0 text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border"
+          >
+            Cancel
+          </button>
+        ) : (
+          selectedAccount && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setSelectionMode(true)}
+                disabled={notes.length === 0}
+                className="text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border disabled:opacity-50"
+              >
+                Select
+              </button>
+              <Button size="sm" onClick={handleNewNote} disabled={creating}>
+                {creating ? "Creating…" : "New note"}
+              </Button>
+            </div>
+          )
         )}
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-4 bg-surface-1 border border-surface-border rounded-card px-4 py-3">
+          <span className="text-sm text-ink-secondary">{selectedIds.size} note{selectedIds.size === 1 ? "" : "s"} selected</span>
+          <button
+            onClick={handleBulkDelete}
+            className="text-xs text-loss font-medium hover:underline"
+          >
+            Delete selected
+          </button>
+        </div>
+      )}
+
+      {bulkDeleteError && (
+        <div className="rounded-md border border-loss/30 bg-loss/10 px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-xs text-loss">{bulkDeleteError}</p>
+          <button
+            onClick={() => setBulkDeleteError(null)}
+            className="text-xs text-ink-muted hover:text-ink-primary shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {accountLoading || loading ? (
         <NotesSkeleton />
@@ -327,7 +436,14 @@ export default function NotesPage() {
               )}
             </div>
           ) : (
-            <NotesList notes={visibleNotes} onSelectNote={handleSelectNote} />
+            <NotesList
+              notes={visibleNotes}
+              onSelectNote={handleSelectNote}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
+            />
           )}
         </div>
       )}
