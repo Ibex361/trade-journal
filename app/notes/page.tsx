@@ -17,7 +17,7 @@ import {
   type Note,
 } from "@/lib/notes";
 import { extractImageFileIds, deleteNoteImages } from "@/lib/noteImages";
-import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
+import { fetchTagSettings, type TagSettingItem } from "@/lib/tagSettings";
 import NotesList from "@/components/notes/NotesList";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import NoteEditPanel from "@/components/notes/NoteEditPanel";
@@ -100,7 +100,7 @@ export default function NotesPage() {
   // onto a note that hasn't failed to save.
   const [saveError, setSaveError] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
+  const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
 
   // Which note is open lives in NotesPageStateContext (see the comment
   // there) rather than local state, so navigating away mid-edit and back
@@ -115,13 +115,15 @@ export default function NotesPage() {
     setSaveError(false);
   }, [activeNoteId]);
 
+  // Tag setting migration part 2: tags now come from the dedicated
+  // tag_settings table instead of dropdown_settings' "tag" category.
   useEffect(() => {
     if (!selectedAccount) {
-      setDropdowns([]);
+      setTagSettings([]);
       return;
     }
-    fetchDropdownItems(selectedAccount.id).then(({ data }) => {
-      if (data) setDropdowns(data as DropdownItem[]);
+    fetchTagSettings(selectedAccount.id).then(({ data }) => {
+      if (data) setTagSettings(data as TagSettingItem[]);
     });
   }, [selectedAccount?.id]);
 
@@ -165,10 +167,10 @@ export default function NotesPage() {
   // union them with the active dropdown list so every tag in use stays
   // findable, same approach app/trades/page.tsx uses for its tag filter.
   const availableTags = useMemo(() => {
-    const active = dropdowns.filter((d) => d.category === "tag").map((d) => d.value);
+    const active = tagSettings.map((t) => t.value);
     const used = notes.flatMap((n) => n.tags ?? []);
     return Array.from(new Set([...active, ...used])).sort();
-  }, [dropdowns, notes]);
+  }, [tagSettings, notes]);
 
   // Strategy filter options: only strategies actually present on a note,
   // not every strategy that exists elsewhere in the app (Trades/Settings) —

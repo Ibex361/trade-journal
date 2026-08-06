@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
+import { fetchTagSettings, TagSettingItem } from "@/lib/tagSettings";
 import { createTrade, updateTrade, Trade, TradeInput, Direction, ExitReason, StopMovement } from "@/lib/trades";
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
@@ -189,6 +190,7 @@ export default function TradeFormPanel({
   const [pendingAction, setPendingAction] = useState<"close" | "diary">("close");
   const pendingDiaryTradeRef = useRef<Trade | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
+  const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -271,6 +273,16 @@ export default function TradeFormPanel({
     if (!selectedAccount) return;
     fetchDropdownItems(selectedAccount.id).then(({ data }) => {
       if (data) setDropdowns(data as DropdownItem[]);
+    });
+  }, [selectedAccount?.id]);
+
+  // Tag setting migration part 2: tag suggestions now come from the
+  // dedicated tag_settings table instead of dropdown_settings' "tag"
+  // category (see lib/tagSettings.ts).
+  useEffect(() => {
+    if (!selectedAccount) return;
+    fetchTagSettings(selectedAccount.id).then(({ data }) => {
+      if (data) setTagSettings(data as TagSettingItem[]);
     });
   }, [selectedAccount?.id]);
 
@@ -984,7 +996,7 @@ export default function TradeFormPanel({
             <TagInput
               value={form.tags}
               onChange={(tags) => set("tags", tags)}
-              suggestions={optionsFor("tag").map((o) => o.value)}
+              suggestions={tagSettings.map((o) => o.value)}
               chipClassName="bg-brass/15 border-brass text-brass"
             />
           </label>

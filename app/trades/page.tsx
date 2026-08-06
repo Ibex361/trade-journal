@@ -8,6 +8,7 @@ import { useNotesPageState } from "@/lib/NotesPageStateContext";
 import { deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
 import { useTradesData } from "@/lib/TradesDataContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
+import { fetchTagSettings, TagSettingItem } from "@/lib/tagSettings";
 import { deleteScreenshot } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
@@ -71,6 +72,7 @@ export default function TradesPage() {
   const [openingDiaryId, setOpeningDiaryId] = useState<string | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [dropdownsLoading, setDropdownsLoading] = useState(true);
+  const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
   const loading = tradesLoading || dropdownsLoading;
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
@@ -112,6 +114,18 @@ export default function TradesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
+  // Tag setting migration part 2: tags now come from the dedicated
+  // tag_settings table instead of dropdown_settings' "tag" category.
+  useEffect(() => {
+    if (!selectedAccount) {
+      setTagSettings([]);
+      return;
+    }
+    fetchTagSettings(selectedAccount.id).then(({ data }) => {
+      if (data) setTagSettings(data as TagSettingItem[]);
+    });
+  }, [selectedAccount?.id]);
+
   useEffect(() => {
     exitSelectionMode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,10 +155,10 @@ export default function TradesPage() {
   // otherwise be impossible to filter by (and easy to lose track of) —
   // union them with the active list so every tag in use stays findable.
   const availableTags = useMemo(() => {
-    const active = dropdowns.filter((d) => d.category === "tag").map((d) => d.value);
+    const active = tagSettings.map((t) => t.value);
     const used = trades.flatMap((t) => t.tags ?? []);
     return Array.from(new Set([...active, ...used])).sort();
-  }, [dropdowns, trades]);
+  }, [tagSettings, trades]);
 
   function openNew() {
     setEditingTrade(null);
@@ -352,7 +366,7 @@ export default function TradesPage() {
       {selectedIds.size > 0 && (
         <BulkActionsBar
           count={selectedIds.size}
-          tagOptions={dropdowns.filter((d) => d.category === "tag").sort((a, b) => a.sort_order - b.sort_order)}
+          tagOptions={tagSettings}
           removableTags={removableTags}
           onAddTag={handleBulkAddTag}
           onRemoveTag={handleBulkRemoveTag}

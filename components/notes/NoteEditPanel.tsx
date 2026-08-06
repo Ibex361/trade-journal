@@ -11,6 +11,7 @@ import NoteEditorErrorBoundary from "@/components/notes/NoteEditorErrorBoundary"
 import LinkedTradesPicker from "@/components/notes/LinkedTradesPicker";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
+import { fetchTagSettings, type TagSettingItem } from "@/lib/tagSettings";
 import type { Note } from "@/lib/notes";
 import type { Trade } from "@/lib/trades";
 
@@ -21,10 +22,12 @@ import type { Trade } from "@/lib/trades";
  * Phase 3 part 1 added a tag picker sourced from the account-wide "tag"
  * dropdown vocabulary (Settings → Tags). Later reworked to freeform typed
  * tags via TagInput (same component TradeFormPanel uses) — any text is a
- * valid tag now, no toggling pre-set chips. Still fetches dropdown items
- * independently (TradeFormPanel does the same) for the other selects
- * (linked strategy) on this panel, rather than threading them down from
- * app/notes/page.tsx.
+ * valid tag now, no toggling pre-set chips. Tag setting migration part 2
+ * switched tag suggestions to the dedicated tag_settings table (see
+ * lib/tagSettings.ts) instead of dropdown_settings' "tag" category. Still
+ * fetches both dropdown items and tag settings independently (TradeFormPanel
+ * does the same) rather than threading them down from app/notes/page.tsx —
+ * dropdown items remain needed here for the "Linked strategy" select.
  *
  * Phase 3 part 3 adds optional linking: a "Linked strategy" select (same
  * `renderOptions`-style orphan handling TradeFormPanel uses for its own
@@ -94,6 +97,7 @@ export default function NoteEditPanel({
   const [linkedTradeIds, setLinkedTradeIds] = useState<string[]>(note.linked_trade_ids ?? []);
   const [linkedStrategy, setLinkedStrategy] = useState<string>(note.linked_strategy ?? "");
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
+  const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
   const [dirty, setDirty] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Details (tags/linked strategy/linked trades) start collapsed so
@@ -231,6 +235,16 @@ export default function NoteEditPanel({
     if (!selectedAccount) return;
     fetchDropdownItems(selectedAccount.id).then(({ data }) => {
       if (data) setDropdowns(data as DropdownItem[]);
+    });
+  }, [selectedAccount?.id]);
+
+  // Tag setting migration part 2: tag suggestions now come from the
+  // dedicated tag_settings table instead of dropdown_settings' "tag"
+  // category (see lib/tagSettings.ts).
+  useEffect(() => {
+    if (!selectedAccount) return;
+    fetchTagSettings(selectedAccount.id).then(({ data }) => {
+      if (data) setTagSettings(data as TagSettingItem[]);
     });
   }, [selectedAccount?.id]);
 
@@ -427,10 +441,7 @@ export default function NoteEditPanel({
                   <TagInput
                     value={tags}
                     onChange={handleTagsChange}
-                    suggestions={dropdowns
-                      .filter((d) => d.category === "tag")
-                      .sort((a, b) => a.sort_order - b.sort_order)
-                      .map((o) => o.value)}
+                    suggestions={tagSettings.map((o) => o.value)}
                     chipClassName="bg-glow/15 border-glow text-glow"
                   />
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DropdownItem } from "@/lib/dropdownSettings";
+import { TagSettingItem } from "@/lib/tagSettings";
 
 function Chip({
   children,
@@ -43,7 +43,7 @@ export default function BulkActionsBar({
   onClear,
 }: {
   count: number;
-  tagOptions: DropdownItem[];
+  tagOptions: TagSettingItem[];
   removableTags: string[];
   onAddTag: (tag: string) => Promise<void>;
   onRemoveTag: (tag: string) => Promise<void>;
