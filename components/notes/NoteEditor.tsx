@@ -14,12 +14,12 @@ import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import type { JSONContent } from "@tiptap/react";
 import BubbleToolbar from "./BubbleToolbar";
-import LinkDialog from "./LinkDialog";
 import SlashCommand from "./slashCommand";
 import NoteImage from "./NoteImage";
 import ImageLightbox from "./ImageLightbox";
 import { Toolbar as ToolbarRoot, ToolbarGroup, ToolbarSeparator, ToolbarButton } from "./Toolbar";
 import ColorHighlightPopover from "./ColorHighlightPopover";
+import LinkPopover from "./LinkPopover";
 import { uploadNoteImage } from "@/lib/noteImages";
 import { validateScreenshotFile } from "@/lib/screenshots";
 
@@ -68,26 +68,7 @@ function Toolbar({
   onInsertImageClick?: () => void;
   imagesEnabled?: boolean;
 }) {
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-
-  function handleSetLink() {
-    // Opening focuses the dialog's input, which would collapse the
-    // selection before a prompt-style synchronous read could use it — so
-    // the edit itself happens in handleLinkSubmit, on submit.
-    setLinkDialogOpen(true);
-  }
-
-  function handleLinkSubmit(url: string) {
-    setLinkDialogOpen(false);
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }
-
   return (
-    <>
     <ToolbarRoot>
       <ToolbarGroup>
       <ToolbarButton
@@ -233,13 +214,7 @@ function Toolbar({
         <span className="line-through">S</span>
       </ToolbarButton>
       <ColorHighlightPopover editor={editor} />
-      <ToolbarButton label="Link" active={editor.isActive("link")} onClick={handleSetLink}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-          <path d="M9 15l6-6" />
-          <path d="M11 6l1-1a3.5 3.5 0 015 5l-1 1" />
-          <path d="M13 18l-1 1a3.5 3.5 0 01-5-5l1-1" />
-        </svg>
-      </ToolbarButton>
+      <LinkPopover editor={editor} />
       {imagesEnabled && (
         <ToolbarButton label="Insert image" onClick={() => onInsertImageClick?.()}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
@@ -313,13 +288,6 @@ function Toolbar({
       )}
       </ToolbarGroup>
     </ToolbarRoot>
-    <LinkDialog
-      open={linkDialogOpen}
-      initialUrl={editor.getAttributes("link").href as string | undefined}
-      onSubmit={handleLinkSubmit}
-      onCancel={() => setLinkDialogOpen(false)}
-    />
-    </>
   );
 }
 

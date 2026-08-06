@@ -65,3 +65,57 @@ export function isNodeTypeSelected(editor: Editor | null, types: string[] = []):
   }
   return false;
 }
+
+// --- Added for the Link popover port ---
+
+type ProtocolOptions = { scheme: string; optionalSlashes?: boolean };
+type ProtocolConfig = Array<ProtocolOptions | string>;
+
+// eslint-disable-next-line no-control-regex
+const ATTR_WHITESPACE = /[\u0000-\u0020\u00A0\u1680\u180E\u2000-\u2029\u205F\u3000]/g;
+
+/**
+ * True if a URL's protocol is one of a fixed allow-list (http/https/ftp/
+ * mailto/tel/etc., extendable via `protocols`) or the URL has no protocol
+ * at all (a relative link). Ported as-is from Tiptap's real
+ * lib/tiptap-utils.ts — this is the actual check their Link extension
+ * uses to reject e.g. `javascript:` URLs.
+ */
+export function isAllowedUri(uri: string | undefined, protocols?: ProtocolConfig): boolean {
+  const allowedProtocols: string[] = ["http", "https", "ftp", "ftps", "mailto", "tel", "callto", "sms", "cid", "xmpp"];
+  if (protocols) {
+    protocols.forEach((protocol) => {
+      const nextProtocol = typeof protocol === "string" ? protocol : protocol.scheme;
+      if (nextProtocol) allowedProtocols.push(nextProtocol);
+    });
+  }
+  return Boolean(
+    !uri ||
+      uri
+        .replace(ATTR_WHITESPACE, "")
+        .match(
+          new RegExp(
+            // eslint-disable-next-line no-useless-escape
+            `^(?:(?:${allowedProtocols.join("|")}):|[^a-z]|[a-z0-9+.\-]+(?:[^a-z+.\-:]|$))`,
+            "i"
+          )
+        )
+  );
+}
+
+/**
+ * Resolves `inputUrl` against `baseUrl` and returns it only if the result
+ * passes `isAllowedUri`; otherwise returns "#" (a safe, inert href) rather
+ * than a possibly-malicious URL. Used before `window.open`-ing a
+ * user-typed link, so pasting `javascript:...` into the Link popover
+ * can't execute anything.
+ */
+export function sanitizeUrl(inputUrl: string, baseUrl: string, protocols?: ProtocolConfig): string {
+  try {
+    const url = new URL(inputUrl, baseUrl);
+    if (isAllowedUri(url.href, protocols)) return url.href;
+  } catch {
+    // Invalid URL — fall through to "#"
+  }
+  return "#";
+}
