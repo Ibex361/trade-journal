@@ -18,7 +18,8 @@ import LinkDialog from "./LinkDialog";
 import SlashCommand from "./slashCommand";
 import NoteImage from "./NoteImage";
 import ImageLightbox from "./ImageLightbox";
-import { Toolbar as ToolbarRoot, ToolbarGroup, ToolbarSeparator } from "./Toolbar";
+import { Toolbar as ToolbarRoot, ToolbarGroup, ToolbarSeparator, ToolbarButton } from "./Toolbar";
+import ColorHighlightPopover from "./ColorHighlightPopover";
 import { uploadNoteImage } from "@/lib/noteImages";
 import { validateScreenshotFile } from "@/lib/screenshots";
 
@@ -53,41 +54,10 @@ type NoteEditorProps = {
   accountId?: string | null;
 };
 
-function ToolbarButton({
-  onClick,
-  active,
-  disabled,
-  label,
-  children,
-}: {
-  onClick: () => void;
-  active?: boolean;
-  disabled?: boolean;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className={`inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-md text-sm font-medium transition-colors duration-fast shrink-0
-        disabled:opacity-30 disabled:pointer-events-none
-        ${
-          active
-            ? "bg-glow/15 text-glow shadow-[inset_0_0_0_1px_rgba(92,230,200,0.3)]"
-            : "text-ink-secondary hover:text-ink-primary hover:bg-surface-2"
-        }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// (Divider/grouping is now handled by the Toolbar primitives imported
-// above — see Toolbar.tsx.)
+// ToolbarButton now lives in ./Toolbar (exported alongside ToolbarGroup/
+// ToolbarSeparator) so the Color highlight popover can reuse it as a real
+// ref-forwarding PopoverTrigger target. Divider/grouping is likewise
+// handled by the Toolbar primitives imported above.
 
 function Toolbar({
   editor,
@@ -262,12 +232,7 @@ function Toolbar({
       >
         <span className="line-through">S</span>
       </ToolbarButton>
-      <ToolbarButton label="Highlight" active={editor.isActive("highlight")} onClick={() => editor.chain().focus().toggleHighlight().run()}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-          <path d="M9 11l6-6 4 4-6 6H9v-4z" />
-          <path d="M5 21l3-3" />
-        </svg>
-      </ToolbarButton>
+      <ColorHighlightPopover editor={editor} />
       <ToolbarButton label="Link" active={editor.isActive("link")} onClick={handleSetLink}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
           <path d="M9 15l6-6" />
@@ -393,7 +358,7 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         autolink: true,
         HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
       }),
-      Highlight,
+      Highlight.configure({ multicolor: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Table.configure({ resizable: false }),

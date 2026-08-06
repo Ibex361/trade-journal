@@ -180,3 +180,47 @@ ToolbarSeparator.displayName = "ToolbarSeparator";
 export function Spacer() {
   return <div className="flex-1" />;
 }
+
+// Moved here (from a private, non-exported copy inside NoteEditor.tsx) so
+// the Color highlight popover can reuse it as a PopoverTrigger's asChild
+// target — that needs a real forwarded ref to attach to the underlying
+// <button>, which the original NoteEditor.tsx copy didn't provide. Same
+// visual treatment and required-onClick shape as before; every one of
+// NoteEditor's 22 existing call sites is unaffected. Extra DOM props are
+// spread through so a Radix trigger can inject its own onClick/aria/data-*
+// attributes alongside this component's own.
+export const ToolbarButton = React.forwardRef<
+  HTMLButtonElement,
+  {
+    onClick: () => void;
+    active?: boolean;
+    disabled?: boolean;
+    label: string;
+    children: React.ReactNode;
+  } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "disabled" | "children">
+>(({ onClick, active, disabled, label, children, className, ...rest }, ref) => {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={[
+        "inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-md text-sm font-medium transition-colors duration-fast shrink-0",
+        "disabled:opacity-30 disabled:pointer-events-none",
+        active
+          ? "bg-glow/15 text-glow shadow-[inset_0_0_0_1px_rgba(92,230,200,0.3)]"
+          : "text-ink-secondary hover:text-ink-primary hover:bg-surface-2",
+        className ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+});
+ToolbarButton.displayName = "ToolbarButton";

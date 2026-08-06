@@ -21,6 +21,22 @@
   --duration-fast: 150ms;
   --duration-base: 250ms;
   --duration-slow: 400ms;
+
+  /*
+   * Highlight color palette — adapted from Tiptap's own UI Components
+   * reference values (--tt-color-highlight-*, apps/web/src/styles/
+   * _variables.scss, dark-mode set), retuned for this app's near-black
+   * "Cinematic Depth" backdrop rather than their light-charcoal dark
+   * theme. Kept to 5 of their 10 (yellow/green/blue/purple/red), matching
+   * their own Simple Editor template's default subset — gray/brown/
+   * orange/pink/default are real colors in their source but not part of
+   * the template's actual shipped picker.
+   */
+  --highlight-yellow: #6b6524;
+  --highlight-green: #2f5d43;
+  --highlight-blue: #2c4f66;
+  --highlight-purple: #4a3566;
+  --highlight-red: #6b2f3a;
 }
 
 html {
