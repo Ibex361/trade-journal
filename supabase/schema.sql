@@ -20,11 +20,14 @@ create table accounts (
   created_at timestamptz not null default now()
 );
 
--- Dropdown/reference lists, scoped per account
+-- Dropdown/reference lists, scoped per account. Tags are NOT part of this
+-- table — they live in the dedicated tag_settings table (see
+-- phase12_tag_settings_migration.sql), a freeform per-account vocabulary
+-- shared by trades and notes rather than a fixed reference list.
 create table dropdown_settings (
   id uuid primary key default uuid_generate_v4(),
   account_id uuid not null references accounts(id) on delete cascade,
-  category text not null check (category in ('asset_class', 'strategy', 'session', 'emotion', 'tag')),
+  category text not null check (category in ('asset_class', 'strategy', 'session', 'emotion')),
   value text not null,
   sort_order int not null default 0,
   created_at timestamptz not null default now()

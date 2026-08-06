@@ -15,9 +15,11 @@ import SettingsCard from "./SettingsCard";
 
 // "tag" intentionally excluded — tag management now lives in the
 // dedicated TagSettingCard ("Tag setting"), backed by tag_settings
-// instead of this generic dropdown_settings category. The 'tag' rows
-// still exist in dropdown_settings for now (untouched, unused by this
-// tab) until part 2 switches remaining consumers over and drops them.
+// instead of this generic dropdown_settings category. Tag setting
+// migration part 2 finished switching all consumers over and dropped
+// the old 'tag' rows/category from dropdown_settings entirely (see
+// phase12b_remove_tag_dropdown_category.sql) — it's no longer a
+// DropdownCategory member at all.
 const CATEGORIES: { key: DropdownCategory; label: string }[] = [
   { key: "asset_class", label: "Asset class" },
   { key: "strategy", label: "Strategy" },

@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type DropdownCategory = "asset_class" | "strategy" | "session" | "emotion" | "tag";
+export type DropdownCategory = "asset_class" | "strategy" | "session" | "emotion";
 
 export type DropdownItem = {
   id: string;
@@ -10,10 +10,9 @@ export type DropdownItem = {
   sort_order: number;
 };
 
-// Starter values for every new account. "tag" is deliberately excluded —
-// tags are freeform per-account labels, not a fixed reference list, so a
-// new account should start with an empty tag list. Since Notes Phase 3
-// part 1, this same "tag" vocabulary is shared by both trades and notes.
+// Starter values for every new account. Tags are managed separately via
+// tag_settings (see lib/tagSettings.ts) — freeform per-account labels
+// shared by both trades and notes — so they aren't seeded here.
 export const DEFAULT_DROPDOWN_ITEMS: { category: DropdownCategory; value: string }[] = [
   { category: "asset_class", value: "Forex" },
   { category: "asset_class", value: "Indices" },
@@ -75,44 +74,28 @@ export async function deleteDropdownItem(id: string) {
 }
 
 /**
- * How many trades/notes on this account currently have this value set, for
- * the given category — used to warn before deleting a dropdown option
- * that's still in use. "tag" is stored as an array column (on both trades
- * and, since Notes Phase 3 part 1, notes too — they share one account-wide
- * tag vocabulary), so it needs a containment check instead of a plain
- * equality match, and for "tag" specifically the count spans both tables.
+ * How many trades currently have this value set, for the given category —
+ * used to warn before deleting a dropdown option that's still in use.
+ * Tag usage counting lives separately in lib/tagSettings.ts
+ * (getTagUsageCount), since tags are no longer a dropdown_settings
+ * category — see phase12b_remove_tag_dropdown_category.sql.
  */
 export async function getDropdownItemUsageCount(
   accountId: string,
   category: DropdownCategory,
   value: string
 ): Promise<number> {
-  let tradesQuery = supabase
+  const { count, error } = await supabase
     .from("trades")
     .select("id", { count: "exact", head: true })
-    .eq("account_id", accountId);
-
-  tradesQuery = category === "tag" ? tradesQuery.contains("tags", [value]) : tradesQuery.eq(category, value);
-
-  const { count: tradesCount, error: tradesError } = await tradesQuery;
-  if (tradesError) {
-    console.error("getDropdownItemUsageCount (trades) failed:", tradesError);
-  }
-
-  if (category !== "tag") {
-    return tradesCount ?? 0;
-  }
-
-  const { count: notesCount, error: notesError } = await supabase
-    .from("notes")
-    .select("id", { count: "exact", head: true })
     .eq("account_id", accountId)
-    .contains("tags", [value]);
-  if (notesError) {
-    console.error("getDropdownItemUsageCount (notes) failed:", notesError);
+    .eq(category, value);
+
+  if (error) {
+    console.error("getDropdownItemUsageCount failed:", error);
   }
 
-  return (tradesCount ?? 0) + (notesCount ?? 0);
+  return count ?? 0;
 }
 
 export async function reorderDropdownItem(id: string, newSortOrder: number) {
