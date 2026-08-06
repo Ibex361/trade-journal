@@ -3,7 +3,6 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { NoteFilters, EMPTY_NOTE_FILTERS } from "@/components/notes/NotesFilterBar";
-import type { NoteView } from "@/lib/notes";
 
 type NotesPageStateContextType = {
   filters: NoteFilters;
@@ -11,12 +10,6 @@ type NotesPageStateContextType = {
   resetFilters: () => void;
   activeNoteId: string | null;
   setActiveNoteId: (id: string | null) => void;
-  // Left-rail smart view (All notes / Linked to trades / Untagged / a
-  // specific strategy, tag, or month) — persisted here for the same reason
-  // filters/activeNoteId are: the Notes page component unmounts on
-  // navigation, this provider doesn't.
-  view: NoteView;
-  setView: (view: NoteView) => void;
 };
 
 const NotesPageStateContext = createContext<NotesPageStateContextType | null>(null);
@@ -37,7 +30,6 @@ export function NotesPageStateProvider({ children }: { children: ReactNode }) {
   const { selectedAccount } = useAccount();
   const [filters, setFilters] = useState<NoteFilters>(EMPTY_NOTE_FILTERS);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  const [view, setView] = useState<NoteView>("all");
 
   // Filters/active note should reset when the user actually switches
   // accounts, but not just because the Notes page happens to remount (e.g.
@@ -52,7 +44,6 @@ export function NotesPageStateProvider({ children }: { children: ReactNode }) {
       prevAccountId.current = selectedAccount?.id;
       setFilters(EMPTY_NOTE_FILTERS);
       setActiveNoteId(null);
-      setView("all");
     }
   }, [selectedAccount?.id]);
 
@@ -62,7 +53,7 @@ export function NotesPageStateProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotesPageStateContext.Provider
-      value={{ filters, setFilters, resetFilters, activeNoteId, setActiveNoteId, view, setView }}
+      value={{ filters, setFilters, resetFilters, activeNoteId, setActiveNoteId }}
     >
       {children}
     </NotesPageStateContext.Provider>

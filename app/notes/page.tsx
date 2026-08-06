@@ -13,30 +13,32 @@ import {
   updateNote,
   deleteNote,
   extractFullText,
-  applyNoteView,
-  noteViewKey,
+  getUsedStrategies,
   type Note,
-  type NoteView,
 } from "@/lib/notes";
 import { extractImageFileIds, deleteNoteImages } from "@/lib/noteImages";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
 import NotesList from "@/components/notes/NotesList";
-import NotesSidebar from "@/components/notes/NotesSidebar";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import NoteEditPanel from "@/components/notes/NoteEditPanel";
-import NotesFilterBar, { NoteFilters, isNoteFiltersActive } from "@/components/notes/NotesFilterBar";
+import NotesFilterBar, { NoteFilters, NO_STRATEGY, isNoteFiltersActive } from "@/components/notes/NotesFilterBar";
 import Button from "@/components/shared/Button";
 import type { Trade } from "@/lib/trades";
 
 /**
  * Phase 3 part 2: search (title + full body text) and tag filtering.
- * Filtering runs client-side over the already-fetched notes list, same as
- * Trades — a search string is matched against the title plus
- * extractFullText's plain-text walk of the Tiptap doc (not the truncated
- * list-card preview, so a match past the 140-char preview cutoff still
- * hits). Wrapped in useDeferredValue + useMemo, mirroring the Trades/
- * Analytics/Reports INP perf pass, so typing in the search box doesn't
- * block re-render on every keystroke.
+ * Phase 6: extended with trade-linkage, strategy, and a date range — all
+ * still client-side over the already-fetched notes list, same as Trades — a
+ * search string is matched against the title plus extractFullText's
+ * plain-text walk of the Tiptap doc (not the truncated list-card preview,
+ * so a match past the 140-char preview cutoff still hits). Wrapped in
+ * useDeferredValue + useMemo, mirroring the Trades/Analytics/Reports INP
+ * perf pass, so typing in the search box doesn't block re-render on every
+ * keystroke.
+ *
+ * Date range is inclusive on both ends and compares calendar dates (not
+ * timestamps) against updated_at, so picking the same day for From and To
+ * captures the whole day regardless of what time a note was last touched.
  */
 function applyFilters(notes: Note[], filters: NoteFilters): Note[] {
   const search = filters.search.trim().toLowerCase();
@@ -46,17 +48,23 @@ function applyFilters(notes: Note[], filters: NoteFilters): Note[] {
       if (!haystack.includes(search)) return false;
     }
     if (filters.tag && !(n.tags ?? []).includes(filters.tag)) return false;
+
+    const hasTradeLink = (n.linked_trade_ids?.length ?? 0) > 0;
+    if (filters.linkage === "linked" && !hasTradeLink) return false;
+    if (filters.linkage === "unlinked" && hasTradeLink) return false;
+
+    if (filters.strategy === NO_STRATEGY && n.linked_strategy) return false;
+    if (filters.strategy && filters.strategy !== NO_STRATEGY && n.linked_strategy !== filters.strategy) return false;
+
+    if (filters.dateFrom || filters.dateTo) {
+      const noteDate = n.updated_at.slice(0, 10); // "YYYY-MM-DD", string-comparable
+      if (filters.dateFrom && noteDate < filters.dateFrom) return false;
+      if (filters.dateTo && noteDate > filters.dateTo) return false;
+    }
+
     return true;
   });
 }
-
-/**
- * Left-rail smart view (see NotesSidebar) is applied before search/tag
- * filters, same layering as e.g. Trades' account scope + filter bar:
- * narrow to the view first, then let NotesFilterBar's search/tag refine
- * within it. Both operate on the same already-fetched `notes` array —
- * no separate query per view.
- */
 
 /**
  * Phase 1c: notes are now fully open/edit/save/delete-able. Clicking a
@@ -81,7 +89,7 @@ export default function NotesPage() {
   const { trades } = useTradesData();
   const router = useRouter();
   const { setPendingTradeId } = useTradesPageState();
-  const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId, view, setView } = useNotesPageState();
+  const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId } = useNotesPageState();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -106,17 +114,6 @@ export default function NotesPage() {
   useEffect(() => {
     setSaveError(false);
   }, [activeNoteId]);
-
-  function handleSelectView(next: NoteView) {
-    setView(next);
-    // A tag filter left over from a previous view (e.g. still set to
-    // "FOMO" while browsing By strategy) would silently exclude notes the
-    // sidebar count promises are there — clearing it keeps the group's
-    // count and the list in sync. Search text is left alone since it's a
-    // free-text refinement the user typed deliberately, not tied to a
-    // specific group.
-    if (filters.tag) setFilters({ ...filters, tag: "" });
-  }
 
   useEffect(() => {
     if (!selectedAccount) {
@@ -161,21 +158,7 @@ export default function NotesPage() {
   }, [selectedAccount?.id]);
 
   const deferredFilters = useDeferredValue(filters);
-  const notesInView = useMemo(() => applyNoteView(notes, view), [notes, view]);
-  const visibleNotes = useMemo(() => applyFilters(notesInView, deferredFilters), [notesInView, deferredFilters]);
-
-  // If the selected view is a specific strategy/tag/month and the notes
-  // list changes underneath it (e.g. the last note in that group gets
-  // retagged, or an account switch clears `notes`) such that the group no
-  // longer exists, fall back to "All notes" rather than silently showing
-  // an empty list with no way to tell why. "all"/"linked-trades"/
-  // "untagged" never go stale this way, so only group-keyed views need
-  // the check.
-  useEffect(() => {
-    if (typeof view === "string") return;
-    if (notesInView.length === 0 && notes.length > 0) setView("all");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notesInView.length, notes.length]);
+  const visibleNotes = useMemo(() => applyFilters(notes, deferredFilters), [notes, deferredFilters]);
 
   // Tags actually used on notes but no longer present in Settings would
   // otherwise be impossible to filter by (and easy to lose track of) —
@@ -186,6 +169,11 @@ export default function NotesPage() {
     const used = notes.flatMap((n) => n.tags ?? []);
     return Array.from(new Set([...active, ...used])).sort();
   }, [dropdowns, notes]);
+
+  // Strategy filter options: only strategies actually present on a note,
+  // not every strategy that exists elsewhere in the app (Trades/Settings) —
+  // an option with zero matching notes would be a dead end in this dropdown.
+  const availableStrategies = useMemo(() => getUsedStrategies(notes), [notes]);
 
   async function handleNewNote() {
     if (!selectedAccount || creating) return;
@@ -320,30 +308,25 @@ export default function NotesPage() {
           <p className="text-ink-muted text-sm">No notes yet.</p>
         </div>
       ) : (
-        // Sidebar + list side by side on desktop; sidebar stacks above the
-        // list on narrow screens (same md: breakpoint the rest of the app
-        // uses for its own responsive layout switches).
-        <div className="flex flex-col md:flex-row gap-6 items-start">
-          <NotesSidebar notes={notes} view={view} onSelectView={handleSelectView} />
-          <div className="flex-1 min-w-0 w-full space-y-6">
-            <NotesFilterBar filters={filters} onChange={setFilters} availableTags={availableTags} />
-            {visibleNotes.length === 0 ? (
-              <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center space-y-2">
-                <p className="text-ink-muted text-sm">No notes match your filters.</p>
-                {isNoteFiltersActive(filters) && (
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="text-xs text-glow hover:underline"
-                  >
-                    Clear filters
-                  </button>
-                )}
-              </div>
-            ) : (
-              <NotesList notes={visibleNotes} onSelectNote={handleSelectNote} />
-            )}
-          </div>
+        <div className="space-y-6">
+          <NotesFilterBar
+            filters={filters}
+            onChange={setFilters}
+            availableTags={availableTags}
+            availableStrategies={availableStrategies}
+          />
+          {visibleNotes.length === 0 ? (
+            <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center space-y-2">
+              <p className="text-ink-muted text-sm">No notes match your filters.</p>
+              {isNoteFiltersActive(filters) && (
+                <button type="button" onClick={resetFilters} className="text-xs text-glow hover:underline">
+                  Clear filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <NotesList notes={visibleNotes} onSelectNote={handleSelectNote} />
+          )}
         </div>
       )}
     </div>

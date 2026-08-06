@@ -149,114 +149,14 @@ export function extractPreviewText(content: JSONContent, maxLen = 140): string {
 }
 
 /**
- * Notes navigation views (left rail). Every view is derived from fields the
- * `notes` table already has — no schema change, no folder/parent column.
- * "strategy"/"tag" are followed by the specific key being viewed (e.g.
- * "strategy:Breakout"), stored as one string so NotesPageStateContext only
- * has to persist a single value, the same way it already persists
- * activeNoteId.
+ * Distinct strategies currently in use across a set of notes, for populating
+ * the Strategy filter dropdown — only strategies that actually appear on a
+ * note, not every strategy that exists elsewhere in the app.
  */
-export type NoteView =
-  | "all"
-  | "linked-trades"
-  | "untagged"
-  | { kind: "strategy"; strategy: string }
-  | { kind: "tag"; tag: string }
-  | { kind: "month"; month: string }; // "YYYY-MM"
-
-export const UNSPECIFIED_STRATEGY = "Unspecified";
-
-/** A note has nothing to organize it by — the true catch-all/orphan case. */
-export function isNoteUntagged(note: Note): boolean {
-  return (note.tags?.length ?? 0) === 0 && !note.linked_strategy && (note.linked_trade_ids?.length ?? 0) === 0;
-}
-
-/** "YYYY-MM" key for a note's updated_at, used by the By month view. */
-export function noteMonthKey(note: Note): string {
-  const d = new Date(note.updated_at);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-export function formatMonthLabel(monthKey: string): string {
-  const [year, month] = monthKey.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
-}
-
-export type NoteGroupCount = { key: string; label: string; count: number };
-
-/**
- * Strategy groups include every note with a linked_strategy set, whether or
- * not it's also linked to a specific trade (per product decision — strategy
- * grouping is not split by trade-linkage). Notes with no strategy at all are
- * excluded here; they surface via Untagged instead, not as an "Unspecified"
- * bucket.
- */
-export function getStrategyGroups(notes: Note[]): NoteGroupCount[] {
-  const counts = new Map<string, number>();
+export function getUsedStrategies(notes: Note[]): string[] {
+  const set = new Set<string>();
   for (const n of notes) {
-    if (!n.linked_strategy) continue;
-    counts.set(n.linked_strategy, (counts.get(n.linked_strategy) ?? 0) + 1);
+    if (n.linked_strategy) set.add(n.linked_strategy);
   }
-  return Array.from(counts.entries())
-    .map(([key, count]) => ({ key, label: key, count }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-export function getTagGroups(notes: Note[]): NoteGroupCount[] {
-  const counts = new Map<string, number>();
-  for (const n of notes) {
-    for (const t of n.tags ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .map(([key, count]) => ({ key, label: key, count }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-/** Newest month first, matching the notes list's own newest-first ordering. */
-export function getMonthGroups(notes: Note[]): NoteGroupCount[] {
-  const counts = new Map<string, number>();
-  for (const n of notes) {
-    const key = noteMonthKey(n);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .map(([key, count]) => ({ key, label: formatMonthLabel(key), count }))
-    .sort((a, b) => b.key.localeCompare(a.key));
-}
-
-export function getLinkedTradesCount(notes: Note[]): number {
-  return notes.filter((n) => (n.linked_trade_ids?.length ?? 0) > 0).length;
-}
-
-export function getUntaggedCount(notes: Note[]): number {
-  return notes.filter(isNoteUntagged).length;
-}
-
-/** Applies the selected left-rail view on top of the already-fetched notes list. */
-export function applyNoteView(notes: Note[], view: NoteView): Note[] {
-  if (view === "all") return notes;
-  if (view === "linked-trades") return notes.filter((n) => (n.linked_trade_ids?.length ?? 0) > 0);
-  if (view === "untagged") return notes.filter(isNoteUntagged);
-  if (view.kind === "strategy") return notes.filter((n) => n.linked_strategy === view.strategy);
-  if (view.kind === "tag") return notes.filter((n) => (n.tags ?? []).includes(view.tag));
-  if (view.kind === "month") return notes.filter((n) => noteMonthKey(n) === view.month);
-  return notes;
-}
-
-/** Stable string key for a NoteView — used for persistence and React keys. */
-export function noteViewKey(view: NoteView): string {
-  if (typeof view === "string") return view;
-  if (view.kind === "strategy") return `strategy:${view.strategy}`;
-  if (view.kind === "tag") return `tag:${view.tag}`;
-  return `month:${view.month}`;
-}
-
-export function noteViewFromKey(key: string): NoteView {
-  if (key === "all" || key === "linked-trades" || key === "untagged") return key;
-  const [kind, ...rest] = key.split(":");
-  const value = rest.join(":");
-  if (kind === "strategy") return { kind: "strategy", strategy: value };
-  if (kind === "tag") return { kind: "tag", tag: value };
-  if (kind === "month") return { kind: "month", month: value };
-  return "all";
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
