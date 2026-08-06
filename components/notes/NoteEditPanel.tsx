@@ -5,6 +5,7 @@ import type { JSONContent } from "@tiptap/react";
 import Button from "@/components/shared/Button";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { Select } from "@/components/shared/Select";
+import TagInput from "@/components/shared/TagInput";
 import NoteEditor from "@/components/notes/NoteEditor";
 import NoteEditorErrorBoundary from "@/components/notes/NoteEditorErrorBoundary";
 import LinkedTradesPicker from "@/components/notes/LinkedTradesPicker";
@@ -17,12 +18,13 @@ import type { Trade } from "@/lib/trades";
  * Phase 1c part 2 adds Delete (with a ConfirmDialog, same component the
  * Trades page's delete flow uses) on top of part 1's open/edit/save.
  *
- * Phase 3 part 1 adds a tag picker — same chip-toggle UX as
- * TradeFormPanel's tag section, reusing the same account-wide "tag"
- * dropdown vocabulary (Settings → Tags) rather than a notes-only list, so
- * a tag means the same thing on a trade or a note. Fetches its own
- * dropdown items independently (TradeFormPanel does the same), rather than
- * threading them down from app/notes/page.tsx.
+ * Phase 3 part 1 added a tag picker sourced from the account-wide "tag"
+ * dropdown vocabulary (Settings → Tags). Later reworked to freeform typed
+ * tags via TagInput (same component TradeFormPanel uses) — any text is a
+ * valid tag now, no toggling pre-set chips. Still fetches dropdown items
+ * independently (TradeFormPanel does the same) for the other selects
+ * (linked strategy) on this panel, rather than threading them down from
+ * app/notes/page.tsx.
  *
  * Phase 3 part 3 adds optional linking: a "Linked strategy" select (same
  * `renderOptions`-style orphan handling TradeFormPanel uses for its own
@@ -232,14 +234,6 @@ export default function NoteEditPanel({
     });
   }, [selectedAccount?.id]);
 
-  const tagOptions = dropdowns
-    .filter((d) => d.category === "tag")
-    .sort((a, b) => a.sort_order - b.sort_order);
-  // A tag on this note that's since been removed from Settings — kept
-  // selectable (dashed style) rather than silently dropped, same treatment
-  // TradeFormPanel gives orphaned tags.
-  const orphanedTags = tags.filter((t) => !tagOptions.some((o) => o.value === t));
-
   const strategyOptions = dropdowns
     .filter((d) => d.category === "strategy")
     .sort((a, b) => a.sort_order - b.sort_order);
@@ -260,8 +254,8 @@ export default function NoteEditPanel({
     scheduleAutosave();
   }
 
-  function toggleTag(value: string) {
-    setTags((current) => (current.includes(value) ? current.filter((t) => t !== value) : [...current, value]));
+  function handleTagsChange(nextTags: string[]) {
+    setTags(nextTags);
     setDirty(true);
     scheduleAutosave();
   }
@@ -428,38 +422,18 @@ export default function NoteEditPanel({
 
             {detailsOpen && (
               <div className="mb-8 space-y-4 pb-6 border-b border-surface-border">
-                {(tagOptions.length > 0 || orphanedTags.length > 0) && (
-                  <div>
-                    <span className="text-[11px] uppercase tracking-wide text-ink-muted">Tags</span>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
-                      {tagOptions.map((o) => (
-                        <button
-                          key={o.id}
-                          type="button"
-                          onClick={() => toggleTag(o.value)}
-                          className={`px-3 py-1 rounded-full text-xs border transition-colors duration-fast ${
-                            tags.includes(o.value)
-                              ? "bg-glow/15 border-glow text-glow"
-                              : "border-surface-border text-ink-secondary hover:text-ink-primary"
-                          }`}
-                        >
-                          {o.value}
-                        </button>
-                      ))}
-                      {orphanedTags.map((t) => (
-                        <button
-                          key={`orphan-${t}`}
-                          type="button"
-                          onClick={() => toggleTag(t)}
-                          title="Removed from Settings — click to remove it from this note"
-                          className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
-                        >
-                          {t} (removed from list)
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div>
+                  <span className="text-[11px] uppercase tracking-wide text-ink-muted">Tags</span>
+                  <TagInput
+                    value={tags}
+                    onChange={handleTagsChange}
+                    suggestions={dropdowns
+                      .filter((d) => d.category === "tag")
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map((o) => o.value)}
+                    chipClassName="bg-glow/15 border-glow text-glow"
+                  />
+                </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>

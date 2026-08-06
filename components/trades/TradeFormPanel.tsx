@@ -9,6 +9,7 @@ import { localDateString } from "@/lib/date";
 import { uploadScreenshot, deleteScreenshot, validateScreenshotFile } from "@/lib/screenshots";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { Select, SelectOption } from "@/components/shared/Select";
+import TagInput from "@/components/shared/TagInput";
 import { NotesIcon } from "@/components/icons";
 
 const emptyForm = {
@@ -367,9 +368,6 @@ export default function TradeFormPanel({
     ];
   }
 
-  const tagOptions = optionsFor("tag");
-  const orphanedTags = form.tags.filter((t) => !tagOptions.some((o) => o.value === t));
-
   const entryNum = form.entry_price ? parseFloat(form.entry_price) : null;
   const exitNum = form.exit_price ? parseFloat(form.exit_price) : null;
   const stopNum = form.stop_loss_price ? parseFloat(form.stop_loss_price) : null;
@@ -416,13 +414,6 @@ export default function TradeFormPanel({
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function toggleTag(value: string) {
-    setForm((f) => ({
-      ...f,
-      tags: f.tags.includes(value) ? f.tags.filter((t) => t !== value) : [...f.tags, value],
-    }));
   }
 
   function handlePnlChange(value: string) {
@@ -988,38 +979,15 @@ export default function TradeFormPanel({
             )}
           </div>
 
-          {(tagOptions.length > 0 || orphanedTags.length > 0) && (
-            <label className="block">
-              <span className={labelClass}>Tags</span>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {tagOptions.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => toggleTag(o.value)}
-                    className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-                      form.tags.includes(o.value)
-                        ? "bg-brass/15 border-brass text-brass"
-                        : "border-surface-border text-ink-secondary hover:text-ink-primary"
-                    }`}
-                  >
-                    {o.value}
-                  </button>
-                ))}
-                {orphanedTags.map((t) => (
-                  <button
-                    key={`orphan-${t}`}
-                    type="button"
-                    onClick={() => toggleTag(t)}
-                    title="Removed from Settings — click to remove it from this trade"
-                    className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
-                  >
-                    {t} (removed from list)
-                  </button>
-                ))}
-              </div>
-            </label>
-          )}
+          <label className="block">
+            <span className={labelClass}>Tags</span>
+            <TagInput
+              value={form.tags}
+              onChange={(tags) => set("tags", tags)}
+              suggestions={optionsFor("tag").map((o) => o.value)}
+              chipClassName="bg-brass/15 border-brass text-brass"
+            />
+          </label>
 
           <label className="block">
             <span className={labelClass}>Notes</span>
