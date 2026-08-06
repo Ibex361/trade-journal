@@ -8,6 +8,7 @@ import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
 import { uploadScreenshot, deleteScreenshot, validateScreenshotFile } from "@/lib/screenshots";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import { Select, SelectOption } from "@/components/shared/Select";
 import { NotesIcon } from "@/components/icons";
 
 const emptyForm = {
@@ -352,28 +353,18 @@ export default function TradeFormPanel({
       .sort((a, b) => a.sort_order - b.sort_order);
 
   // If a trade's stored value was later removed from Settings, it won't be
-  // in optionsFor(...) anymore. Rather than have the <select> silently show
+  // in optionsFor(...) anymore. Rather than have the select silently show
   // blank (which risks the field getting cleared on save if the user
   // doesn't notice and re-saves), keep it as a selectable option — just
-  // marked so it's clear it's no longer an active list item.
-  function renderOptions(category: string, currentValue: string) {
+  // marked (muted) so it's clear it's no longer an active list item.
+  function renderOptions(category: string, currentValue: string): SelectOption[] {
     const active = optionsFor(category);
     const isOrphaned = currentValue !== "" && !active.some((o) => o.value === currentValue);
-    return (
-      <>
-        <option value="">—</option>
-        {active.map((o) => (
-          <option key={o.id} value={o.value}>
-            {o.value}
-          </option>
-        ))}
-        {isOrphaned && (
-          <option value={currentValue} style={{ color: "#8a8f98" }}>
-            {currentValue} (removed from list)
-          </option>
-        )}
-      </>
-    );
+    return [
+      { value: "", label: "—" },
+      ...active.map((o) => ({ value: o.value, label: o.value })),
+      ...(isOrphaned ? [{ value: currentValue, label: `${currentValue} (removed from list)`, muted: true }] : []),
+    ];
   }
 
   const tagOptions = optionsFor("tag");
@@ -700,48 +691,44 @@ export default function TradeFormPanel({
             </label>
             <label className="block">
               <span className={labelClass}>Asset class</span>
-              <select
+              <Select
                 value={form.asset_class}
-                onChange={(e) => set("asset_class", e.target.value)}
-                className={selectClass}
-              >
-                {renderOptions("asset_class", form.asset_class)}
-              </select>
+                onChange={(v) => set("asset_class", v)}
+                options={renderOptions("asset_class", form.asset_class)}
+                fullWidth
+              />
             </label>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
               <span className={labelClass}>Strategy</span>
-              <select
+              <Select
                 value={form.strategy}
-                onChange={(e) => set("strategy", e.target.value)}
-                className={selectClass}
-              >
-                {renderOptions("strategy", form.strategy)}
-              </select>
+                onChange={(v) => set("strategy", v)}
+                options={renderOptions("strategy", form.strategy)}
+                fullWidth
+              />
             </label>
             <label className="block">
               <span className={labelClass}>Session</span>
-              <select
+              <Select
                 value={form.session}
-                onChange={(e) => set("session", e.target.value)}
-                className={selectClass}
-              >
-                {renderOptions("session", form.session)}
-              </select>
+                onChange={(v) => set("session", v)}
+                options={renderOptions("session", form.session)}
+                fullWidth
+              />
             </label>
           </div>
 
           <label className="block">
             <span className={labelClass}>Emotion</span>
-            <select
+            <Select
               value={form.emotion}
-              onChange={(e) => set("emotion", e.target.value)}
-              className={selectClass}
-            >
-              {renderOptions("emotion", form.emotion)}
-            </select>
+              onChange={(v) => set("emotion", v)}
+              options={renderOptions("emotion", form.emotion)}
+              fullWidth
+            />
           </label>
 
           <div className="grid grid-cols-3 gap-4">
@@ -804,18 +791,12 @@ export default function TradeFormPanel({
 
           <label className="block">
             <span className={labelClass}>Exit reason</span>
-            <select
+            <Select
               value={form.exit_reason}
-              onChange={(e) => set("exit_reason", e.target.value as ExitReason | "")}
-              className={selectClass}
-            >
-              <option value="">—</option>
-              {EXIT_REASON_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set("exit_reason", v as ExitReason | "")}
+              options={[{ value: "", label: "—" }, ...EXIT_REASON_OPTIONS]}
+              fullWidth
+            />
           </label>
 
           <div className="grid grid-cols-2 gap-4">

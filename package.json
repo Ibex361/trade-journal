@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@radix-ui/react-popover": "^1.1.23",
+    "@radix-ui/react-select": "^2.3.7",
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "^2.45.4",
     "@tiptap/extension-bubble-menu": "^2.9.1",

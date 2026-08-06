@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
 import { getTradeRowEmphasis } from "@/lib/metrics";
+import { Select } from "@/components/shared/Select";
 
 export type SortColumn = "entry_date" | "instrument" | "pnl" | "r_multiple";
 export type SortState = { column: SortColumn; direction: "asc" | "desc" };
@@ -630,19 +631,19 @@ function TradesList({
           wasn't reachable at all on mobile. */}
       <div className="md:hidden flex items-center gap-2 mb-3">
         <span className="text-[11px] text-ink-secondary">Sort by</span>
-        <select
+        <Select
           value={sort.column}
-          onChange={(e) => {
-            const column = e.target.value as SortColumn;
+          onChange={(v) => {
+            const column = v as SortColumn;
             onSortChange({ column, direction: column === "instrument" ? "asc" : "desc" });
           }}
-          className="bg-surface-2 border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary"
-        >
-          <option value="entry_date">Entry date</option>
-          <option value="instrument">Instrument</option>
-          <option value="pnl">P&amp;L</option>
-          <option value="r_multiple">R</option>
-        </select>
+          options={[
+            { value: "entry_date", label: "Entry date" },
+            { value: "instrument", label: "Instrument" },
+            { value: "pnl", label: "P&L" },
+            { value: "r_multiple", label: "R" },
+          ]}
+        />
         <button
           type="button"
           onClick={() => onSortChange({ column: sort.column, direction: sort.direction === "asc" ? "desc" : "asc" })}

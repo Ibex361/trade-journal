@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
 import Button from "@/components/shared/Button";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import { Select } from "@/components/shared/Select";
 import NoteEditor from "@/components/notes/NoteEditor";
 import NoteEditorErrorBoundary from "@/components/notes/NoteEditorErrorBoundary";
 import LinkedTradesPicker from "@/components/notes/LinkedTradesPicker";
@@ -463,23 +464,18 @@ export default function NoteEditPanel({
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <span className="text-[11px] uppercase tracking-wide text-ink-muted">Linked strategy</span>
-                    <select
+                    <Select
                       value={linkedStrategy}
-                      onChange={(e) => handleLinkedStrategyChange(e.target.value)}
-                      className="mt-1.5 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-glow/60 focus:ring-2 focus:ring-glow/20 transition-colors"
-                    >
-                      <option value="">—</option>
-                      {strategyOptions.map((o) => (
-                        <option key={o.id} value={o.value}>
-                          {o.value}
-                        </option>
-                      ))}
-                      {strategyIsOrphaned && (
-                        <option value={linkedStrategy} style={{ color: "#8a8f98" }}>
-                          {linkedStrategy} (removed from list)
-                        </option>
-                      )}
-                    </select>
+                      onChange={handleLinkedStrategyChange}
+                      options={[
+                        { value: "", label: "—" },
+                        ...strategyOptions.map((o) => ({ value: o.value, label: o.value })),
+                        ...(strategyIsOrphaned
+                          ? [{ value: linkedStrategy, label: `${linkedStrategy} (removed from list)`, muted: true }]
+                          : []),
+                      ]}
+                      fullWidth
+                    />
                   </div>
 
                   <LinkedTradesPicker

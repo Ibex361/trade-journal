@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/components/shared/Select";
+
 /**
  * Filter card for Notes — search plus four structured filters: tag, trade
  * linkage, strategy, and a date range. Superseded a left-rail "smart views"
@@ -93,14 +95,14 @@ export default function NotesFilterBar({
         {availableTags.length > 0 && (
           <div>
             <span className={labelClass}>Tag</span>
-            <select value={filters.tag} onChange={(e) => set("tag", e.target.value)} className={selectClass}>
-              <option value="">Any tag</option>
-              {availableTags.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={filters.tag}
+              onChange={(v) => set("tag", v)}
+              options={[
+                { value: "", label: "Any tag" },
+                ...availableTags.map((t) => ({ value: t, label: t })),
+              ]}
+            />
           </div>
         )}
 
@@ -134,15 +136,15 @@ export default function NotesFilterBar({
 
         <div>
           <span className={labelClass}>Strategy</span>
-          <select value={filters.strategy} onChange={(e) => set("strategy", e.target.value)} className={selectClass}>
-            <option value="">Any strategy</option>
-            <option value={NO_STRATEGY}>None</option>
-            {availableStrategies.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={filters.strategy}
+            onChange={(v) => set("strategy", v)}
+            options={[
+              { value: "", label: "Any strategy" },
+              { value: NO_STRATEGY, label: "None" },
+              ...availableStrategies.map((s) => ({ value: s, label: s })),
+            ]}
+          />
         </div>
 
         <div>

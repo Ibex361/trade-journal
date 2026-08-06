@@ -1,6 +1,7 @@
 "use client";
 
 import { DropdownItem } from "@/lib/dropdownSettings";
+import { Select } from "@/components/shared/Select";
 
 export type TradeFilters = {
   search: string;
@@ -77,66 +78,50 @@ export default function TradesFilterBar({
 
         <div>
           <span className={labelClass}>Asset class</span>
-          <select
+          <Select
             value={filters.assetClass}
-            onChange={(e) => set("assetClass", e.target.value)}
-            className={selectClass}
-          >
-            <option value="">All</option>
-            {optionsFor("asset_class").map((o) => (
-              <option key={o.id} value={o.value}>
-                {o.value}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("assetClass", v)}
+            options={[
+              { value: "", label: "All" },
+              ...optionsFor("asset_class").map((o) => ({ value: o.value, label: o.value })),
+            ]}
+          />
         </div>
 
         <div>
           <span className={labelClass}>Strategy</span>
-          <select
+          <Select
             value={filters.strategy}
-            onChange={(e) => set("strategy", e.target.value)}
-            className={selectClass}
-          >
-            <option value="">All</option>
-            {optionsFor("strategy").map((o) => (
-              <option key={o.id} value={o.value}>
-                {o.value}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("strategy", v)}
+            options={[
+              { value: "", label: "All" },
+              ...optionsFor("strategy").map((o) => ({ value: o.value, label: o.value })),
+            ]}
+          />
         </div>
 
         <div>
           <span className={labelClass}>Session</span>
-          <select
+          <Select
             value={filters.session}
-            onChange={(e) => set("session", e.target.value)}
-            className={selectClass}
-          >
-            <option value="">All</option>
-            {optionsFor("session").map((o) => (
-              <option key={o.id} value={o.value}>
-                {o.value}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("session", v)}
+            options={[
+              { value: "", label: "All" },
+              ...optionsFor("session").map((o) => ({ value: o.value, label: o.value })),
+            ]}
+          />
         </div>
 
         <div>
           <span className={labelClass}>Tag</span>
-          <select
+          <Select
             value={filters.tag}
-            onChange={(e) => set("tag", e.target.value)}
-            className={selectClass}
-          >
-            <option value="">All</option>
-            {availableTags.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("tag", v)}
+            options={[
+              { value: "", label: "All" },
+              ...availableTags.map((t) => ({ value: t, label: t })),
+            ]}
+          />
         </div>
 
         <div>

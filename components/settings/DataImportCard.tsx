@@ -9,6 +9,7 @@ import { parseExnessCsv } from "@/lib/exnessImport";
 import { ParsedImport, ImportRowIssue } from "@/lib/csvUtils";
 import SettingsCard from "./SettingsCard";
 import Button from "@/components/shared/Button";
+import { Select } from "@/components/shared/Select";
 
 const MAX_VISIBLE_ISSUES = 8;
 
@@ -205,17 +206,13 @@ export default function DataImportCard() {
 
             <label className="block max-w-xs">
               <span className="text-xs uppercase tracking-wide text-ink-muted">Import into account</span>
-              <select
+              <Select
                 value={effectiveAccountId}
-                onChange={(e) => setTargetAccountId(e.target.value)}
-                className="mt-1 w-full bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm"
-              >
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setTargetAccountId}
+                options={accounts.map((acc) => ({ value: acc.id, label: acc.name }))}
+                fullWidth
+                className="mt-1"
+              />
             </label>
 
             {parsed.issues.length > 0 && (
