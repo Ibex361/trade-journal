@@ -69,10 +69,13 @@ export function Select({
       <SelectPrimitive.Trigger
         aria-label={ariaLabel}
         className={[
-          "bg-surface-2 border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary",
+          "bg-surface-2 backdrop-blur-md border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary",
           "inline-flex items-center justify-between gap-2",
-          "focus:outline-none focus:border-glow/60 focus:ring-2 focus:ring-glow/20 transition-colors",
-          "disabled:opacity-50 disabled:cursor-not-allowed",
+          "transition-colors duration-fast",
+          "hover:border-glow/40 hover:bg-surface-2/80",
+          "focus:outline-none focus:border-glow/60 focus:ring-2 focus:ring-glow/20",
+          "data-[state=open]:border-glow/60 data-[state=open]:ring-2 data-[state=open]:ring-glow/20",
+          "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-surface-border disabled:hover:bg-surface-2",
           "data-[placeholder]:text-ink-secondary",
           fullWidth ? "w-full" : "",
           className ?? "",
@@ -108,7 +111,13 @@ export function Select({
             "z-[60] overflow-hidden outline-none",
             "bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass",
             "motion-safe:data-[state=open]:animate-scale-in",
-            "w-[var(--radix-select-trigger-width)] max-h-[min(320px,var(--radix-select-content-available-height))]",
+            // Content sizes to its longest label (up to a cap) rather than
+            // being locked to the trigger's width — a narrow trigger like a
+            // "Strategy" filter shouldn't clip options like "Mean reversion".
+            // min-width still matches the trigger so short-label menus don't
+            // look undersized relative to the control that opened them.
+            "w-max min-w-[var(--radix-select-trigger-width)] max-w-[min(280px,var(--radix-select-content-available-width))]",
+            "max-h-[min(320px,var(--radix-select-content-available-height))]",
           ].join(" ")}
         >
           <SelectPrimitive.ScrollUpButton className="flex items-center justify-center py-1 text-ink-secondary">
@@ -129,7 +138,9 @@ export function Select({
                   o.muted ? "text-ink-muted" : "text-ink-primary",
                 ].join(" ")}
               >
-                <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
+                <SelectPrimitive.ItemText>
+                  <span className="break-words">{o.label}</span>
+                </SelectPrimitive.ItemText>
                 <SelectPrimitive.ItemIndicator>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0">
                     <path d="M20 6L9 17l-5-5" />
