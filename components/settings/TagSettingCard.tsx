@@ -3,34 +3,32 @@
 import { useEffect, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import {
-  fetchDropdownItems,
-  addDropdownItem,
-  deleteDropdownItem,
-  reorderDropdownItem,
-  getDropdownItemUsageCount,
-  DropdownItem,
-  DropdownCategory,
-} from "@/lib/dropdownSettings";
+  fetchTagSettings,
+  addTagSetting,
+  deleteTagSetting,
+  reorderTagSetting,
+  getTagUsageCount,
+  TagSettingItem,
+} from "@/lib/tagSettings";
 import SettingsCard from "./SettingsCard";
 
-// "tag" intentionally excluded — tag management now lives in the
-// dedicated TagSettingCard ("Tag setting"), backed by tag_settings
-// instead of this generic dropdown_settings category. The 'tag' rows
-// still exist in dropdown_settings for now (untouched, unused by this
-// tab) until part 2 switches remaining consumers over and drops them.
-const CATEGORIES: { key: DropdownCategory; label: string }[] = [
-  { key: "asset_class", label: "Asset class" },
-  { key: "strategy", label: "Strategy" },
-  { key: "session", label: "Session" },
-  { key: "emotion", label: "Emotion" },
-];
+/**
+ * "Tag setting" — dedicated account-wide tag vocabulary management,
+ * decoupled from the generic Dropdown lists card (which now only handles
+ * asset_class/strategy/session/emotion). Backed by the tag_settings table.
+ *
+ * Part 1: this card manages tag_settings directly. TradeFormPanel/
+ * NoteEditPanel/the filter bars still read tags from dropdown_settings'
+ * 'tag' category for now — part 2 switches them over and safely removes
+ * that category from dropdown_settings.
+ */
 
 function RemoveButton({
   item,
   accountId,
   onRemoved,
 }: {
-  item: DropdownItem;
+  item: TagSettingItem;
   accountId: string;
   onRemoved: () => void;
 }) {
@@ -42,7 +40,7 @@ function RemoveButton({
   async function startConfirm() {
     setConfirming(true);
     setCheckingCount(true);
-    const count = await getDropdownItemUsageCount(accountId, item.category, item.value);
+    const count = await getTagUsageCount(accountId, item.value);
     setUsageCount(count);
     setCheckingCount(false);
   }
@@ -54,7 +52,7 @@ function RemoveButton({
 
   async function confirmRemove() {
     setRemoving(true);
-    await deleteDropdownItem(item.id);
+    await deleteTagSetting(item.id);
     setRemoving(false);
     onRemoved();
   }
@@ -67,8 +65,8 @@ function RemoveButton({
         ) : (
           <span className="text-[11px] text-ink-secondary">
             {usageCount && usageCount > 0
-              ? `Used by ${usageCount} trade${usageCount === 1 ? "" : "s"} — they'll keep it, but it won't be pickable for new ones.`
-              : "Remove this item?"}
+              ? `Used by ${usageCount} trade${usageCount === 1 ? "" : "s"}/note${usageCount === 1 ? "" : "s"} — they'll keep it, it just won't be pickable for new ones.`
+              : "Remove this tag?"}
           </span>
         )}
         <button
@@ -96,18 +94,17 @@ function RemoveButton({
   );
 }
 
-export default function DropdownLists() {
+export default function TagSettingCard() {
   const { selectedAccount } = useAccount();
-  const [items, setItems] = useState<DropdownItem[]>([]);
-  const [activeTab, setActiveTab] = useState<DropdownCategory>("asset_class");
+  const [items, setItems] = useState<TagSettingItem[]>([]);
   const [newValue, setNewValue] = useState("");
   const [loading, setLoading] = useState(true);
 
   async function load() {
     if (!selectedAccount) return;
     setLoading(true);
-    const { data } = await fetchDropdownItems(selectedAccount.id);
-    if (data) setItems(data as DropdownItem[]);
+    const { data } = await fetchTagSettings(selectedAccount.id);
+    if (data) setItems(data as TagSettingItem[]);
     setLoading(false);
   }
 
@@ -116,54 +113,40 @@ export default function DropdownLists() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
-  const activeItems = items
-    .filter((i) => i.category === activeTab)
-    .sort((a, b) => a.sort_order - b.sort_order);
+  const sortedItems = [...items].sort((a, b) => a.sort_order - b.sort_order);
 
   async function handleAdd() {
     if (!selectedAccount || !newValue.trim()) return;
-    const nextOrder =
-      activeItems.length > 0 ? Math.max(...activeItems.map((i) => i.sort_order)) + 1 : 1;
-    await addDropdownItem(selectedAccount.id, activeTab, newValue.trim(), nextOrder);
+    const trimmed = newValue.trim();
+    if (sortedItems.some((i) => i.value.toLowerCase() === trimmed.toLowerCase())) {
+      setNewValue("");
+      return;
+    }
+    const nextOrder = sortedItems.length > 0 ? Math.max(...sortedItems.map((i) => i.sort_order)) + 1 : 1;
+    await addTagSetting(selectedAccount.id, trimmed, nextOrder);
     setNewValue("");
     load();
   }
 
-  async function handleMove(item: DropdownItem, direction: -1 | 1) {
-    const idx = activeItems.findIndex((i) => i.id === item.id);
-    const swapWith = activeItems[idx + direction];
+  async function handleMove(item: TagSettingItem, direction: -1 | 1) {
+    const idx = sortedItems.findIndex((i) => i.id === item.id);
+    const swapWith = sortedItems[idx + direction];
     if (!swapWith) return;
-    await reorderDropdownItem(item.id, swapWith.sort_order);
-    await reorderDropdownItem(swapWith.id, item.sort_order);
+    await reorderTagSetting(item.id, swapWith.sort_order);
+    await reorderTagSetting(swapWith.id, item.sort_order);
     load();
   }
 
   return (
     <SettingsCard
-      title="Dropdown lists"
-      description="These options power the fields on every trade entry, per account."
+      title="Tag setting"
+      description="Manage the account-wide tag vocabulary used across trades and notes."
     >
-      <div className="flex gap-1 bg-surface-2 rounded-full p-1 border border-surface-border mb-4 w-fit">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.key}
-            onClick={() => setActiveTab(cat.key)}
-            className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-              activeTab === cat.key
-                ? "bg-brass text-surface-0 font-medium"
-                : "text-ink-secondary hover:text-ink-primary"
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
       {loading ? (
         <p className="text-sm text-ink-muted">Loading…</p>
       ) : (
         <div className="space-y-2">
-          {activeItems.map((item, idx) => (
+          {sortedItems.map((item, idx) => (
             <div
               key={item.id}
               className="flex items-center justify-between bg-surface-2 border border-surface-border rounded-md px-3 py-2"
@@ -179,7 +162,7 @@ export default function DropdownLists() {
                 </button>
                 <button
                   onClick={() => handleMove(item, 1)}
-                  disabled={idx === activeItems.length - 1}
+                  disabled={idx === sortedItems.length - 1}
                   className="text-ink-muted hover:text-ink-primary disabled:opacity-30 text-xs"
                 >
                   ↓
@@ -190,8 +173,8 @@ export default function DropdownLists() {
               </div>
             </div>
           ))}
-          {activeItems.length === 0 && (
-            <p className="text-sm text-ink-muted">No items yet in this list.</p>
+          {sortedItems.length === 0 && (
+            <p className="text-sm text-ink-muted">No tags yet — tags you type on a trade or note will still save even if they're not listed here.</p>
           )}
         </div>
       )}
@@ -201,7 +184,7 @@ export default function DropdownLists() {
           value={newValue}
           onChange={(e) => setNewValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          placeholder="Add new item…"
+          placeholder="Add a tag…"
           className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm flex-1"
         />
         <button
