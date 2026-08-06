@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 /**
  * Freeform tag entry — type a tag and press Enter/comma (or blur the
@@ -8,10 +8,12 @@ import { useState, type KeyboardEvent } from "react";
  * old pattern of toggling pre-set chips sourced from the Settings "tag"
  * dropdown list (TradeFormPanel/NoteEditPanel both used that identically).
  *
- * `suggestions` is accepted but not yet rendered as a dropdown — reserved
- * for a later autocomplete pass so call sites don't need to change when
- * that lands. Dedupe is case-insensitive but preserves the casing of
- * whichever occurrence was typed first.
+ * `suggestions` drives an as-you-type autocomplete panel below the input:
+ * already-used tags (from `suggestions`, typically the account's
+ * tag_settings list) are filtered by the current draft text and offered
+ * as clickable/keyboard-navigable options, so previously-used tags don't
+ * need to be retyped from scratch. Dedupe is case-insensitive but
+ * preserves the casing of whichever occurrence was typed first.
  */
 export default function TagInput({
   value,
@@ -29,13 +31,58 @@ export default function TagInput({
   className?: string;
 }) {
   const [draft, setDraft] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  function commitDraft() {
-    const trimmed = draft.trim();
-    setDraft("");
+  const filteredSuggestions = useMemo(() => {
+    if (!suggestions || suggestions.length === 0) return [];
+    const trimmed = draft.trim().toLowerCase();
+    const alreadyAdded = new Set(value.map((t) => t.toLowerCase()));
+    return suggestions
+      .filter((s) => !alreadyAdded.has(s.toLowerCase()))
+      .filter((s) => (trimmed ? s.toLowerCase().includes(trimmed) : true))
+      .slice(0, 8);
+  }, [suggestions, draft, value]);
+
+  const showPanel = isOpen && filteredSuggestions.length > 0;
+
+  // Keep the highlighted option in range as the filtered list changes.
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [filteredSuggestions.length, draft]);
+
+  // Close the panel on outside click (blur alone can fire before a click
+  // on an option registers, so this covers clicks outside the whole field).
+  useEffect(() => {
+    if (!showPanel) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [showPanel]);
+
+  function addTag(tag: string) {
+    const trimmed = tag.trim();
     if (!trimmed) return;
     if (value.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return;
     onChange([...value, trimmed]);
+  }
+
+  function commitDraft() {
+    const trimmed = draft;
+    setDraft("");
+    setIsOpen(false);
+    addTag(trimmed);
+  }
+
+  function selectSuggestion(tag: string) {
+    setDraft("");
+    setIsOpen(false);
+    addTag(tag);
   }
 
   function removeTag(tag: string) {
@@ -43,9 +90,25 @@ export default function TagInput({
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (showPanel && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      const count = filteredSuggestions.length;
+      setHighlightedIndex((i) =>
+        e.key === "ArrowDown" ? (i + 1) % count : (i - 1 + count) % count
+      );
+      return;
+    }
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      commitDraft();
+      if (showPanel) {
+        selectSuggestion(filteredSuggestions[highlightedIndex]);
+      } else {
+        commitDraft();
+      }
+      return;
+    }
+    if (e.key === "Escape" && showPanel) {
+      setIsOpen(false);
       return;
     }
     // Backspace on an empty draft removes the last chip — mirrors the
@@ -56,33 +119,70 @@ export default function TagInput({
   }
 
   return (
-    <div className={className}>
-      <div className="flex flex-wrap items-center gap-2 mt-1 bg-surface-2 border border-surface-border rounded-md px-2 py-1.5 focus-within:border-glow/60 focus-within:ring-2 focus-within:ring-glow/20 transition-colors">
-        {value.map((tag) => (
-          <span
-            key={tag}
-            className={`inline-flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 rounded-full text-xs border ${chipClassName}`}
-          >
-            {tag}
-            <button
-              type="button"
-              onClick={() => removeTag(tag)}
-              aria-label={`Remove tag ${tag}`}
-              className="text-ink-muted hover:text-ink-primary rounded-full w-4 h-4 flex items-center justify-center leading-none"
+    <div className={className} ref={containerRef}>
+      <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 mt-1 bg-surface-2 border border-surface-border rounded-md px-2 py-1.5 focus-within:border-glow/60 focus-within:ring-2 focus-within:ring-glow/20 transition-colors">
+          {value.map((tag) => (
+            <span
+              key={tag}
+              className={`inline-flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 rounded-full text-xs border ${chipClassName}`}
             >
-              ×
-            </button>
-          </span>
-        ))}
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={commitDraft}
-          placeholder={value.length === 0 ? placeholder : ""}
-          className="flex-1 min-w-[6rem] bg-transparent text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none py-0.5"
-        />
+              {tag}
+              <button
+                type="button"
+                onClick={() => removeTag(tag)}
+                aria-label={`Remove tag ${tag}`}
+                className="text-ink-muted hover:text-ink-primary rounded-full w-4 h-4 flex items-center justify-center leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setIsOpen(true);
+            }}
+            onFocus={() => setIsOpen(true)}
+            onKeyDown={handleKeyDown}
+            onBlur={commitDraft}
+            role="combobox"
+            aria-expanded={showPanel}
+            aria-autocomplete="list"
+            placeholder={value.length === 0 ? placeholder : ""}
+            className="flex-1 min-w-[6rem] bg-transparent text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none py-0.5"
+          />
+        </div>
+
+        {showPanel && (
+          <ul
+            role="listbox"
+            className="absolute z-[60] left-0 right-0 mt-1 max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
+          >
+            {filteredSuggestions.map((s, i) => (
+              <li
+                key={s}
+                role="option"
+                aria-selected={i === highlightedIndex}
+                // onMouseDown (not onClick) so this fires before the
+                // input's onBlur commits/clears the draft.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectSuggestion(s);
+                }}
+                onMouseEnter={() => setHighlightedIndex(i)}
+                className={[
+                  "flex items-center rounded-md px-2.5 py-1.5 text-xs cursor-pointer select-none",
+                  i === highlightedIndex ? "bg-glow/15 text-glow" : "text-ink-primary",
+                ].join(" ")}
+              >
+                {s}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
