@@ -13,7 +13,6 @@ import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import type { JSONContent } from "@tiptap/react";
-import BubbleToolbar from "./BubbleToolbar";
 import SlashCommand from "./slashCommand";
 import NoteImage from "./NoteImage";
 import ImageLightbox from "./ImageLightbox";
@@ -33,8 +32,11 @@ import { validateScreenshotFile } from "@/lib/screenshots";
  *
  * Phase 1a shipped StarterKit's default set only. Phase 2 part 1 added
  * Link and Highlight. Phase 2 part 2 added checklists (TaskList/TaskItem)
- * and tables. Phase 2 part 3 added a floating BubbleToolbar for text
- * selections and a "/" slash-command menu for inserting block types.
+ * and tables. Phase 2 part 3 added a floating bubble toolbar for text
+ * selections (later removed — its link/highlight buttons never got
+ * updated to match the fixed toolbar's popover-based versions, and with
+ * the fixed toolbar always present there was no real gap to fill) and a
+ * "/" slash-command menu for inserting block types.
  * Phase 4 Part 1 (this) adds image support: paste-from-clipboard,
  * drag-and-drop, and a manual toolbar button, all uploading to ImageKit
  * via lib/noteImages.ts and inserting a NoteImage node. Embedding an
@@ -411,9 +413,9 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         // Deferred to the next animation frame: this insert changes the
         // document structure and collapses/moves the selection, which can
         // land in the same React commit as an unrelated DOM update already
-        // in flight (e.g. the bubble toolbar hiding) and corrupt React's
-        // view of the DOM (NotFoundError on insertBefore). Waiting a frame
-        // lets any in-flight DOM/React updates finish first.
+        // in flight (e.g. a popover closing) and corrupt React's view of
+        // the DOM (NotFoundError on insertBefore). Waiting a frame lets
+        // any in-flight DOM/React updates finish first.
         requestAnimationFrame(() => {
           // The editor can be gone by the time this fires — e.g. if the
           // component holding it was unmounted while the upload was in
@@ -486,7 +488,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
           {imageError ?? (uploadingCount === 1 ? "Uploading image…" : `Uploading ${uploadingCount} images…`)}
         </p>
       )}
-      {editable && <BubbleToolbar editor={editor} />}
       <EditorContent editor={editor} />
       {lightbox && <ImageLightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
     </div>

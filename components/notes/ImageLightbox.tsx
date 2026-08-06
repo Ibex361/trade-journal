@@ -5,10 +5,10 @@ import { createPortal } from "react-dom";
 
 /**
  * Notes Phase 4 Part 3 — click-to-expand for images inside a note.
- * Rendered via a portal into document.body, same reasoning as
- * BubbleToolbar's rewrite: stays inside React's one render tree instead of
- * being managed by some other library, and escapes the note panel's
- * overflow-hidden so it can cover the full viewport.
+ * Rendered via a portal into document.body: stays inside React's one
+ * render tree instead of being managed by some other library, and
+ * escapes the note panel's overflow-hidden so it can cover the full
+ * viewport.
  */
 export default function ImageLightbox({ src, alt, onClose }: { src: string; alt?: string; onClose: () => void }) {
   useEffect(() => {

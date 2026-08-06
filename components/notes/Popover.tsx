@@ -17,16 +17,16 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
  *   (--tt-popover-bg-color etc., light/dark pairs). This version is
  *   styled directly with this app's existing Tailwind glass/blur
  *   classes (bg-surface-solid, border-surface-border, shadow-glass —
- *   the same classes BubbleToolbar.tsx and LinkDialog.tsx already use)
- *   instead of introducing a parallel token system for one component.
+ *   the same classes used elsewhere in the editor chrome) instead of
+ *   introducing a parallel token system for one component.
  * - Their version has no light/dark split to adapt since this app is
  *   dark-theme-only (see app/globals.css — `color-scheme: dark`, no
  *   toggle).
  * - Their scss defines slide/fade-in animations keyed off Radix's
  *   `data-state`/`data-side` attributes; this version uses Tailwind's
  *   existing `animate-scale-in`/`animate-fade-in` utility classes
- *   (already defined in this app's tailwind config, used by
- *   LinkDialog.tsx) rather than porting a second animation system.
+ *   (already defined in this app's tailwind config) rather than
+ *   porting a second animation system.
  */
 
 export const Popover = PopoverPrimitive.Root;
