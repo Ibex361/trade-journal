@@ -80,20 +80,11 @@ export function CloseIcon({ className }: IconProps) {
   );
 }
 
-export function MoreIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-// Standard three-line hamburger — replaces MoreIcon as the bottom bar's
-// "More" trigger (see MobileTabBar's More sheet). Three dots read as a
-// context/overflow menu (Android-style); three lines read unambiguously
-// as "open the rest of the app's navigation," which is the actual job.
+// Standard three-line hamburger — the trigger for AppHeader's More drawer
+// (Analytics/Strategies/Reports). Three lines read unambiguously as "open
+// the rest of the app's navigation," which is the actual job — an older
+// three-dot MoreIcon that served the same purpose was removed as an
+// orphan once every call site had switched to this one.
 export function HamburgerIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>

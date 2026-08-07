@@ -29,15 +29,21 @@ const MORE_ICONS: Record<string, (props: { className?: string }) => JSX.Element>
  * the same top-left slot, and desktop's "Trade journal" wordmark reads
  * fine without it).
  *
- * MoreSheet is rendered as a sibling of <header>, not nested inside it.
+ * MoreDrawer is rendered as a sibling of <header>, not nested inside it.
  * This matters: the header is `sticky` with `backdrop-blur-xl`, both of
  * which establish their own stacking/containing context. A previous
  * attempt at this exact change nested the sheet's `fixed inset-0`
  * overlay inside that header context, which clipped/mispositioned the
  * sheet and visually cut off page content sitting under the sticky
- * header. Keeping the sheet as a top-level sibling (the same pattern
- * MobileTabBar already used successfully for its own version of this
- * sheet) avoids that entirely.
+ * header. Keeping the drawer as a top-level sibling (the same pattern
+ * MobileTabBar's older version of this menu already used successfully)
+ * avoids that entirely.
+ *
+ * The overflow menu is a left-side drawer, not a bottom sheet — it opens
+ * from the same edge as its hamburger trigger (top-left), matching the
+ * side-drawer pattern most native/professional apps use for nav overflow,
+ * rather than a bottom sheet (which reads more like an action menu for a
+ * single item than "the rest of the app's navigation").
  */
 export default function AppHeader() {
   const pathname = usePathname();
@@ -78,18 +84,20 @@ export default function AppHeader() {
         </div>
       </header>
 
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} />
+      <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} />
     </>
   );
 }
 
 /**
- * Full-width bottom sheet for the three pages that don't fit the mobile
- * tab bar (Analytics, Strategies, Reports). Same hand-rolled backdrop +
- * panel MobileTabBar's version used — only the trigger moved, not the
- * sheet's own presentation.
+ * Left-side nav drawer for the three pages that don't fit the mobile tab
+ * bar (Analytics, Strategies, Reports). Slides in from the left edge —
+ * same side as the hamburger trigger — rather than up from the bottom,
+ * matching how the reference apps this was modeled on treat navigation
+ * overflow (a drawer, not an action sheet). Closes on backdrop click,
+ * the X button, Escape, or navigating (via the pathname effect above).
  */
-function MoreSheet({
+function MoreDrawer({
   open,
   onClose,
   pathname,
@@ -107,6 +115,16 @@ function MoreSheet({
     };
   }, [open]);
 
+  // Escape closes the drawer, same convention as TradeFormPanel's slide-over.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
@@ -117,10 +135,10 @@ function MoreSheet({
         className="absolute inset-0 bg-surface-0/70 backdrop-blur-sm motion-safe:animate-fade-in"
       />
       <div
-        className="absolute bottom-0 inset-x-0 bg-surface-solid backdrop-blur-xl border-t border-surface-border rounded-t-panel shadow-glass motion-safe:animate-slide-up"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)" }}
+        className="absolute inset-y-0 left-0 w-[82%] max-w-xs bg-surface-solid backdrop-blur-xl border-r border-surface-border shadow-glass motion-safe:animate-slide-in-left flex flex-col"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)", paddingTop: "env(safe-area-inset-top)" }}
       >
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-surface-border">
           <span className="text-sm font-medium text-ink-secondary">More</span>
           <button
             onClick={onClose}
@@ -130,7 +148,7 @@ function MoreSheet({
             <CloseIcon className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-2 pb-3">
+        <div className="px-2 py-3 overflow-y-auto">
           {MORE_HREFS.map((href) => {
             const tab = NAV_TABS.find((t) => t.href === href)!;
             const Icon = MORE_ICONS[href];
