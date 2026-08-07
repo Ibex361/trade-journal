@@ -255,13 +255,15 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
   // reach *current* state through these refs instead of closing over a
   // single, stale render.
   const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
-  hasUnsavedChangesRef.current = hasUnsavedChanges;
   const requestCloseRef = useRef(requestClose);
-  requestCloseRef.current = requestClose;
   const showDiscardConfirmRef = useRef(showDiscardConfirm);
-  showDiscardConfirmRef.current = showDiscardConfirm;
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+    requestCloseRef.current = requestClose;
+    showDiscardConfirmRef.current = showDiscardConfirm;
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!selectedAccount) return;
