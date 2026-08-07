@@ -92,7 +92,15 @@ export default function NotesPage() {
   const { trades } = useTradesData();
   const router = useRouter();
   const { setPendingTradeId } = useTradesPageState();
-  const { filters, setFilters, resetFilters, activeNoteId, setActiveNoteId } = useNotesPageState();
+  const {
+    filters,
+    setFilters,
+    resetFilters,
+    activeNoteId,
+    setActiveNoteId,
+    pendingNewNote,
+    setPendingNewNote,
+  } = useNotesPageState();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -227,6 +235,22 @@ export default function NotesPage() {
     setNotes((current) => [newNote, ...current]);
     setActiveNoteId(newNote.id);
   }
+
+  // Picks up a "new note" request set by MobileTabBar's FAB (the plus
+  // button's "New note" choice) via NotesPageStateContext.pendingNewNote
+  // before navigating here. handleNewNote() guards on !selectedAccount and
+  // silently no-ops, so this effect has to wait for selectedAccount to be
+  // ready rather than fire immediately on mount — otherwise a fast FAB tap
+  // right after a fresh page load could land before the account resolves
+  // and the flag would clear without ever creating the note. The flag is
+  // cleared *before* calling handleNewNote() (it's async) rather than
+  // after, to avoid any chance of a double-fire if selectedAccount changes
+  // again mid-request.
+  useEffect(() => {
+    if (!pendingNewNote || !selectedAccount) return;
+    setPendingNewNote(false);
+    handleNewNote();
+  }, [pendingNewNote, selectedAccount, setPendingNewNote]);
 
   function handleSelectNote(note: Note) {
     setActiveNoteId(note.id);

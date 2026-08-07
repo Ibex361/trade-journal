@@ -10,6 +10,8 @@ type NotesPageStateContextType = {
   resetFilters: () => void;
   activeNoteId: string | null;
   setActiveNoteId: (id: string | null) => void;
+  pendingNewNote: boolean;
+  setPendingNewNote: (pending: boolean) => void;
 };
 
 const NotesPageStateContext = createContext<NotesPageStateContextType | null>(null);
@@ -30,6 +32,11 @@ export function NotesPageStateProvider({ children }: { children: ReactNode }) {
   const { selectedAccount } = useAccount();
   const [filters, setFilters] = useState<NoteFilters>(EMPTY_NOTE_FILTERS);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  // Set by MobileTabBar's FAB "New note" choice before navigating to
+  // /notes — mirrors TradesPageStateContext.pendingNewTrade.
+  // app/notes/page.tsx picks this up in an effect once selectedAccount is
+  // ready and calls handleNewNote(), then clears it.
+  const [pendingNewNote, setPendingNewNote] = useState(false);
 
   // Filters/active note should reset when the user actually switches
   // accounts, but not just because the Notes page happens to remount (e.g.
@@ -44,6 +51,7 @@ export function NotesPageStateProvider({ children }: { children: ReactNode }) {
       prevAccountId.current = selectedAccount?.id;
       setFilters(EMPTY_NOTE_FILTERS);
       setActiveNoteId(null);
+      setPendingNewNote(false);
     }
   }, [selectedAccount?.id]);
 
@@ -53,7 +61,15 @@ export function NotesPageStateProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotesPageStateContext.Provider
-      value={{ filters, setFilters, resetFilters, activeNoteId, setActiveNoteId }}
+      value={{
+        filters,
+        setFilters,
+        resetFilters,
+        activeNoteId,
+        setActiveNoteId,
+        pendingNewNote,
+        setPendingNewNote,
+      }}
     >
       {children}
     </NotesPageStateContext.Provider>

@@ -77,7 +77,16 @@ export default function TradesPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
-  const { filters, setFilters, sort, setSort, pendingTradeId, setPendingTradeId } = useTradesPageState();
+  const {
+    filters,
+    setFilters,
+    sort,
+    setSort,
+    pendingTradeId,
+    setPendingTradeId,
+    pendingNewTrade,
+    setPendingNewTrade,
+  } = useTradesPageState();
   // Typing in the filter bar or changing sort updates `filters`/`sort` (and
   // their controls) immediately; this combined, deferred copy is what
   // actually drives the filter+sort+row-render pipeline below, so neither
@@ -194,6 +203,17 @@ export default function TradesPage() {
     if (target) openEdit(target);
     setPendingTradeId(null);
   }, [pendingTradeId, tradesLoading, trades, openEdit, setPendingTradeId]);
+
+  // Picks up a "new trade" request set by MobileTabBar's FAB (the plus
+  // button's "New trade" choice) via TradesPageStateContext.pendingNewTrade
+  // before navigating here. Waits for trades to finish loading first, same
+  // as the pendingTradeId effect above, purely so both effects settle in a
+  // consistent order — openNew() itself doesn't actually need the list.
+  useEffect(() => {
+    if (!pendingNewTrade || tradesLoading) return;
+    setPendingNewTrade(false);
+    openNew();
+  }, [pendingNewTrade, tradesLoading, setPendingNewTrade]);
 
   const openDuplicate = useCallback((trade: Trade) => {
     setEditingTrade(null);

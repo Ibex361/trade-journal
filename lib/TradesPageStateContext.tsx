@@ -13,6 +13,8 @@ type TradesPageStateContextType = {
   resetFilters: () => void;
   pendingTradeId: string | null;
   setPendingTradeId: (id: string | null) => void;
+  pendingNewTrade: boolean;
+  setPendingNewTrade: (pending: boolean) => void;
 };
 
 const TradesPageStateContext = createContext<TradesPageStateContextType | null>(null);
@@ -34,6 +36,11 @@ export function TradesPageStateProvider({ children }: { children: ReactNode }) {
   // trade in TradeFormPanel, then clears it so it doesn't reopen on a
   // later, unrelated visit to Trades.
   const [pendingTradeId, setPendingTradeId] = useState<string | null>(null);
+  // Set by MobileTabBar's FAB "New trade" choice before navigating to
+  // /trades — same "store just a flag, root-mounted context" approach as
+  // pendingTradeId above. app/trades/page.tsx picks this up in an effect
+  // once trades has finished loading and calls openNew(), then clears it.
+  const [pendingNewTrade, setPendingNewTrade] = useState(false);
 
   // Filters should reset when the user actually switches accounts, but not
   // just because the Trades page happens to remount (e.g. navigating back
@@ -49,6 +56,7 @@ export function TradesPageStateProvider({ children }: { children: ReactNode }) {
       prevAccountId.current = selectedAccount?.id;
       setFilters(EMPTY_FILTERS);
       setPendingTradeId(null);
+      setPendingNewTrade(false);
     }
   }, [selectedAccount?.id]);
 
@@ -58,7 +66,17 @@ export function TradesPageStateProvider({ children }: { children: ReactNode }) {
 
   return (
     <TradesPageStateContext.Provider
-      value={{ filters, setFilters, sort, setSort, resetFilters, pendingTradeId, setPendingTradeId }}
+      value={{
+        filters,
+        setFilters,
+        sort,
+        setSort,
+        resetFilters,
+        pendingTradeId,
+        setPendingTradeId,
+        pendingNewTrade,
+        setPendingNewTrade,
+      }}
     >
       {children}
     </TradesPageStateContext.Provider>
