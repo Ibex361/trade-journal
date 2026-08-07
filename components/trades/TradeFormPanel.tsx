@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
-import { fetchTagSettings, TagSettingItem } from "@/lib/tagSettings";
+import { fetchTagSettings, fetchDistinctTags, TagSettingItem } from "@/lib/tagSettings";
 import { createTrade, updateTrade, Trade, TradeInput, Direction, ExitReason, StopMovement } from "@/lib/trades";
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
@@ -191,6 +191,7 @@ export default function TradeFormPanel({
   const pendingDiaryTradeRef = useRef<Trade | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -284,6 +285,14 @@ export default function TradeFormPanel({
     fetchTagSettings(selectedAccount.id).then(({ data }) => {
       if (data) setTagSettings(data as TagSettingItem[]);
     });
+  }, [selectedAccount?.id]);
+
+  // Freeform tag suggestion fix, part 1: suggest every tag actually in use
+  // on this account (trades + notes), not just the curated tag_settings
+  // list — see fetchDistinctTags for why.
+  useEffect(() => {
+    if (!selectedAccount) return;
+    fetchDistinctTags(selectedAccount.id).then(setTagSuggestions);
   }, [selectedAccount?.id]);
 
   useEffect(() => {
@@ -996,7 +1005,7 @@ export default function TradeFormPanel({
             <TagInput
               value={form.tags}
               onChange={(tags) => set("tags", tags)}
-              suggestions={tagSettings.map((o) => o.value)}
+              suggestions={tagSuggestions}
               chipClassName="bg-brass/15 border-brass text-brass"
             />
           </label>

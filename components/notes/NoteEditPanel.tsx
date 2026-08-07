@@ -11,7 +11,7 @@ import NoteEditorErrorBoundary from "@/components/notes/NoteEditorErrorBoundary"
 import LinkedTradesPicker from "@/components/notes/LinkedTradesPicker";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
-import { fetchTagSettings, type TagSettingItem } from "@/lib/tagSettings";
+import { fetchTagSettings, fetchDistinctTags, type TagSettingItem } from "@/lib/tagSettings";
 import type { Note } from "@/lib/notes";
 import type { Trade } from "@/lib/trades";
 
@@ -98,6 +98,7 @@ export default function NoteEditPanel({
   const [linkedStrategy, setLinkedStrategy] = useState<string>(note.linked_strategy ?? "");
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Details (tags/linked strategy/linked trades) start collapsed so
@@ -246,6 +247,14 @@ export default function NoteEditPanel({
     fetchTagSettings(selectedAccount.id).then(({ data }) => {
       if (data) setTagSettings(data as TagSettingItem[]);
     });
+  }, [selectedAccount?.id]);
+
+  // Freeform tag suggestion fix, part 1: suggest every tag actually in use
+  // on this account (trades + notes), not just the curated tag_settings
+  // list — see fetchDistinctTags for why.
+  useEffect(() => {
+    if (!selectedAccount) return;
+    fetchDistinctTags(selectedAccount.id).then(setTagSuggestions);
   }, [selectedAccount?.id]);
 
   const strategyOptions = dropdowns
@@ -441,7 +450,7 @@ export default function NoteEditPanel({
                   <TagInput
                     value={tags}
                     onChange={handleTagsChange}
-                    suggestions={tagSettings.map((o) => o.value)}
+                    suggestions={tagSuggestions}
                     chipClassName="bg-glow/15 border-glow text-glow"
                   />
                 </div>

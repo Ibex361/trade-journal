@@ -20,6 +20,33 @@ export type TagSettingItem = {
   created_at: string;
 };
 
+/**
+ * Every distinct tag currently in use on this account, across both trades
+ * and notes — the actual autocomplete source (Part 1 of the freeform-tag
+ * suggestion fix): previously TagInput's `suggestions` only offered the
+ * curated tag_settings list, so a tag typed freeform onto a trade/note but
+ * never separately added in Settings would never show up as a suggestion
+ * again. Selects just the tags column from both tables (not a head-count)
+ * since the values themselves are what's needed here.
+ */
+export async function fetchDistinctTags(accountId: string): Promise<string[]> {
+  const [tradesResult, notesResult] = await Promise.all([
+    supabase.from("trades").select("tags").eq("account_id", accountId),
+    supabase.from("notes").select("tags").eq("account_id", accountId),
+  ]);
+  if (tradesResult.error) console.error("fetchDistinctTags (trades) failed:", tradesResult.error);
+  if (notesResult.error) console.error("fetchDistinctTags (notes) failed:", notesResult.error);
+
+  const seen = new Map<string, string>(); // lowercase -> first-seen casing
+  for (const row of [...(tradesResult.data ?? []), ...(notesResult.data ?? [])]) {
+    for (const tag of (row as { tags: string[] | null }).tags ?? []) {
+      const key = tag.toLowerCase();
+      if (!seen.has(key)) seen.set(key, tag);
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+}
+
 export async function fetchTagSettings(accountId: string) {
   return supabase
     .from("tag_settings")
