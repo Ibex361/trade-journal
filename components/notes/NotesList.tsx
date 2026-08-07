@@ -1,7 +1,10 @@
+import { useCallback, useRef } from "react";
 import Card from "@/components/shared/Card";
 import Badge from "@/components/shared/Badge";
 import type { Note } from "@/lib/notes";
 import { extractPreviewText } from "@/lib/notes";
+
+const LONG_PRESS_MS = 450;
 
 function formatUpdated(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -18,6 +21,7 @@ export default function NotesList({
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
+  onEnterSelectionMode,
 }: {
   notes: Note[];
   onSelectNote: (note: Note) => void;
@@ -25,8 +29,48 @@ export default function NotesList({
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
+  onEnterSelectionMode: (id: string) => void;
 }) {
   const allSelected = notes.length > 0 && notes.every((n) => selectedIds.has(n.id));
+
+  // Long-press (or mouse-hold) support so selection mode can be entered by
+  // pressing a note card directly, same convention as the Trades list —
+  // no permanently-visible checkboxes needed to discover multi-select.
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  const clearPressTimer = useCallback(() => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }, []);
+
+  const startPress = useCallback(
+    (id: string, target: EventTarget) => {
+      if (selectionMode) return;
+      if ((target as HTMLElement).closest("input")) return;
+      longPressFired.current = false;
+      clearPressTimer();
+      pressTimer.current = setTimeout(() => {
+        longPressFired.current = true;
+        onEnterSelectionMode(id);
+      }, LONG_PRESS_MS);
+    },
+    [selectionMode, clearPressTimer, onEnterSelectionMode]
+  );
+
+  const handleCardClick = useCallback(
+    (note: Note) => {
+      if (longPressFired.current) {
+        longPressFired.current = false;
+        return;
+      }
+      if (selectionMode) onToggleSelect(note.id);
+      else onSelectNote(note);
+    },
+    [selectionMode, onToggleSelect, onSelectNote]
+  );
 
   return (
     <div className="space-y-3">
@@ -50,7 +94,14 @@ export default function NotesList({
             <button
               key={note.id}
               type="button"
-              onClick={() => (selectionMode ? onToggleSelect(note.id) : onSelectNote(note))}
+              onClick={() => handleCardClick(note)}
+              onPointerDown={(e) => startPress(note.id, e.target)}
+              onPointerUp={clearPressTimer}
+              onPointerLeave={clearPressTimer}
+              onPointerCancel={clearPressTimer}
+              onContextMenu={(e) => {
+                if (longPressFired.current) e.preventDefault();
+              }}
               className="text-left"
             >
               <Card

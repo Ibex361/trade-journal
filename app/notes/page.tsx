@@ -113,6 +113,11 @@ export default function NotesPage() {
     setSelectedIds(new Set());
   }, []);
 
+  const enterSelectionMode = useCallback((id: string) => {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
   // Which note is open lives in NotesPageStateContext (see the comment
   // there) rather than local state, so navigating away mid-edit and back
   // reopens the same note instead of dropping back to the list — derived
@@ -480,6 +485,7 @@ export default function NotesPage() {
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}
               onToggleSelectAll={toggleSelectAll}
+              onEnterSelectionMode={enterSelectionMode}
             />
           )}
         </div>
