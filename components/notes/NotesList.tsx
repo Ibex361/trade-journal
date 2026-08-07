@@ -81,7 +81,7 @@ export default function NotesList({
             checked={allSelected}
             onChange={onToggleSelectAll}
             aria-label="Select all notes"
-            className="accent-brass"
+            className="accent-glow"
           />
           <span className="text-[11px] text-ink-secondary">Select all</span>
         </div>
@@ -107,7 +107,7 @@ export default function NotesList({
               <Card
                 padding="tight"
                 className={`space-y-2 h-full transition-colors duration-fast ${
-                  isSelected ? "border-brass/40 bg-brass/10" : "hover:border-glow/40"
+                  isSelected ? "border-glow/40 bg-glow/10" : "hover:border-glow/40"
                 }`}
               >
                 <div className="flex items-start gap-2">
@@ -121,7 +121,7 @@ export default function NotesList({
                         onToggleSelect(note.id);
                       }}
                       aria-label={`Select note ${note.title || "Untitled"}`}
-                      className="accent-brass mt-1 shrink-0"
+                      className="accent-glow mt-1 shrink-0"
                     />
                   )}
                   <h3 className="font-display text-base font-medium text-ink-primary truncate">

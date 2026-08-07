@@ -31,14 +31,14 @@ export default function WinRateModeCard() {
             onClick={() => setMode(opt.value)}
             className={`text-left rounded-md border px-4 py-3 transition-colors ${
               mode === opt.value
-                ? "border-brass bg-brass/10"
+                ? "border-glow bg-glow/10"
                 : "border-surface-border hover:bg-surface-2/60"
             }`}
           >
             <div className="flex items-center gap-2">
               <span
                 className={`w-3.5 h-3.5 rounded-full border flex-shrink-0 ${
-                  mode === opt.value ? "border-brass bg-brass" : "border-surface-border"
+                  mode === opt.value ? "border-glow bg-glow" : "border-surface-border"
                 }`}
               />
               <span className="text-sm font-medium text-ink-primary">{opt.label}</span>

@@ -164,7 +164,7 @@ export default function DataImportCard() {
               onClick={() => handleSourceChange(s.id)}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                 source === s.id
-                  ? "border-brass text-ink-primary bg-surface-2"
+                  ? "border-glow text-ink-primary bg-surface-2"
                   : "border-surface-border text-ink-muted hover:text-ink-secondary"
               }`}
             >
@@ -175,7 +175,7 @@ export default function DataImportCard() {
         <p className="text-xs text-ink-muted">{activeSource.description}</p>
 
         <div className="flex items-center gap-3">
-          <label className="text-sm bg-surface-2 border border-surface-border rounded-full px-4 py-1.5 text-ink-primary hover:border-brass/60 cursor-pointer">
+          <label className="text-sm bg-surface-2 border border-surface-border rounded-full px-4 py-1.5 text-ink-primary hover:border-glow/60 cursor-pointer">
             {fileName ?? "Choose CSV file…"}
             <input
               ref={fileInputRef}

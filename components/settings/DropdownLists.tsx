@@ -152,7 +152,7 @@ export default function DropdownLists() {
             onClick={() => setActiveTab(cat.key)}
             className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
               activeTab === cat.key
-                ? "bg-brass text-surface-0 font-medium"
+                ? "bg-glow text-surface-0 font-medium"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >
@@ -208,7 +208,7 @@ export default function DropdownLists() {
         />
         <button
           onClick={handleAdd}
-          className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
+          className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
         >
           Add
         </button>

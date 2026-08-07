@@ -146,7 +146,7 @@ export default function AccountManager() {
                     <button
                       onClick={() => handleRename(acc.id)}
                       disabled={busy}
-                      className="text-sm text-brass"
+                      className="text-sm text-glow"
                     >
                       Save
                     </button>
@@ -169,7 +169,7 @@ export default function AccountManager() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{acc.name}</span>
                     {acc.is_demo && (
-                      <span className="text-[11px] uppercase tracking-wide bg-brass/15 text-brass px-2 py-0.5 rounded-full">
+                      <span className="text-[11px] uppercase tracking-wide bg-glow/15 text-glow px-2 py-0.5 rounded-full">
                         Demo
                       </span>
                     )}
@@ -251,7 +251,7 @@ export default function AccountManager() {
                   <button
                     onClick={() => handleEditDetails(acc.id)}
                     disabled={busy}
-                    className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
+                    className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
                   >
                     Save changes
                   </button>
@@ -308,7 +308,7 @@ export default function AccountManager() {
             <button
               onClick={handleCreate}
               disabled={busy}
-              className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
+              className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
             >
               Create account
             </button>
@@ -326,7 +326,7 @@ export default function AccountManager() {
       ) : (
         <button
           onClick={() => setShowNew(true)}
-          className="mt-4 text-sm text-brass hover:text-brass-dim"
+          className="mt-4 text-sm text-glow hover:text-glow-dim"
         >
           + Add account
         </button>
@@ -353,7 +353,7 @@ export default function AccountManager() {
                       <button
                         onClick={() => handleRestore(acc.id)}
                         disabled={busy}
-                        className="text-xs text-brass"
+                        className="text-xs text-glow"
                       >
                         Restore
                       </button>

@@ -383,7 +383,7 @@ export default function TradesPage() {
             <button
               onClick={openNew}
               disabled={!selectedAccount}
-              className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
+              className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
             >
               New trade
             </button>

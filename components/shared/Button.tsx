@@ -2,11 +2,10 @@ import type { ButtonHTMLAttributes } from "react";
 
 /**
  * The one button every page should reach for going forward, replacing the
- * "bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full" string that
+ * "bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full" string that
  * was copy-pasted into roughly 15 different files (Trades filters, Settings
- * forms, Reports toolbar, Login...). Those existing raw buttons still work
- * (brass is aliased to the new teal in tailwind.config.ts), but Step 4
- * should swap each one over to <Button> as it touches that page.
+ * forms, Reports toolbar, Login...). Those existing raw buttons still work,
+ * but Step 4 should swap each one over to <Button> as it touches that page.
  */
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";

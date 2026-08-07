@@ -154,7 +154,7 @@ body {
   [class*="text-ink-muted"] {
     color: #85888d !important;
   }
-  [class*="text-brass"] {
+  [class*="text-glow"] {
     color: #1f8a76 !important; /* darkened teal, legible on white */
   }
   [class*="rounded-card"] {

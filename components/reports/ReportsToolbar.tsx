@@ -39,14 +39,14 @@ export default function ReportsToolbar({
       <button
         onClick={handleExport}
         disabled={trades.length === 0}
-        className="text-sm text-ink-secondary border border-surface-border px-3 py-1.5 rounded-full hover:text-ink-primary hover:border-brass/50 transition-colors disabled:opacity-50 disabled:hover:text-ink-secondary disabled:hover:border-surface-border"
+        className="text-sm text-ink-secondary border border-surface-border px-3 py-1.5 rounded-full hover:text-ink-primary hover:border-glow/50 transition-colors disabled:opacity-50 disabled:hover:text-ink-secondary disabled:hover:border-surface-border"
       >
         {justExported ? "Downloaded ✓" : "Export CSV"}
       </button>
       <button
         onClick={handlePrint}
         disabled={trades.length === 0}
-        className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
+        className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
       >
         Print report
       </button>

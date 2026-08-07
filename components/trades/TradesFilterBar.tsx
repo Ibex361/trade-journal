@@ -138,7 +138,7 @@ export default function TradesFilterBar({
                 onClick={() => set("direction", opt.value as TradeFilters["direction"])}
                 className={`px-3 py-1 rounded-full text-xs transition-colors ${
                   filters.direction === opt.value
-                    ? "bg-brass text-surface-0 font-medium"
+                    ? "bg-glow text-surface-0 font-medium"
                     : "text-ink-secondary hover:text-ink-primary"
                 }`}
               >
@@ -162,7 +162,7 @@ export default function TradesFilterBar({
                 onClick={() => set("rulesFollowed", opt.value as TradeFilters["rulesFollowed"])}
                 className={`px-3 py-1 rounded-full text-xs transition-colors ${
                   filters.rulesFollowed === opt.value
-                    ? "bg-brass text-surface-0 font-medium"
+                    ? "bg-glow text-surface-0 font-medium"
                     : "text-ink-secondary hover:text-ink-primary"
                 }`}
               >
@@ -187,7 +187,7 @@ export default function TradesFilterBar({
                 onClick={() => set("pnlOutcome", opt.value as TradeFilters["pnlOutcome"])}
                 className={`px-3 py-1 rounded-full text-xs transition-colors ${
                   filters.pnlOutcome === opt.value
-                    ? "bg-brass text-surface-0 font-medium"
+                    ? "bg-glow text-surface-0 font-medium"
                     : "text-ink-secondary hover:text-ink-primary"
                 }`}
               >

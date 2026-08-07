@@ -29,18 +29,9 @@ const config: Config = {
           muted: "#5C6180",
         },
         // Signature two-tone accent for Concept C: a teal-to-violet glow.
-        // This is the real going-forward name — Step 3 should reach for this
-        // (and `glow-violet`) directly when it rebuilds shared components.
         glow: {
           DEFAULT: "#5CE6C8",
           violet: "#7C6FF0",
-        },
-        // Deprecated alias for the old single-tone gold accent. Kept only so
-        // the ~60 existing `brass-*` / `bg-brass` / `accent-brass` classes
-        // scattered across components stay styled (now in teal) until Step 3
-        // renames each of them onto `glow`. Remove this block once that's done.
-        brass: {
-          DEFAULT: "#5CE6C8",
           dim: "#2F9885",
         },
         gain: "#5CE6C8", // same teal as glow — a win is the glow signal

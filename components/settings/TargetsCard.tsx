@@ -83,7 +83,7 @@ export default function TargetsCard() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
+          className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
         >
           {saving ? "Saving…" : "Save targets"}
         </button>

@@ -683,7 +683,7 @@ export default function TradeFormPanel({
                     onClick={() => set("direction", d)}
                     className={`flex-1 py-1.5 rounded-full text-xs capitalize transition-colors ${
                       form.direction === d
-                        ? "bg-brass text-surface-0 font-medium"
+                        ? "bg-glow text-surface-0 font-medium"
                         : "text-ink-secondary hover:text-ink-primary"
                     }`}
                   >
@@ -813,7 +813,7 @@ export default function TradeFormPanel({
                     onClick={() => set("sl_movement", form.sl_movement === o.value ? null : o.value)}
                     className={`flex-1 py-1.5 rounded-full text-[11px] transition-colors ${
                       form.sl_movement === o.value
-                        ? "bg-brass text-surface-0 font-medium"
+                        ? "bg-glow text-surface-0 font-medium"
                         : "text-ink-secondary hover:text-ink-primary"
                     }`}
                   >
@@ -832,7 +832,7 @@ export default function TradeFormPanel({
                     onClick={() => set("tp_movement", form.tp_movement === o.value ? null : o.value)}
                     className={`flex-1 py-1.5 rounded-full text-[11px] transition-colors ${
                       form.tp_movement === o.value
-                        ? "bg-brass text-surface-0 font-medium"
+                        ? "bg-glow text-surface-0 font-medium"
                         : "text-ink-secondary hover:text-ink-primary"
                     }`}
                   >
@@ -851,7 +851,7 @@ export default function TradeFormPanel({
                   <button
                     type="button"
                     onClick={resetPnlToAuto}
-                    className="text-[11px] text-brass hover:underline"
+                    className="text-[11px] text-glow hover:underline"
                   >
                     Use calculated
                   </button>
@@ -870,8 +870,8 @@ export default function TradeFormPanel({
                 </span>
               )}
               {pnlMismatch && (
-                <div className="mt-1.5 rounded-md border border-brass/30 bg-brass/10 px-2.5 py-1.5">
-                  <p className="text-[11px] text-brass leading-snug">
+                <div className="mt-1.5 rounded-md border border-glow/30 bg-glow/10 px-2.5 py-1.5">
+                  <p className="text-[11px] text-glow leading-snug">
                     This P&amp;L doesn&apos;t match what entry/exit/size imply
                     (calculated: {pnlMismatch.computed.toFixed(2)}, entered:{" "}
                     {pnlMismatch.manual.toFixed(2)}). Keep it if that&apos;s
@@ -895,7 +895,7 @@ export default function TradeFormPanel({
                   <button
                     type="button"
                     onClick={resetRToAuto}
-                    className="text-[11px] text-brass hover:underline"
+                    className="text-[11px] text-glow hover:underline"
                   >
                     Use calculated
                   </button>
@@ -930,7 +930,7 @@ export default function TradeFormPanel({
                   onClick={() => set("rules_followed", opt.value)}
                   className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
                     form.rules_followed === opt.value
-                      ? "bg-brass text-surface-0 font-medium"
+                      ? "bg-glow text-surface-0 font-medium"
                       : "text-ink-secondary hover:text-ink-primary"
                   }`}
                 >
@@ -960,7 +960,7 @@ export default function TradeFormPanel({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-[11px] text-brass hover:underline"
+                    className="text-[11px] text-glow hover:underline"
                   >
                     Replace
                   </button>
@@ -977,7 +977,7 @@ export default function TradeFormPanel({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full rounded-md border border-dashed border-surface-border bg-surface-2 px-3 py-4 text-center text-xs text-ink-secondary hover:text-ink-primary hover:border-brass/50 transition-colors"
+                className="w-full rounded-md border border-dashed border-surface-border bg-surface-2 px-3 py-4 text-center text-xs text-ink-secondary hover:text-ink-primary hover:border-glow/50 transition-colors"
               >
                 + Add screenshot
               </button>
@@ -997,7 +997,7 @@ export default function TradeFormPanel({
               value={form.tags}
               onChange={(tags) => set("tags", tags)}
               suggestions={tagSuggestions}
-              chipClassName="bg-brass/15 border-brass text-brass"
+              chipClassName="bg-glow/15 border-glow text-glow"
             />
           </label>
 
@@ -1028,7 +1028,7 @@ export default function TradeFormPanel({
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-60"
+              className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-60"
             >
               {saving ? "Saving…" : trade ? "Save changes" : "Add trade"}
             </button>

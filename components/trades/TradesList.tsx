@@ -92,7 +92,7 @@ function ScreenshotThumb({ url, onOpen }: { url: string | null; onOpen: () => vo
   return (
     <button
       onClick={onOpen}
-      className="w-9 h-9 rounded-md overflow-hidden border border-surface-border hover:border-brass/60 transition-colors"
+      className="w-9 h-9 rounded-md overflow-hidden border border-surface-border hover:border-glow/60 transition-colors"
       aria-label="View chart screenshot"
     >
       <img src={url} alt="" className="w-full h-full object-cover" />
@@ -159,7 +159,7 @@ function SortHeader({
       } ${align === "right" ? "ml-auto" : ""}`}
     >
       {label}
-      <span className={`text-brass ${active ? "" : "opacity-0"}`}>
+      <span className={`text-glow ${active ? "" : "opacity-0"}`}>
         {sort.direction === "asc" ? "↑" : "↓"}
       </span>
     </button>
@@ -224,7 +224,7 @@ const DesktopRow = memo(function DesktopRow({
       onContextMenu={onContextMenuGuard}
       onClick={(e) => onRowClick(e, t.id)}
       className={`border-b border-surface-border last:border-0 transition-colors select-none ${
-        isSelected ? "bg-brass/10 hover:bg-brass/15" : "hover:bg-surface-2/50"
+        isSelected ? "bg-glow/10 hover:bg-glow/15" : "hover:bg-surface-2/50"
       } ${selectionMode ? "cursor-pointer" : ""} ${
         isBest ? "border-l-2 border-l-gain" : isWorst ? "border-l-2 border-l-loss" : ""
       }`}
@@ -238,7 +238,7 @@ const DesktopRow = memo(function DesktopRow({
             onChange={() => {}}
             onClick={(e) => onCheckboxClick(e, t.id, index)}
             aria-label={`Select trade ${t.instrument}`}
-            className="accent-brass"
+            className="accent-glow"
           />
         </td>
       )}
@@ -294,10 +294,10 @@ const DesktopRow = memo(function DesktopRow({
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center justify-end gap-3">
-          <button onClick={() => onEdit(t)} className="text-xs text-ink-secondary hover:text-brass">
+          <button onClick={() => onEdit(t)} className="text-xs text-ink-secondary hover:text-glow">
             Edit
           </button>
-          <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-brass">
+          <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-glow">
             Duplicate
           </button>
           <DeleteButton onConfirm={() => onDelete(t.id)} />
@@ -337,7 +337,7 @@ const MobileCard = memo(function MobileCard({
       onClick={(e) => onRowClick(e, t.id)}
       className={`border rounded-card p-4 transition-colors select-none ${
         isSelected
-          ? "bg-brass/10 border-brass/40"
+          ? "bg-glow/10 border-glow/40"
           : isBest
           ? "bg-surface-1 border-gain/40"
           : isWorst
@@ -355,7 +355,7 @@ const MobileCard = memo(function MobileCard({
               onChange={() => {}}
               onClick={(e) => onCheckboxClick(e, t.id, index)}
               aria-label={`Select trade ${t.instrument}`}
-              className="accent-brass mt-1"
+              className="accent-glow mt-1"
             />
           )}
           <span
@@ -419,7 +419,7 @@ const MobileCard = memo(function MobileCard({
           {t.tags.map((tag) => (
             <span
               key={tag}
-              className="text-[11px] text-brass bg-brass/10 border border-brass/25 rounded-full px-2 py-0.5"
+              className="text-[11px] text-glow bg-glow/10 border border-glow/25 rounded-full px-2 py-0.5"
             >
               {tag}
             </span>
@@ -428,10 +428,10 @@ const MobileCard = memo(function MobileCard({
       )}
 
       <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-surface-border">
-        <button onClick={() => onEdit(t)} className="text-xs text-ink-secondary hover:text-brass">
+        <button onClick={() => onEdit(t)} className="text-xs text-ink-secondary hover:text-glow">
           Edit
         </button>
-        <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-brass">
+        <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-glow">
           Duplicate
         </button>
         <DeleteButton onConfirm={() => onDelete(t.id)} />
@@ -583,7 +583,7 @@ function TradesList({
                     checked={allSelected}
                     onChange={onToggleSelectAll}
                     aria-label="Select all trades"
-                    className="accent-brass"
+                    className="accent-glow"
                   />
                 </th>
               )}
@@ -663,7 +663,7 @@ function TradesList({
               checked={allSelected}
               onChange={onToggleSelectAll}
               aria-label="Select all trades"
-              className="accent-brass"
+              className="accent-glow"
             />
             <span className="text-[11px] text-ink-secondary">Select all</span>
           </div>

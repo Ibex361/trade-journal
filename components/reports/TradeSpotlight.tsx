@@ -74,7 +74,7 @@ function SpotlightCard({
         {trade.screenshot_url && (
           <button
             onClick={() => onOpenScreenshot(trade.screenshot_url!)}
-            className="w-14 h-14 shrink-0 rounded-md overflow-hidden border border-surface-border hover:border-brass/60 transition-colors print:hidden"
+            className="w-14 h-14 shrink-0 rounded-md overflow-hidden border border-surface-border hover:border-glow/60 transition-colors print:hidden"
             aria-label="View chart screenshot"
           >
             <img src={trade.screenshot_url} alt="" className="w-full h-full object-cover" />

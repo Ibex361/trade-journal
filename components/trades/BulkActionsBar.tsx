@@ -88,9 +88,9 @@ export default function BulkActionsBar({
 
   return (
     <div className="sticky top-[52px] md:top-[68px] z-20 -mx-4 px-4 md:mx-0 md:px-0 mb-4 pointer-events-none">
-      <div className="bg-brass/15 border border-brass/50 rounded-2xl shadow-lg shadow-black/30 pointer-events-auto overflow-hidden ring-1 ring-brass/20 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-brass/20">
-          <span className="flex items-center gap-2 text-xs font-semibold text-brass tracking-wide">
+      <div className="bg-glow/15 border border-glow/50 rounded-2xl shadow-lg shadow-black/30 pointer-events-auto overflow-hidden ring-1 ring-glow/20 backdrop-blur-sm">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-glow/20">
+          <span className="flex items-center gap-2 text-xs font-semibold text-glow tracking-wide">
             <span className="signal-bar h-4" />
             {count} selected
           </span>
@@ -153,7 +153,7 @@ export default function BulkActionsBar({
             horizontally, and an overflow-x-auto container also clips vertical
             overflow, which was cutting the popover off. */}
         {(addTagOpen || removableTags.length > 0 && removeTagOpen) && (
-          <div className="border-t border-brass/20 px-4 py-2.5 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+          <div className="border-t border-glow/20 px-4 py-2.5 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
             {addTagOpen &&
               tagOptions.map((o) => (
                 <button
