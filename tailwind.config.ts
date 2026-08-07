@@ -91,12 +91,18 @@ const config: Config = {
           "0%": { transform: "translateX(100%)" },
           "100%": { transform: "translateX(0)" },
         },
+        // Bottom sheet entrance (MobileTabBar's More menu).
+        "slide-up": {
+          "0%": { transform: "translateY(100%)" },
+          "100%": { transform: "translateY(0)" },
+        },
       },
       animation: {
         "fade-rise": "fade-rise 0.5s cubic-bezier(.16,1,.3,1) both",
         "fade-in": "fade-in 0.25s ease-out both",
         "scale-in": "scale-in 0.25s cubic-bezier(.16,1,.3,1) both",
         "slide-in-right": "slide-in-right 0.35s cubic-bezier(.16,1,.3,1) both",
+        "slide-up": "slide-up 0.3s cubic-bezier(.16,1,.3,1) both",
       },
     },
   },
