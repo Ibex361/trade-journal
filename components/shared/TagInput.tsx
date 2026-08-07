@@ -81,6 +81,29 @@ export default function TagInput({
     if (next.length !== value.length) onChange(next);
   }
 
+  // Comma handling lives here (onChange), not just in handleKeyDown, so
+  // mobile/IME keyboards (Samsung Internet, Gboard with predictive
+  // text, etc.) commonly commit a comma as part of a composed input event
+  // without ever firing a discrete keydown for it, so a keydown-only
+  // check left the draft as a literal "tag1," with the suggestion panel
+  // filtering against that whole string (matching nothing) for every tag
+  // after the first, until Enter on a comma-less draft finally committed
+  // via handleKeyDown. Handling it here instead makes tag-splitting and
+  // reopening the suggestion panel work the same way regardless of how
+  // the comma was typed.
+  function handleDraftChange(next: string) {
+    if (next.includes(",")) {
+      const lastCommaIndex = next.lastIndexOf(",");
+      addTag(next.slice(0, lastCommaIndex));
+      const remainder = next.slice(lastCommaIndex + 1);
+      setDraft(remainder);
+      setIsOpen(true);
+      return;
+    }
+    setDraft(next);
+    setIsOpen(true);
+  }
+
   function commitDraft() {
     const trimmed = draft;
     setDraft("");
@@ -107,13 +130,22 @@ export default function TagInput({
       );
       return;
     }
-    if (e.key === "Enter" || e.key === ",") {
+    if (e.key === "Enter") {
       e.preventDefault();
       if (showPanel) {
         selectSuggestion(filteredSuggestions[highlightedIndex]);
       } else {
         commitDraft();
       }
+      return;
+    }
+    // Comma is NOT preventDefault'd here — it's left to reach onChange
+    // (handleDraftChange), same code path as the mobile/IME/paste cases,
+    // so the panel reopens and re-filters for the next tag immediately
+    // instead of closing the way commitDraft/selectSuggestion would.
+    if (e.key === "," && showPanel) {
+      e.preventDefault();
+      selectSuggestion(filteredSuggestions[highlightedIndex]);
       return;
     }
     if (e.key === "Escape" && showPanel) {
@@ -150,10 +182,7 @@ export default function TagInput({
           <input
             type="text"
             value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setIsOpen(true);
-            }}
+            onChange={(e) => handleDraftChange(e.target.value)}
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
             onPaste={(e) => {
