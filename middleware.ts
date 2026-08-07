@@ -19,20 +19,29 @@ const PUBLIC_PATHS = [
   "/api/cron",
 ];
 
+// PWA install assets — browsers and OSes fetch these with no session
+// cookie (e.g. during "Add to Home Screen"), so gating them behind login
+// breaks installability. Kept separate from PUBLIC_PATHS: unlike /login,
+// these should stay servable even to a logged-in user, not bounce them
+// home.
+const PWA_PATHS = ["/manifest.webmanifest", "/icons", "/apple-touch-icon.png"];
+
 export async function middleware(request: NextRequest) {
   const { response, user } = await getSessionFromRequest(request);
 
-  const isPublicPath = PUBLIC_PATHS.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
+  const pathname = request.nextUrl.pathname;
+  const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  const isPwaPath = PWA_PATHS.some((path) => pathname.startsWith(path));
 
-  if (!user && !isPublicPath) {
+  if (!user && !isPublicPath && !isPwaPath) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+    loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   // Already signed in and trying to view the login page — send them home.
+  // (Doesn't apply to PWA asset paths: those should stay servable to a
+  // logged-in user too, not bounce them to "/".)
   if (user && isPublicPath) {
     return NextResponse.redirect(new URL("/", request.url));
   }
