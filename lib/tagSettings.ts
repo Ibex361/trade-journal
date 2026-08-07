@@ -9,18 +9,18 @@ import { supabase } from "./supabaseClient";
  * purely a rename/delete tool: type an existing tag's name, then rename or
  * delete it everywhere it appears across trades and notes.
  *
- * fetchTagSettings/addTagSetting/deleteTagSetting/reorderTagSetting below
- * are kept for now (the tag_settings table itself hasn't been dropped —
- * that's a separate migration decision) but are no longer called from the
- * UI as of this change.
+ * The tag_settings table itself has been dropped (see
+ * supabase/phase13_drop_tag_settings.sql) now that nothing reads or writes
+ * it — fetchTagSettings/addTagSetting/deleteTagSetting/reorderTagSetting
+ * were removed along with it.
  */
 
+// Only .id/.value are ever read by callers (BulkActionsBar,
+// NotesBulkActionsBar) — trimmed down from the old tag_settings row shape
+// now that nothing synthesizes the other fields from a real table row.
 export type TagSettingItem = {
   id: string;
-  account_id: string;
   value: string;
-  sort_order: number;
-  created_at: string;
 };
 
 /**
@@ -120,30 +120,6 @@ export async function deleteTagEverywhere(accountId: string, value: string) {
   const error = results.find((r) => r.error)?.error ?? null;
   if (error) console.error("deleteTagEverywhere failed:", error);
   return { error, count: tradeRows.length + noteRows.length };
-}
-
-export async function fetchTagSettings(accountId: string) {
-  return supabase
-    .from("tag_settings")
-    .select("*")
-    .eq("account_id", accountId)
-    .order("sort_order", { ascending: true });
-}
-
-export async function addTagSetting(accountId: string, value: string, sortOrder: number) {
-  return supabase.from("tag_settings").insert({
-    account_id: accountId,
-    value,
-    sort_order: sortOrder,
-  });
-}
-
-export async function deleteTagSetting(id: string) {
-  return supabase.from("tag_settings").delete().eq("id", id);
-}
-
-export async function reorderTagSetting(id: string, newSortOrder: number) {
-  return supabase.from("tag_settings").update({ sort_order: newSortOrder }).eq("id", id);
 }
 
 /**

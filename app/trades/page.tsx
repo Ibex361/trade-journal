@@ -129,13 +129,7 @@ export default function TradesPage() {
     }
     fetchDistinctTags(selectedAccount.id).then((tags) => {
       setTagSettings(
-        tags.map((value, i) => ({
-          id: value,
-          account_id: selectedAccount.id,
-          value,
-          sort_order: i,
-          created_at: "",
-        }))
+        tags.map((value) => ({ id: value, value }))
       );
     });
   }, [selectedAccount?.id]);
