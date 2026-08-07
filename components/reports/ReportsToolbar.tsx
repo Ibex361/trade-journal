@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Trade } from "@/lib/trades";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
+import Button from "@/components/shared/Button";
 
 const MONTH_LABELS = [
   "january", "february", "march", "april", "may", "june",
@@ -36,20 +37,12 @@ export default function ReportsToolbar({
 
   return (
     <div className="print:hidden flex items-center gap-2">
-      <button
-        onClick={handleExport}
-        disabled={trades.length === 0}
-        className="text-sm text-ink-secondary border border-surface-border px-3 py-1.5 rounded-full hover:text-ink-primary hover:border-glow/50 transition-colors disabled:opacity-50 disabled:hover:text-ink-secondary disabled:hover:border-surface-border"
-      >
+      <Button variant="secondary" size="sm" onClick={handleExport} disabled={trades.length === 0}>
         {justExported ? "Downloaded ✓" : "Export CSV"}
-      </button>
-      <button
-        onClick={handlePrint}
-        disabled={trades.length === 0}
-        className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
-      >
+      </Button>
+      <Button size="sm" onClick={handlePrint} disabled={trades.length === 0}>
         Print report
-      </button>
+      </Button>
     </div>
   );
 }

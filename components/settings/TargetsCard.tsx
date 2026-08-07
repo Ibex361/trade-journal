@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { updateTargets, resetDemoData } from "@/lib/accounts";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
 export default function TargetsCard() {
   const { selectedAccount, refreshAccounts } = useAccount();
@@ -80,13 +81,9 @@ export default function TargetsCard() {
       </div>
 
       <div className="flex items-center gap-4 mt-5">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
-        >
+        <Button size="sm" onClick={handleSave} disabled={saving}>
           {saving ? "Saving…" : "Save targets"}
-        </button>
+        </Button>
         {savedFlash && <span className="text-xs text-gain">Saved</span>}
       </div>
 

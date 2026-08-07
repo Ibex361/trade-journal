@@ -12,6 +12,7 @@ import {
   DropdownCategory,
 } from "@/lib/dropdownSettings";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
 // "tag" intentionally excluded — tag management now lives in the
 // dedicated TagSettingCard ("Tag setting"), backed by tag_settings
@@ -206,12 +207,9 @@ export default function DropdownLists() {
           placeholder="Add new item…"
           className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm flex-1"
         />
-        <button
-          onClick={handleAdd}
-          className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
-        >
+        <Button size="sm" onClick={handleAdd}>
           Add
-        </button>
+        </Button>
       </div>
     </SettingsCard>
   );

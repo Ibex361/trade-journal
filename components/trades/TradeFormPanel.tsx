@@ -12,6 +12,7 @@ import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { Select, SelectOption } from "@/components/shared/Select";
 import TagInput from "@/components/shared/TagInput";
 import { NotesIcon } from "@/components/icons";
+import Button from "@/components/shared/Button";
 
 const emptyForm = {
   entry_date: localDateString(),
@@ -1025,19 +1026,12 @@ export default function TradeFormPanel({
           )}
 
           <div className="flex items-center gap-3 pt-2">
-            <button
-              onClick={handleSubmit}
-              disabled={saving}
-              className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-60"
-            >
+            <Button size="sm" onClick={handleSubmit} disabled={saving}>
               {saving ? "Saving…" : trade ? "Save changes" : "Add trade"}
-            </button>
-            <button
-              onClick={requestClose}
-              className="text-sm text-ink-secondary hover:text-ink-primary px-4 py-1.5"
-            >
+            </Button>
+            <Button variant="ghost" size="sm" onClick={requestClose}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -411,22 +411,20 @@ export default function NotesPage() {
           </p>
         </div>
         {selectionMode ? (
-          <button
-            onClick={exitSelectionMode}
-            className="shrink-0 text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border"
-          >
+          <Button variant="secondary" size="sm" onClick={exitSelectionMode} className="shrink-0">
             Cancel
-          </button>
+          </Button>
         ) : (
           selectedAccount && (
             <div className="flex items-center gap-2 shrink-0">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setSelectionMode(true)}
                 disabled={notes.length === 0}
-                className="text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border disabled:opacity-50"
               >
                 Select
-              </button>
+              </Button>
               <Button size="sm" onClick={handleNewNote} disabled={creating}>
                 {creating ? "Creating…" : "New note"}
               </Button>

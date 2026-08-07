@@ -19,6 +19,7 @@ import TradesFilterBar, { TradeFilters } from "@/components/trades/TradesFilterB
 import TradesPerformanceRibbon from "@/components/trades/TradesPerformanceRibbon";
 import TradesSkeleton from "@/components/trades/TradesSkeleton";
 import BulkActionsBar from "@/components/trades/BulkActionsBar";
+import Button from "@/components/shared/Button";
 
 function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
   const search = filters.search.trim().toLowerCase();
@@ -365,28 +366,22 @@ export default function TradesPage() {
           </p>
         </div>
         {selectionMode ? (
-          <button
-            onClick={exitSelectionMode}
-            className="shrink-0 text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border"
-          >
+          <Button variant="secondary" size="sm" onClick={exitSelectionMode} className="shrink-0">
             Cancel
-          </button>
+          </Button>
         ) : (
           <div className="flex items-center gap-2 shrink-0">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setSelectionMode(true)}
               disabled={!selectedAccount || visibleTrades.length === 0}
-              className="text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border disabled:opacity-50"
             >
               Select
-            </button>
-            <button
-              onClick={openNew}
-              disabled={!selectedAccount}
-              className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
-            >
+            </Button>
+            <Button size="sm" onClick={openNew} disabled={!selectedAccount}>
               New trade
-            </button>
+            </Button>
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { createAccount, renameAccount, updateAccountDetails, archiveAccount, restoreAccount, deleteAccountPermanently } from "@/lib/accounts";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
 export default function AccountManager() {
   const { accounts, archivedAccounts, refreshAccounts, selectAccount } = useAccount();
@@ -248,13 +249,9 @@ export default function AccountManager() {
                 </p>
                 {editDetailsError && <p className="text-xs text-loss">{editDetailsError}</p>}
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => handleEditDetails(acc.id)}
-                    disabled={busy}
-                    className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
-                  >
+                  <Button size="sm" onClick={() => handleEditDetails(acc.id)} disabled={busy}>
                     Save changes
-                  </button>
+                  </Button>
                   <button
                     onClick={() => {
                       setEditingDetailsId(null);
@@ -305,13 +302,9 @@ export default function AccountManager() {
           </div>
           {createError && <p className="text-xs text-loss">{createError}</p>}
           <div className="flex gap-3">
-            <button
-              onClick={handleCreate}
-              disabled={busy}
-              className="text-sm bg-glow text-surface-0 font-medium px-4 py-1.5 rounded-full"
-            >
+            <Button size="sm" onClick={handleCreate} disabled={busy}>
               Create account
-            </button>
+            </Button>
             <button
               onClick={() => {
                 setShowNew(false);

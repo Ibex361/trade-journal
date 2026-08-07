@@ -8,6 +8,7 @@ import {
 } from "@/lib/screenshots";
 import { useTradesData } from "@/lib/TradesDataContext";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
 type Status = "checking" | "none" | "ready" | "migrating" | "done";
 
@@ -63,12 +64,9 @@ export default function LegacyScreenshotMigrationCard() {
     >
       <div className="space-y-2">
         {status === "ready" && (
-          <button
-            onClick={handleMigrate}
-            className="text-sm bg-surface-2 border border-surface-border rounded-full px-4 py-1.5 text-ink-primary hover:border-glow/60"
-          >
+          <Button variant="secondary" size="sm" onClick={handleMigrate}>
             Migrate {total} screenshot{total === 1 ? "" : "s"} to ImageKit
-          </button>
+          </Button>
         )}
 
         {status === "migrating" && (

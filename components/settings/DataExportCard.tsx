@@ -6,6 +6,7 @@ import { fetchTrades, Trade } from "@/lib/trades";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
 import { localDateString } from "@/lib/date";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
 export default function DataExportCard() {
   const { selectedAccount } = useAccount();
@@ -35,13 +36,9 @@ export default function DataExportCard() {
       description="Download every trade on this account as a CSV file — separate from the single-month export on the Reports page."
     >
       <div className="flex items-center gap-3">
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="text-sm bg-surface-2 border border-surface-border rounded-full px-4 py-1.5 text-ink-primary hover:border-glow/60 disabled:opacity-50"
-        >
+        <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
           {exporting ? "Preparing export…" : `Export all trades for ${selectedAccount.name}`}
-        </button>
+        </Button>
         {error && <p className="text-xs text-loss">{error}</p>}
       </div>
     </SettingsCard>
