@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAccount } from "@/lib/AccountContext";
 import {
   fetchDistinctTags,
@@ -30,6 +31,13 @@ export default function TagSettingCard() {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLUListElement>(null);
+  // Position of the panel when portalled to document.body — see the
+  // "badly positioned" fix below. Recomputed from the input's own bounding
+  // rect rather than relying on CSS `absolute`, since a portal escapes the
+  // normal positioned-ancestor relationship entirely.
+  const [panelRect, setPanelRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
@@ -67,13 +75,47 @@ export default function TagSettingCard() {
 
   useEffect(() => {
     if (!showPanel) return;
+    // The panel is portalled to document.body (see below), so it's no
+    // longer a DOM descendant of containerRef — checked separately here,
+    // or every click on an option would register as an outside click and
+    // close the panel before onMouseDown's pickTag could run.
     function handlePointerDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setIsOpen(false);
     }
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [showPanel]);
+
+  // Positioning fix: this panel used to render as a normal `absolute`
+  // child, but every Card on the page has its own backdrop-blur (needed
+  // for the app's glass-panel look), and backdrop-filter creates a new
+  // CSS stacking context — so the *next* Card down the page (Dropdown
+  // lists) painted over this panel regardless of z-index, since z-index
+  // only resolves within a shared stacking context. Portalling to
+  // document.body escapes that entirely; the tradeoff is the panel loses
+  // its natural position relative to the input, so its coordinates are
+  // computed here from the input's own bounding rect instead.
+  useEffect(() => {
+    if (!showPanel) {
+      setPanelRect(null);
+      return;
+    }
+    function updateRect() {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPanelRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+    updateRect();
+    window.addEventListener("scroll", updateRect, true);
+    window.addEventListener("resize", updateRect);
+    return () => {
+      window.removeEventListener("scroll", updateRect, true);
+      window.removeEventListener("resize", updateRect);
+    };
   }, [showPanel]);
 
   function resetSelection() {
@@ -179,6 +221,7 @@ export default function TagSettingCard() {
     >
       <div ref={containerRef} className="relative">
         <input
+          ref={inputRef}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -195,31 +238,35 @@ export default function TagSettingCard() {
           className="w-full bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm disabled:opacity-50"
         />
 
-        {showPanel && (
-          <ul
-            role="listbox"
-            className="absolute z-[60] left-0 right-0 mt-1 max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
-          >
-            {filteredMatches.map((tag, i) => (
-              <li
-                key={tag}
-                role="option"
-                aria-selected={i === highlightedIndex}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pickTag(tag);
-                }}
-                onMouseEnter={() => setHighlightedIndex(i)}
-                className={[
-                  "flex items-center rounded-md px-2.5 py-1.5 text-xs cursor-pointer select-none",
-                  i === highlightedIndex ? "bg-glow/15 text-glow" : "text-ink-primary",
-                ].join(" ")}
-              >
-                {tag}
-              </li>
-            ))}
-          </ul>
-        )}
+        {showPanel && panelRect &&
+          createPortal(
+            <ul
+              ref={panelRef}
+              role="listbox"
+              style={{ top: panelRect.top, left: panelRect.left, width: panelRect.width }}
+              className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
+            >
+              {filteredMatches.map((tag, i) => (
+                <li
+                  key={tag}
+                  role="option"
+                  aria-selected={i === highlightedIndex}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pickTag(tag);
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(i)}
+                  className={[
+                    "flex items-center rounded-md px-2.5 py-1.5 text-xs cursor-pointer select-none",
+                    i === highlightedIndex ? "bg-glow/15 text-glow" : "text-ink-primary",
+                  ].join(" ")}
+                >
+                  {tag}
+                </li>
+              ))}
+            </ul>,
+            document.body
+          )}
       </div>
 
       {!loading && allTags.length === 0 && (
