@@ -13,6 +13,7 @@ import {
   updateNote,
   deleteNote,
   deleteNotes,
+  updateNoteTags,
   extractFullText,
   getUsedStrategies,
   type Note,
@@ -22,6 +23,7 @@ import { fetchTagSettings, type TagSettingItem } from "@/lib/tagSettings";
 import NotesList from "@/components/notes/NotesList";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import NoteEditPanel from "@/components/notes/NoteEditPanel";
+import NotesBulkActionsBar from "@/components/notes/NotesBulkActionsBar";
 import NotesFilterBar, { NoteFilters, NO_STRATEGY, isNoteFiltersActive } from "@/components/notes/NotesFilterBar";
 import Button from "@/components/shared/Button";
 import type { Trade } from "@/lib/trades";
@@ -255,6 +257,41 @@ export default function NotesPage() {
     exitSelectionMode();
   }
 
+  async function handleBulkAddTag(tag: string) {
+    const ids = Array.from(selectedIds);
+    const targets = notes.filter((n) => ids.includes(n.id) && !(n.tags ?? []).includes(tag));
+    await Promise.all(targets.map((n) => updateNoteTags(n.id, [...(n.tags ?? []), tag])));
+    setNotes((current) =>
+      current.map((n) =>
+        ids.includes(n.id) && !(n.tags ?? []).includes(tag)
+          ? { ...n, tags: [...(n.tags ?? []), tag] }
+          : n
+      )
+    );
+  }
+
+  async function handleBulkRemoveTag(tag: string) {
+    const ids = Array.from(selectedIds);
+    const targets = notes.filter((n) => ids.includes(n.id) && (n.tags ?? []).includes(tag));
+    await Promise.all(
+      targets.map((n) => updateNoteTags(n.id, (n.tags ?? []).filter((existing) => existing !== tag)))
+    );
+    setNotes((current) =>
+      current.map((n) =>
+        ids.includes(n.id) ? { ...n, tags: (n.tags ?? []).filter((existing) => existing !== tag) } : n
+      )
+    );
+  }
+
+  const selectedNotes = useMemo(
+    () => notes.filter((n) => selectedIds.has(n.id)),
+    [notes, selectedIds]
+  );
+  const removableTags = useMemo(
+    () => Array.from(new Set(selectedNotes.flatMap((n) => n.tags ?? []))).sort(),
+    [selectedNotes]
+  );
+
   async function handleSaveNote(
     title: string,
     content: JSONContent,
@@ -364,15 +401,15 @@ export default function NotesPage() {
       </div>
 
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between gap-4 bg-surface-1 border border-surface-border rounded-card px-4 py-3">
-          <span className="text-sm text-ink-secondary">{selectedIds.size} note{selectedIds.size === 1 ? "" : "s"} selected</span>
-          <button
-            onClick={handleBulkDelete}
-            className="text-xs text-loss font-medium hover:underline"
-          >
-            Delete selected
-          </button>
-        </div>
+        <NotesBulkActionsBar
+          count={selectedIds.size}
+          tagOptions={tagSettings}
+          removableTags={removableTags}
+          onAddTag={handleBulkAddTag}
+          onRemoveTag={handleBulkRemoveTag}
+          onDelete={handleBulkDelete}
+          onClear={exitSelectionMode}
+        />
       )}
 
       {bulkDeleteError && (

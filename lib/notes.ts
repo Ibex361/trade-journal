@@ -125,6 +125,13 @@ export async function deleteNotes(ids: string[]) {
   return result;
 }
 
+/** Narrow update used by the bulk add/remove-tag actions — only touches tags, mirrors updateTradeTags. */
+export async function updateNoteTags(id: string, tags: string[]) {
+  const result = await supabase.from("notes").update({ tags }).eq("id", id);
+  if (result.error) console.error("updateNoteTags failed:", result.error);
+  return result;
+}
+
 /**
  * Walks a Tiptap JSON document and concatenates every text node into one
  * plain-text string, with no length cap — used where the full body matters
