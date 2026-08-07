@@ -1,110 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import {
-  fetchTagSettings,
-  addTagSetting,
-  deleteTagSetting,
-  reorderTagSetting,
+  fetchDistinctTags,
+  renameTagEverywhere,
+  deleteTagEverywhere,
   getTagUsageCount,
-  TagSettingItem,
 } from "@/lib/tagSettings";
 import SettingsCard from "./SettingsCard";
 
 /**
- * "Tag setting" — dedicated account-wide tag vocabulary management,
- * decoupled from the generic Dropdown lists card (which now only handles
- * asset_class/strategy/session/emotion). Backed by the tag_settings table.
- *
- * Part 1: this card manages tag_settings directly. TradeFormPanel/
- * NoteEditPanel/the filter bars still read tags from dropdown_settings'
- * 'tag' category for now — part 2 switches them over and safely removes
- * that category from dropdown_settings.
+ * "Tag setting" — Part 2 of the freeform-tag work. No longer a curated
+ * list you add to before a tag can be suggested (see Part 1: suggestions
+ * now come from every tag actually in use). This card is purely a
+ * rename/delete tool: type an existing tag's name — autocomplete-assisted
+ * against the same "tags in use" list TagInput suggests from — then rename
+ * or delete it everywhere it appears across trades and notes.
  */
 
-function RemoveButton({
-  item,
-  accountId,
-  onRemoved,
-}: {
-  item: TagSettingItem;
-  accountId: string;
-  onRemoved: () => void;
-}) {
-  const [confirming, setConfirming] = useState(false);
-  const [checkingCount, setCheckingCount] = useState(false);
-  const [usageCount, setUsageCount] = useState<number | null>(null);
-  const [removing, setRemoving] = useState(false);
-
-  async function startConfirm() {
-    setConfirming(true);
-    setCheckingCount(true);
-    const count = await getTagUsageCount(accountId, item.value);
-    setUsageCount(count);
-    setCheckingCount(false);
-  }
-
-  function cancel() {
-    setConfirming(false);
-    setUsageCount(null);
-  }
-
-  async function confirmRemove() {
-    setRemoving(true);
-    await deleteTagSetting(item.id);
-    setRemoving(false);
-    onRemoved();
-  }
-
-  if (confirming) {
-    return (
-      <div className="flex items-center gap-2">
-        {checkingCount ? (
-          <span className="text-[11px] text-ink-muted">Checking…</span>
-        ) : (
-          <span className="text-[11px] text-ink-secondary">
-            {usageCount && usageCount > 0
-              ? `Used by ${usageCount} trade${usageCount === 1 ? "" : "s"}/note${usageCount === 1 ? "" : "s"} — they'll keep it, it just won't be pickable for new ones.`
-              : "Remove this tag?"}
-          </span>
-        )}
-        <button
-          onClick={confirmRemove}
-          disabled={checkingCount || removing}
-          className="text-xs text-loss font-medium hover:underline disabled:opacity-50"
-        >
-          {removing ? "Removing…" : "Confirm"}
-        </button>
-        <button
-          onClick={cancel}
-          disabled={removing}
-          className="text-xs text-ink-muted hover:text-ink-primary"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button onClick={startConfirm} className="text-xs text-loss/80 hover:text-loss">
-      Remove
-    </button>
-  );
-}
+type Mode = "idle" | "renaming" | "deleting";
 
 export default function TagSettingCard() {
   const { selectedAccount } = useAccount();
-  const [items, setItems] = useState<TagSettingItem[]>([]);
-  const [newValue, setNewValue] = useState("");
+  const [allTags, setAllTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("idle");
+  const [renameValue, setRenameValue] = useState("");
+  const [usageCount, setUsageCount] = useState<number | null>(null);
+  const [checkingUsage, setCheckingUsage] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function load() {
     if (!selectedAccount) return;
     setLoading(true);
-    const { data } = await fetchTagSettings(selectedAccount.id);
-    if (data) setItems(data as TagSettingItem[]);
+    const tags = await fetchDistinctTags(selectedAccount.id);
+    setAllTags(tags);
     setLoading(false);
   }
 
@@ -113,87 +53,254 @@ export default function TagSettingCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
-  const sortedItems = [...items].sort((a, b) => a.sort_order - b.sort_order);
+  const filteredMatches = useMemo(() => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return allTags.slice(0, 8);
+    return allTags.filter((t) => t.toLowerCase().includes(trimmed)).slice(0, 8);
+  }, [allTags, query]);
 
-  async function handleAdd() {
-    if (!selectedAccount || !newValue.trim()) return;
-    const trimmed = newValue.trim();
-    if (sortedItems.some((i) => i.value.toLowerCase() === trimmed.toLowerCase())) {
-      setNewValue("");
+  const showPanel = isOpen && filteredMatches.length > 0;
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [filteredMatches.length, query]);
+
+  useEffect(() => {
+    if (!showPanel) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [showPanel]);
+
+  function resetSelection() {
+    setSelectedTag(null);
+    setMode("idle");
+    setRenameValue("");
+    setUsageCount(null);
+    setErrorMsg(null);
+  }
+
+  function pickTag(tag: string) {
+    setQuery(tag);
+    setIsOpen(false);
+    resetSelection();
+    setSelectedTag(tag);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (showPanel && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      const count = filteredMatches.length;
+      setHighlightedIndex((i) => (e.key === "ArrowDown" ? (i + 1) % count : (i - 1 + count) % count));
       return;
     }
-    const nextOrder = sortedItems.length > 0 ? Math.max(...sortedItems.map((i) => i.sort_order)) + 1 : 1;
-    await addTagSetting(selectedAccount.id, trimmed, nextOrder);
-    setNewValue("");
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (showPanel) pickTag(filteredMatches[highlightedIndex]);
+      else {
+        // Exact (case-insensitive) match against a known tag lets Enter
+        // work without touching the dropdown at all.
+        const exact = allTags.find((t) => t.toLowerCase() === query.trim().toLowerCase());
+        if (exact) pickTag(exact);
+      }
+      return;
+    }
+    if (e.key === "Escape" && showPanel) {
+      setIsOpen(false);
+    }
+  }
+
+  async function startRename() {
+    if (!selectedTag) return;
+    setMode("renaming");
+    setRenameValue(selectedTag);
+    setErrorMsg(null);
+    setFeedback(null);
+  }
+
+  async function startDelete() {
+    if (!selectedTag || !selectedAccount) return;
+    setMode("deleting");
+    setErrorMsg(null);
+    setFeedback(null);
+    setCheckingUsage(true);
+    const count = await getTagUsageCount(selectedAccount.id, selectedTag);
+    setUsageCount(count);
+    setCheckingUsage(false);
+  }
+
+  async function confirmRename() {
+    if (!selectedAccount || !selectedTag) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    if (trimmed.toLowerCase() === selectedTag.toLowerCase()) {
+      resetSelection();
+      setQuery("");
+      return;
+    }
+    setBusy(true);
+    setErrorMsg(null);
+    const { error, count } = await renameTagEverywhere(selectedAccount.id, selectedTag, trimmed);
+    setBusy(false);
+    if (error) {
+      setErrorMsg("Couldn't rename this tag. Please try again.");
+      return;
+    }
+    setFeedback(`Renamed "${selectedTag}" to "${trimmed}" on ${count} trade${count === 1 ? "" : "s"}/note${count === 1 ? "" : "s"}.`);
+    resetSelection();
+    setQuery("");
     load();
   }
 
-  async function handleMove(item: TagSettingItem, direction: -1 | 1) {
-    const idx = sortedItems.findIndex((i) => i.id === item.id);
-    const swapWith = sortedItems[idx + direction];
-    if (!swapWith) return;
-    await reorderTagSetting(item.id, swapWith.sort_order);
-    await reorderTagSetting(swapWith.id, item.sort_order);
+  async function confirmDelete() {
+    if (!selectedAccount || !selectedTag) return;
+    setBusy(true);
+    setErrorMsg(null);
+    const { error, count } = await deleteTagEverywhere(selectedAccount.id, selectedTag);
+    setBusy(false);
+    if (error) {
+      setErrorMsg("Couldn't delete this tag. Please try again.");
+      return;
+    }
+    setFeedback(`Removed "${selectedTag}" from ${count} trade${count === 1 ? "" : "s"}/note${count === 1 ? "" : "s"}.`);
+    resetSelection();
+    setQuery("");
     load();
   }
 
   return (
     <SettingsCard
       title="Tag setting"
-      description="Manage the account-wide tag vocabulary used across trades and notes."
+      description="Rename or delete a tag everywhere it's used across trades and notes."
     >
-      {loading ? (
-        <p className="text-sm text-ink-muted">Loading…</p>
-      ) : (
-        <div className="space-y-2">
-          {sortedItems.map((item, idx) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between bg-surface-2 border border-surface-border rounded-md px-3 py-2"
-            >
-              <span className="text-sm">{item.value}</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleMove(item, -1)}
-                  disabled={idx === 0}
-                  className="text-ink-muted hover:text-ink-primary disabled:opacity-30 text-xs"
-                >
-                  ↑
-                </button>
-                <button
-                  onClick={() => handleMove(item, 1)}
-                  disabled={idx === sortedItems.length - 1}
-                  className="text-ink-muted hover:text-ink-primary disabled:opacity-30 text-xs"
-                >
-                  ↓
-                </button>
-                {selectedAccount && (
-                  <RemoveButton item={item} accountId={selectedAccount.id} onRemoved={load} />
-                )}
-              </div>
-            </div>
-          ))}
-          {sortedItems.length === 0 && (
-            <p className="text-sm text-ink-muted">No tags yet — tags you type on a trade or note will still save even if they're not listed here.</p>
-          )}
+      <div ref={containerRef} className="relative">
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+            if (selectedTag && e.target.value !== selectedTag) resetSelection();
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={loading ? "Loading tags…" : "Type a tag name…"}
+          disabled={loading}
+          role="combobox"
+          aria-expanded={showPanel}
+          aria-autocomplete="list"
+          className="w-full bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm disabled:opacity-50"
+        />
+
+        {showPanel && (
+          <ul
+            role="listbox"
+            className="absolute z-[60] left-0 right-0 mt-1 max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
+          >
+            {filteredMatches.map((tag, i) => (
+              <li
+                key={tag}
+                role="option"
+                aria-selected={i === highlightedIndex}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickTag(tag);
+                }}
+                onMouseEnter={() => setHighlightedIndex(i)}
+                className={[
+                  "flex items-center rounded-md px-2.5 py-1.5 text-xs cursor-pointer select-none",
+                  i === highlightedIndex ? "bg-glow/15 text-glow" : "text-ink-primary",
+                ].join(" ")}
+              >
+                {tag}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {!loading && allTags.length === 0 && (
+        <p className="text-sm text-ink-muted mt-3">
+          No tags yet — tags you type on a trade or note will show up here once saved.
+        </p>
+      )}
+
+      {selectedTag && mode === "idle" && (
+        <div className="flex items-center justify-between bg-surface-2 border border-surface-border rounded-md px-3 py-2 mt-3">
+          <span className="text-sm">{selectedTag}</span>
+          <div className="flex items-center gap-3">
+            <button onClick={startRename} className="text-xs text-glow hover:underline">
+              Rename
+            </button>
+            <button onClick={startDelete} className="text-xs text-loss/80 hover:text-loss">
+              Delete
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="flex gap-2 mt-4">
-        <input
-          value={newValue}
-          onChange={(e) => setNewValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          placeholder="Add a tag…"
-          className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm flex-1"
-        />
-        <button
-          onClick={handleAdd}
-          className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
-        >
-          Add
-        </button>
-      </div>
+      {selectedTag && mode === "renaming" && (
+        <div className="bg-surface-2 border border-surface-border rounded-md px-3 py-2.5 mt-3 space-y-2">
+          <p className="text-[11px] text-ink-secondary">Rename "{selectedTag}" to:</p>
+          <div className="flex items-center gap-2">
+            <input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && confirmRename()}
+              autoFocus
+              className="flex-1 bg-surface-0 border border-surface-border rounded-md px-3 py-1.5 text-sm"
+            />
+            <button
+              onClick={confirmRename}
+              disabled={busy || !renameValue.trim()}
+              className="text-xs text-glow font-medium hover:underline disabled:opacity-50"
+            >
+              {busy ? "Renaming…" : "Confirm"}
+            </button>
+            <button
+              onClick={resetSelection}
+              disabled={busy}
+              className="text-xs text-ink-muted hover:text-ink-primary"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selectedTag && mode === "deleting" && (
+        <div className="bg-surface-2 border border-surface-border rounded-md px-3 py-2.5 mt-3 flex items-center gap-3">
+          {checkingUsage ? (
+            <span className="text-[11px] text-ink-muted">Checking…</span>
+          ) : (
+            <span className="text-[11px] text-ink-secondary flex-1">
+              {usageCount && usageCount > 0
+                ? `Delete "${selectedTag}" from ${usageCount} trade${usageCount === 1 ? "" : "s"}/note${usageCount === 1 ? "" : "s"}?`
+                : `Delete "${selectedTag}"?`}
+            </span>
+          )}
+          <button
+            onClick={confirmDelete}
+            disabled={checkingUsage || busy}
+            className="text-xs text-loss font-medium hover:underline disabled:opacity-50"
+          >
+            {busy ? "Removing…" : "Confirm"}
+          </button>
+          <button
+            onClick={resetSelection}
+            disabled={busy}
+            className="text-xs text-ink-muted hover:text-ink-primary"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {feedback && <p className="text-xs text-gain mt-3">{feedback}</p>}
+      {errorMsg && <p className="text-xs text-loss mt-3">{errorMsg}</p>}
     </SettingsCard>
   );
 }

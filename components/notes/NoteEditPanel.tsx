@@ -11,7 +11,7 @@ import NoteEditorErrorBoundary from "@/components/notes/NoteEditorErrorBoundary"
 import LinkedTradesPicker from "@/components/notes/LinkedTradesPicker";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, type DropdownItem } from "@/lib/dropdownSettings";
-import { fetchTagSettings, fetchDistinctTags, type TagSettingItem } from "@/lib/tagSettings";
+import { fetchDistinctTags } from "@/lib/tagSettings";
 import type { Note } from "@/lib/notes";
 import type { Trade } from "@/lib/trades";
 
@@ -22,12 +22,13 @@ import type { Trade } from "@/lib/trades";
  * Phase 3 part 1 added a tag picker sourced from the account-wide "tag"
  * dropdown vocabulary (Settings → Tags). Later reworked to freeform typed
  * tags via TagInput (same component TradeFormPanel uses) — any text is a
- * valid tag now, no toggling pre-set chips. Tag setting migration part 2
- * switched tag suggestions to the dedicated tag_settings table (see
- * lib/tagSettings.ts) instead of dropdown_settings' "tag" category. Still
- * fetches both dropdown items and tag settings independently (TradeFormPanel
- * does the same) rather than threading them down from app/notes/page.tsx —
- * dropdown items remain needed here for the "Linked strategy" select.
+ * valid tag now, no toggling pre-set chips. Tag suggestions now come from
+ * fetchDistinctTags (every tag actually in use — see lib/tagSettings.ts),
+ * not a curated list; the old tag_settings table is now purely a
+ * rename/delete tool in Settings, not a suggestion source. Still fetches
+ * dropdown items independently (TradeFormPanel does the same) rather than
+ * threading them down from app/notes/page.tsx — dropdown items remain
+ * needed here for the "Linked strategy" select.
  *
  * Phase 3 part 3 adds optional linking: a "Linked strategy" select (same
  * `renderOptions`-style orphan handling TradeFormPanel uses for its own
@@ -97,7 +98,6 @@ export default function NoteEditPanel({
   const [linkedTradeIds, setLinkedTradeIds] = useState<string[]>(note.linked_trade_ids ?? []);
   const [linkedStrategy, setLinkedStrategy] = useState<string>(note.linked_strategy ?? "");
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
-  const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -239,19 +239,11 @@ export default function NoteEditPanel({
     });
   }, [selectedAccount?.id]);
 
-  // Tag setting migration part 2: tag suggestions now come from the
-  // dedicated tag_settings table instead of dropdown_settings' "tag"
-  // category (see lib/tagSettings.ts).
-  useEffect(() => {
-    if (!selectedAccount) return;
-    fetchTagSettings(selectedAccount.id).then(({ data }) => {
-      if (data) setTagSettings(data as TagSettingItem[]);
-    });
-  }, [selectedAccount?.id]);
-
   // Freeform tag suggestion fix, part 1: suggest every tag actually in use
   // on this account (trades + notes), not just the curated tag_settings
-  // list — see fetchDistinctTags for why.
+  // list — see fetchDistinctTags for why. Part 2 retired the tag_settings
+  // fetch that used to live here — that table is no longer a curated
+  // suggestion source (see components/settings/TagSettingCard.tsx).
   useEffect(() => {
     if (!selectedAccount) return;
     fetchDistinctTags(selectedAccount.id).then(setTagSuggestions);

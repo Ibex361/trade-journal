@@ -8,7 +8,7 @@ import { useNotesPageState } from "@/lib/NotesPageStateContext";
 import { deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
 import { useTradesData } from "@/lib/TradesDataContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
-import { fetchTagSettings, TagSettingItem } from "@/lib/tagSettings";
+import { fetchDistinctTags, TagSettingItem } from "@/lib/tagSettings";
 import { deleteScreenshot } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
@@ -115,14 +115,28 @@ export default function TradesPage() {
   }, [selectedAccount?.id]);
 
   // Tag setting migration part 2: tags now come from the dedicated
-  // tag_settings table instead of dropdown_settings' "tag" category.
+  // Tag setting migration part 2 (updated): the "+ Tag" bulk-add chip list
+  // now sources from every tag actually in use (fetchDistinctTags) rather
+  // than the old curated tag_settings list — that list is no longer
+  // maintained via the UI as of the Tag setting reshape, so it would
+  // otherwise silently go stale. Synthesized into TagSettingItem shape
+  // (BulkActionsBar only reads .id/.value) so the bar itself needed no
+  // changes.
   useEffect(() => {
     if (!selectedAccount) {
       setTagSettings([]);
       return;
     }
-    fetchTagSettings(selectedAccount.id).then(({ data }) => {
-      if (data) setTagSettings(data as TagSettingItem[]);
+    fetchDistinctTags(selectedAccount.id).then((tags) => {
+      setTagSettings(
+        tags.map((value, i) => ({
+          id: value,
+          account_id: selectedAccount.id,
+          value,
+          sort_order: i,
+          created_at: "",
+        }))
+      );
     });
   }, [selectedAccount?.id]);
 
@@ -151,9 +165,9 @@ export default function TradesPage() {
 
   const summary = useMemo(() => summarizeTrades(visibleTrades), [visibleTrades]);
 
-  // Tags actually used on trades but no longer present in Settings would
-  // otherwise be impossible to filter by (and easy to lose track of) —
-  // union them with the active list so every tag in use stays findable.
+  // tagSettings is now itself "tags in use" (see the effect above), so this
+  // union with trades' own tags is redundant but harmless — kept as a
+  // belt-and-suspenders fallback in case tagSettings hasn't loaded yet.
   const availableTags = useMemo(() => {
     const active = tagSettings.map((t) => t.value);
     const used = trades.flatMap((t) => t.tags ?? []);

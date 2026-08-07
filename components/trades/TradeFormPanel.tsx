@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
-import { fetchTagSettings, fetchDistinctTags, TagSettingItem } from "@/lib/tagSettings";
+import { fetchDistinctTags } from "@/lib/tagSettings";
 import { createTrade, updateTrade, Trade, TradeInput, Direction, ExitReason, StopMovement } from "@/lib/trades";
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
 import { localDateString } from "@/lib/date";
@@ -190,7 +190,6 @@ export default function TradeFormPanel({
   const [pendingAction, setPendingAction] = useState<"close" | "diary">("close");
   const pendingDiaryTradeRef = useRef<Trade | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
-  const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -277,19 +276,11 @@ export default function TradeFormPanel({
     });
   }, [selectedAccount?.id]);
 
-  // Tag setting migration part 2: tag suggestions now come from the
-  // dedicated tag_settings table instead of dropdown_settings' "tag"
-  // category (see lib/tagSettings.ts).
-  useEffect(() => {
-    if (!selectedAccount) return;
-    fetchTagSettings(selectedAccount.id).then(({ data }) => {
-      if (data) setTagSettings(data as TagSettingItem[]);
-    });
-  }, [selectedAccount?.id]);
-
   // Freeform tag suggestion fix, part 1: suggest every tag actually in use
   // on this account (trades + notes), not just the curated tag_settings
-  // list — see fetchDistinctTags for why.
+  // list — see fetchDistinctTags for why. Part 2 retired the tag_settings
+  // fetch that used to live here — that table is no longer a curated
+  // suggestion source (see components/settings/TagSettingCard.tsx).
   useEffect(() => {
     if (!selectedAccount) return;
     fetchDistinctTags(selectedAccount.id).then(setTagSuggestions);

@@ -19,7 +19,7 @@ import {
   type Note,
 } from "@/lib/notes";
 import { extractImageFileIds, deleteNoteImages } from "@/lib/noteImages";
-import { fetchTagSettings, type TagSettingItem } from "@/lib/tagSettings";
+import { fetchDistinctTags, type TagSettingItem } from "@/lib/tagSettings";
 import NotesList from "@/components/notes/NotesList";
 import NotesSkeleton from "@/components/notes/NotesSkeleton";
 import NoteEditPanel from "@/components/notes/NoteEditPanel";
@@ -131,15 +131,28 @@ export default function NotesPage() {
     setSaveError(false);
   }, [activeNoteId]);
 
-  // Tag setting migration part 2: tags now come from the dedicated
-  // tag_settings table instead of dropdown_settings' "tag" category.
+  // Tag setting migration part 2 (updated): the "+ Tag" bulk-add chip list
+  // now sources from every tag actually in use (fetchDistinctTags) rather
+  // than the old curated tag_settings list — that list is no longer
+  // maintained via the UI as of the Tag setting reshape, so it would
+  // otherwise silently go stale. Synthesized into TagSettingItem shape
+  // (NotesBulkActionsBar only reads .id/.value) so the bar itself needed no
+  // changes.
   useEffect(() => {
     if (!selectedAccount) {
       setTagSettings([]);
       return;
     }
-    fetchTagSettings(selectedAccount.id).then(({ data }) => {
-      if (data) setTagSettings(data as TagSettingItem[]);
+    fetchDistinctTags(selectedAccount.id).then((tags) => {
+      setTagSettings(
+        tags.map((value, i) => ({
+          id: value,
+          account_id: selectedAccount.id,
+          value,
+          sort_order: i,
+          created_at: "",
+        }))
+      );
     });
   }, [selectedAccount?.id]);
 
@@ -196,10 +209,9 @@ export default function NotesPage() {
   const deferredFilters = useDeferredValue(filters);
   const visibleNotes = useMemo(() => applyFilters(notes, deferredFilters), [notes, deferredFilters]);
 
-  // Tags actually used on notes but no longer present in Settings would
-  // otherwise be impossible to filter by (and easy to lose track of) —
-  // union them with the active dropdown list so every tag in use stays
-  // findable, same approach app/trades/page.tsx uses for its tag filter.
+  // tagSettings is now itself "tags in use" (see the effect above), so this
+  // union with notes' own tags is redundant but harmless — kept as a
+  // belt-and-suspenders fallback in case tagSettings hasn't loaded yet.
   const availableTags = useMemo(() => {
     const active = tagSettings.map((t) => t.value);
     const used = notes.flatMap((n) => n.tags ?? []);
