@@ -65,11 +65,20 @@ export default function TagInput({
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [showPanel]);
 
-  function addTag(tag: string) {
-    const trimmed = tag.trim();
-    if (!trimmed) return;
-    if (value.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return;
-    onChange([...value, trimmed]);
+  // Splits on commas so pasted or autofilled text like "tag1, tag2, tag3"
+  // becomes three chips instead of one literal "tag1, tag2, tag3" tag —
+  // the comma key itself is also caught in handleKeyDown for the
+  // type-one-at-a-time case, but that alone doesn't cover paste.
+  function addTag(raw: string) {
+    const parts = raw.split(",").map((t) => t.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    const next = [...value];
+    for (const part of parts) {
+      if (!next.some((t) => t.toLowerCase() === part.toLowerCase())) {
+        next.push(part);
+      }
+    }
+    if (next.length !== value.length) onChange(next);
   }
 
   function commitDraft() {
@@ -147,6 +156,16 @@ export default function TagInput({
             }}
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              if (pasted.includes(",")) {
+                e.preventDefault();
+                addTag(pasted);
+                setDraft("");
+              }
+              // No comma: let the default paste happen, so it just lands
+              // in the draft like normal typing.
+            }}
             onBlur={commitDraft}
             role="combobox"
             aria-expanded={showPanel}
