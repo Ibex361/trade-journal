@@ -26,7 +26,7 @@ const PUBLIC_PATHS = [
 // home.
 const PWA_PATHS = ["/manifest.webmanifest", "/icons", "/apple-touch-icon.png"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { response, user } = await getSessionFromRequest(request);
 
   const pathname = request.nextUrl.pathname;
