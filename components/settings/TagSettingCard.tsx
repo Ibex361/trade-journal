@@ -234,6 +234,7 @@ export default function TagSettingCard() {
           disabled={loading}
           role="combobox"
           aria-expanded={showPanel}
+          aria-controls="tag-setting-listbox"
           aria-autocomplete="list"
           className="w-full bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm disabled:opacity-50"
         />
@@ -242,6 +243,7 @@ export default function TagSettingCard() {
           createPortal(
             <ul
               ref={panelRef}
+              id="tag-setting-listbox"
               role="listbox"
               style={{ top: panelRect.top, left: panelRect.left, width: panelRect.width }}
               className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"

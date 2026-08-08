@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 /**
  * Freeform tag entry — type a tag and press Enter/comma (or blur the
@@ -34,6 +34,7 @@ export default function TagInput({
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
 
   const filteredSuggestions = useMemo(() => {
     if (!suggestions || suggestions.length === 0) return [];
@@ -198,6 +199,7 @@ export default function TagInput({
             onBlur={commitDraft}
             role="combobox"
             aria-expanded={showPanel}
+            aria-controls={listboxId}
             aria-autocomplete="list"
             placeholder={value.length === 0 ? placeholder : ""}
             className="flex-1 min-w-[6rem] bg-transparent text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none py-0.5"
@@ -206,6 +208,7 @@ export default function TagInput({
 
         {showPanel && (
           <ul
+            id={listboxId}
             role="listbox"
             className="absolute z-[60] left-0 right-0 mt-1 max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
           >

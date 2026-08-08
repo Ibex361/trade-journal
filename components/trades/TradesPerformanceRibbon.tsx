@@ -33,8 +33,11 @@ export default function TradesPerformanceRibbon({
     const sorted = [...trades].sort(
       (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
     );
-    let running = 0;
-    return sorted.map((t) => (running += t.pnl));
+    return sorted.reduce<number[]>((acc, t) => {
+      const previous = acc.length > 0 ? acc[acc.length - 1] : 0;
+      acc.push(previous + t.pnl);
+      return acc;
+    }, []);
   }, [trades]);
 
   return (

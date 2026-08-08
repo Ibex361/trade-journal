@@ -32,7 +32,7 @@ export default function ReportsPage() {
   const handleMonthChange = useCallback((y: number, m: number) => {
     setYear(y);
     setMonth(m);
-  }, []);
+  }, [setYear, setMonth]);
 
   const monthTrades = useMemo(
     () => getTradesInMonth(trades, deferredYear, deferredMonth),

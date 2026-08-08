@@ -30,10 +30,15 @@ function ReportsHero({
     summary.totalPnl > 0 ? "text-gain" : summary.totalPnl < 0 ? "text-loss" : "text-ink-primary";
   const pnlSign = summary.totalPnl > 0 ? "+" : "";
 
-  const cumulative = useMemo(() => {
-    let running = 0;
-    return dailyPnls.map((d) => (running += d.pnl));
-  }, [dailyPnls]);
+  const cumulative = useMemo(
+    () =>
+      dailyPnls.reduce<number[]>((acc, d) => {
+        const previous = acc.length > 0 ? acc[acc.length - 1] : 0;
+        acc.push(previous + d.pnl);
+        return acc;
+      }, []),
+    [dailyPnls]
+  );
 
   return (
     <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass p-5 flex flex-col sm:flex-row sm:items-center gap-5">
