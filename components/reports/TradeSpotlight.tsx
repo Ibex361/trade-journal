@@ -1,7 +1,9 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
+import Image from "next/image";
 import { Trade } from "@/lib/trades";
+import imagekitLoader, { isRemoteScreenshotUrl } from "@/lib/imagekitLoader";
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -23,11 +25,25 @@ function ScreenshotLightbox({ url, onClose }: { url: string; onClose: () => void
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 print:hidden">
       <div className="absolute inset-0 bg-black/80 motion-safe:animate-fade-in" onClick={onClose} />
-      <img
-        src={url}
-        alt="Trade chart screenshot"
-        className="relative max-w-full max-h-full rounded-lg border border-surface-border motion-safe:animate-scale-in"
-      />
+      <div className="relative w-[90vw] h-[85vh] max-w-3xl motion-safe:animate-scale-in">
+        {isRemoteScreenshotUrl(url) ? (
+          <Image
+            loader={imagekitLoader}
+            src={url}
+            alt="Trade chart screenshot"
+            fill
+            className="object-contain rounded-lg border border-surface-border"
+            sizes="90vw"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- local blob:/data: preview, not an ImageKit URL the loader/optimizer can handle.
+          <img
+            src={url}
+            alt="Trade chart screenshot"
+            className="w-full h-full object-contain rounded-lg border border-surface-border"
+          />
+        )}
+      </div>
       <button
         onClick={onClose}
         className="absolute top-6 right-6 text-ink-primary/80 hover:text-ink-primary text-2xl leading-none"
@@ -74,10 +90,17 @@ function SpotlightCard({
         {trade.screenshot_url && (
           <button
             onClick={() => onOpenScreenshot(trade.screenshot_url!)}
-            className="w-14 h-14 shrink-0 rounded-md overflow-hidden border border-surface-border hover:border-glow/60 transition-colors print:hidden"
+            className="relative w-14 h-14 shrink-0 rounded-md overflow-hidden border border-surface-border hover:border-glow/60 transition-colors print:hidden"
             aria-label="View chart screenshot"
           >
-            <img src={trade.screenshot_url} alt="" className="w-full h-full object-cover" />
+            <Image
+              loader={imagekitLoader}
+              src={trade.screenshot_url}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="56px"
+            />
           </button>
         )}
       </div>

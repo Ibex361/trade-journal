@@ -1,4 +1,6 @@
 import { RefObject } from "react";
+import Image from "next/image";
+import imagekitLoader, { isRemoteScreenshotUrl } from "@/lib/imagekitLoader";
 
 /**
  * Chart screenshot picker for TradeFormPanel: empty-state "+ Add
@@ -34,12 +36,24 @@ export default function ScreenshotUploader({
         className="hidden"
       />
       {screenshotPreview ? (
-        <div className="relative w-full max-w-[220px] rounded-md overflow-hidden border border-surface-border">
-          <img
-            src={screenshotPreview}
-            alt="Trade chart screenshot preview"
-            className="w-full h-auto block"
-          />
+        <div className="relative w-full max-w-[220px] aspect-video rounded-md overflow-hidden border border-surface-border">
+          {isRemoteScreenshotUrl(screenshotPreview) ? (
+            <Image
+              loader={imagekitLoader}
+              src={screenshotPreview}
+              alt="Trade chart screenshot preview"
+              fill
+              className="object-cover"
+              sizes="220px"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- local blob: preview from URL.createObjectURL right after picking a file, before upload completes; not an ImageKit URL the loader/optimizer can handle.
+            <img
+              src={screenshotPreview}
+              alt="Trade chart screenshot preview"
+              className="w-full h-full object-cover"
+            />
+          )}
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-3 bg-surface-0/80 backdrop-blur px-3 py-1.5">
             <button
               type="button"

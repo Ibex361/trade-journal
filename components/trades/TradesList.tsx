@@ -1,9 +1,11 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { Trade } from "@/lib/trades";
 import { getTradeRowEmphasis } from "@/lib/metrics";
 import { Select } from "@/components/shared/Select";
+import imagekitLoader, { isRemoteScreenshotUrl } from "@/lib/imagekitLoader";
 
 export type SortColumn = "entry_date" | "instrument" | "pnl" | "r_multiple";
 export type SortState = { column: SortColumn; direction: "asc" | "desc" };
@@ -92,10 +94,10 @@ function ScreenshotThumb({ url, onOpen }: { url: string | null; onOpen: () => vo
   return (
     <button
       onClick={onOpen}
-      className="w-9 h-9 rounded-md overflow-hidden border border-surface-border hover:border-glow/60 transition-colors"
+      className="relative w-9 h-9 rounded-md overflow-hidden border border-surface-border hover:border-glow/60 transition-colors"
       aria-label="View chart screenshot"
     >
-      <img src={url} alt="" className="w-full h-full object-cover" />
+      <Image loader={imagekitLoader} src={url} alt="" fill className="object-cover" sizes="36px" />
     </button>
   );
 }
@@ -112,11 +114,25 @@ function ScreenshotLightbox({ url, onClose }: { url: string; onClose: () => void
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/80 motion-safe:animate-fade-in" onClick={onClose} />
-      <img
-        src={url}
-        alt="Trade chart screenshot"
-        className="relative max-w-full max-h-full rounded-lg border border-surface-border motion-safe:animate-scale-in"
-      />
+      <div className="relative w-[90vw] h-[85vh] max-w-3xl motion-safe:animate-scale-in">
+        {isRemoteScreenshotUrl(url) ? (
+          <Image
+            loader={imagekitLoader}
+            src={url}
+            alt="Trade chart screenshot"
+            fill
+            className="object-contain rounded-lg border border-surface-border"
+            sizes="90vw"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- local blob:/data: preview, not an ImageKit URL the loader/optimizer can handle.
+          <img
+            src={url}
+            alt="Trade chart screenshot"
+            className="w-full h-full object-contain rounded-lg border border-surface-border"
+          />
+        )}
+      </div>
       <button
         onClick={onClose}
         className="absolute top-6 right-6 text-ink-primary/80 hover:text-ink-primary text-2xl leading-none"
