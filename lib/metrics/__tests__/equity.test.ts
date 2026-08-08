@@ -85,21 +85,18 @@ describe("getCurrentStreak", () => {
 });
 
 describe("getDrawdown", () => {
-  it("returns zero currentPct and null maxPct for a monotonically rising curve (no drawdown ever recorded)", () => {
+  it("returns zero currentPct and zero maxPct for a monotonically rising curve (no drawdown ever recorded)", () => {
     const points: EquityPoint[] = [
       { date: "start", balance: 1000 },
       { date: "d1", balance: 1100 },
       { date: "d2", balance: 1200 },
     ];
     const dd = getDrawdown(points);
-    // maxAmount never exceeds 0, so the maxPct assignment branch (amount >
-    // maxAmount) never fires and it stays at its null initial value — this
-    // is the actual, current behavior, not necessarily ideal UI-facing
-    // behavior (arguably a curve with zero drawdown "everywhere" should
-    // read as 0%, not null) — flagged here as a real disagreement between
-    // this test's original expectation and the code, worth a product call
-    // rather than silently normalizing away in the test.
-    expect(dd).toEqual({ currentAmount: 0, currentPct: 0, maxAmount: 0, maxPct: null });
+    // maxAmount is 0 (no peak-to-trough drop ever occurred), and the peak
+    // itself (1200) is a valid, positive basis — so maxPct reads as a
+    // genuine 0%, not null. Null is reserved for when the peak itself isn't
+    // a valid percentage basis (zero or negative), see the next two tests.
+    expect(dd).toEqual({ currentAmount: 0, currentPct: 0, maxAmount: 0, maxPct: 0 });
   });
 
   it("computes the max peak-to-trough drop, even if a later recovery followed", () => {
@@ -141,8 +138,9 @@ describe("getDrawdown", () => {
 
   it("handles a single-point curve with no drawdown", () => {
     const dd = getDrawdown([{ date: "start", balance: 500 }]);
-    // Same maxPct-stays-null case as the monotonic-rise test above.
-    expect(dd).toEqual({ currentAmount: 0, currentPct: 0, maxAmount: 0, maxPct: null });
+    // Same valid-positive-peak, zero-drawdown case as the monotonic-rise
+    // test above — maxPct reads as 0%, not null.
+    expect(dd).toEqual({ currentAmount: 0, currentPct: 0, maxAmount: 0, maxPct: 0 });
   });
 });
 

@@ -107,7 +107,13 @@ export type Drawdown = {
   currentPct: number | null;
   /** The largest peak-to-trough drop seen anywhere in the curve. */
   maxAmount: number;
-  /** Percentage form of maxAmount — same zero-or-negative-peak caveat as currentPct. */
+  /**
+   * Percentage form of maxAmount. 0 when the curve has a valid (positive)
+   * peak but no drawdown ever occurred (monotonically rising, or a
+   * single-point curve) — there IS a well-defined answer in that case, and
+   * it's zero. Null only in the genuine zero-or-negative-peak case, where
+   * "percent below peak" has no meaningful denominator at all.
+   */
   maxPct: number | null;
 };
 
@@ -118,16 +124,20 @@ export type Drawdown = {
 export function getDrawdown(points: EquityPoint[]): Drawdown {
   let peak = points[0]?.balance ?? 0;
   let maxAmount = 0;
-  let maxPct: number | null = null;
 
   for (const p of points) {
     if (p.balance > peak) peak = p.balance;
     const amount = peak - p.balance;
     if (amount > maxAmount) {
       maxAmount = amount;
-      maxPct = peak > 0 ? (amount / peak) * 100 : null;
     }
   }
+  // maxAmount is always well-defined (0 when no drawdown ever occurred).
+  // maxPct follows the peak reached at the point of that max drawdown —
+  // for the common "never drawn down" case that's just the curve's overall
+  // peak, since maxAmount is 0 everywhere. Null only when that peak itself
+  // isn't a valid percentage basis (zero or negative).
+  const maxPct = peak > 0 ? (maxAmount / peak) * 100 : null;
 
   const last = points[points.length - 1]?.balance ?? 0;
   let lastPeak = points[0]?.balance ?? 0;

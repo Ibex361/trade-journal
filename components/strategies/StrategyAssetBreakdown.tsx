@@ -184,7 +184,9 @@ export default function StrategyAssetBreakdown({
                   <td className="px-3 py-3 text-right font-mono text-ink-secondary">{formatRatio(r.payoffRatio)}</td>
                   <td className="px-3 py-3 text-right font-mono text-ink-secondary">{formatRatio(r.stdDevR)}</td>
                   <td className="px-3 py-3 text-right font-mono text-loss">
-                    {r.maxDrawdownPct != null ? `-${formatPct(r.maxDrawdownPct)}` : "—"}
+                    {r.maxDrawdownPct != null
+                      ? `${r.maxDrawdownPct > 0 ? "-" : ""}${formatPct(r.maxDrawdownPct)}`
+                      : "—"}
                   </td>
                   <td className={`px-3 py-3 text-right font-mono ${pnlColor}`}>
                     {r.totalPnl > 0 ? "+" : ""}

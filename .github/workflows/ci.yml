@@ -1,0 +1,42 @@
+name: CI
+
+# Runs the checks Claude already runs by hand in the sandbox every
+# session (tsc --noEmit, eslint, vitest) automatically on every push and
+# pull request, so a regression shows up here instead of only being
+# caught next time someone happens to ask for a manual check. This repo
+# is public, so Actions minutes are unlimited/free regardless of usage.
+#
+# Deliberately does NOT run `next build` — that needs network access to
+# fonts.googleapis.com at build time, which isn't a problem on GitHub's
+# runners (unlike the sandbox), but Vercel's own build on deploy already
+# covers that; this workflow is about fast, cheap feedback on every push
+# rather than duplicating the deploy build.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
