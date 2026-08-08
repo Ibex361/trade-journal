@@ -94,19 +94,26 @@ export default function AnalyticsPage() {
 
   const rangeTrades = useMemo(() => filterTradesByRange(trades, deferredRange), [trades, deferredRange]);
 
+  // Keyed on starting_balance, not the account object — same reasoning as
+  // the selectedAccount?.id-keyed effects elsewhere (avoids recomputing on
+  // AccountContext's spurious object-identity churn from Supabase's
+  // background token refresh).
   const equityCurve = useMemo(
     () =>
       selectedAccount
         ? buildEquityCurveForRange(trades, selectedAccount.starting_balance, deferredRange)
         : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [trades, selectedAccount?.starting_balance, deferredRange]
   );
 
   const drawdown = useMemo(() => getDrawdown(equityCurve), [equityCurve]);
   const profitFactor = useMemo(() => getProfitFactor(rangeTrades), [rangeTrades]);
   const expectancy = useMemo(() => getExpectancy(rangeTrades), [rangeTrades]);
+  // Same starting_balance-keying reasoning as equityCurve above.
   const totalReturnPct = useMemo(
     () => getTotalReturnPct(rangeTrades, equityCurve[0]?.balance ?? selectedAccount?.starting_balance ?? 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rangeTrades, equityCurve]
   );
   const pnlBuckets = useMemo(
@@ -203,7 +210,7 @@ export default function AnalyticsPage() {
     setSelectedExitStrategy((prev) =>
       prev && prev.strategyKey === strategyKey && prev.reason === reason ? null : { strategyKey, reason }
     );
-  }, []);
+  }, [setSelectedExitStrategy]);
 
   const slHitRateRows = useMemo(() => getSlHitRateByStrategy(rangeTrades), [rangeTrades]);
   const selectedSlMovementRow = useMemo(
@@ -227,8 +234,8 @@ export default function AnalyticsPage() {
     setSelectedSlMovement((prev) =>
       prev && prev.strategyKey === strategyKey && prev.movement === movement ? null : { strategyKey, movement }
     );
-  }, []);
-  const closeSlTrailDrilldown = useCallback(() => setSelectedSlMovement(null), []);
+  }, [setSelectedSlMovement]);
+  const closeSlTrailDrilldown = useCallback(() => setSelectedSlMovement(null), [setSelectedSlMovement]);
 
   const plannedVsRealizedPoints = useMemo(() => getPlannedVsRealizedR(rangeTrades), [rangeTrades]);
   const plannedVsRealizedSummary = useMemo(
@@ -244,14 +251,14 @@ export default function AnalyticsPage() {
     () => (selectedPlannedRId ? rangeTrades.find((t) => t.id === selectedPlannedRId) ?? null : null),
     [rangeTrades, selectedPlannedRId]
   );
-  const closePlannedRDrilldown = useCallback(() => setSelectedPlannedRId(null), []);
+  const closePlannedRDrilldown = useCallback(() => setSelectedPlannedRId(null), [setSelectedPlannedRId]);
 
-  const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), []);
-  const closeHourDrilldown = useCallback(() => setSelectedHourKey(null), []);
-  const closeHoldingDrilldown = useCallback(() => setSelectedHoldingKey(null), []);
-  const closeRBucketDrilldown = useCallback(() => setSelectedRBucketKey(null), []);
-  const closeRulesDrilldown = useCallback(() => setSelectedRulesKey(null), []);
-  const closeExitStrategyDrilldown = useCallback(() => setSelectedExitStrategy(null), []);
+  const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), [setSelectedGroupKey]);
+  const closeHourDrilldown = useCallback(() => setSelectedHourKey(null), [setSelectedHourKey]);
+  const closeHoldingDrilldown = useCallback(() => setSelectedHoldingKey(null), [setSelectedHoldingKey]);
+  const closeRBucketDrilldown = useCallback(() => setSelectedRBucketKey(null), [setSelectedRBucketKey]);
+  const closeRulesDrilldown = useCallback(() => setSelectedRulesKey(null), [setSelectedRulesKey]);
+  const closeExitStrategyDrilldown = useCallback(() => setSelectedExitStrategy(null), [setSelectedExitStrategy]);
 
   return (
     <div className="space-y-6">

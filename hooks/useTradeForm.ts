@@ -265,11 +265,15 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
     onCloseRef.current = onClose;
   });
 
+  // Keyed on the id, not the object — same reasoning as the notes-fetch
+  // effect in app/notes/page.tsx (spurious object-identity churn from
+  // AccountContext shouldn't re-trigger this fetch).
   useEffect(() => {
     if (!selectedAccount) return;
     fetchDropdownItems(selectedAccount.id).then(({ data }) => {
       if (data) setDropdowns(data as DropdownItem[]);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   // Freeform tag suggestion fix, part 1: suggest every tag actually in use
@@ -277,9 +281,12 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
   // list — see fetchDistinctTags for why. Part 2 retired the tag_settings
   // fetch that used to live here — that table is no longer a curated
   // suggestion source (see components/settings/TagSettingCard.tsx).
+  // Keyed on the id, not the object — same object-identity-churn reasoning
+  // as the effect above.
   useEffect(() => {
     if (!selectedAccount) return;
     fetchDistinctTags(selectedAccount.id).then(setTagSuggestions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   useEffect(() => {

@@ -28,8 +28,13 @@ export default function DashboardPage() {
 
   const summary = useMemo(() => summarizeTrades(trades), [trades]);
 
+  // Keyed on starting_balance, not the account object — same reasoning as
+  // the selectedAccount?.id-keyed effects elsewhere (avoids recomputing on
+  // AccountContext's spurious object-identity churn from Supabase's
+  // background token refresh).
   const equityCurve = useMemo(
     () => (selectedAccount ? buildEquityCurve(trades, selectedAccount.starting_balance) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [trades, selectedAccount?.starting_balance]
   );
 
@@ -42,8 +47,10 @@ export default function DashboardPage() {
   const monthSummary = useMemo(() => summarizeTrades(monthTrades), [monthTrades]);
   // Each trade's risk % is measured against the balance it actually had at
   // the time, not today's balance — see getAvgRiskPct / getBalanceBeforeTrade.
+  // Same starting_balance-keying reasoning as equityCurve above.
   const balanceBeforeByTradeId = useMemo(
     () => (selectedAccount ? getBalanceBeforeTrade(trades, selectedAccount.starting_balance) : new Map<string, number>()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [trades, selectedAccount?.starting_balance]
   );
   const avgRiskPct = useMemo(

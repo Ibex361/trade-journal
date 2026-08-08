@@ -15,11 +15,15 @@ export default function TargetsCard() {
   const [resetting, setResetting] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  // Keyed on the id, not the object — same reasoning as the notes-fetch
+  // effect in app/notes/page.tsx (spurious object-identity churn from
+  // AccountContext shouldn't re-trigger this fetch).
   useEffect(() => {
     if (!selectedAccount) return;
     setRisk(selectedAccount.target_risk_pct?.toString() ?? "");
     setMonthlyPnl(selectedAccount.target_monthly_pnl?.toString() ?? "");
     setWinrate(selectedAccount.target_monthly_winrate?.toString() ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   if (!selectedAccount) return null;

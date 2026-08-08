@@ -42,6 +42,9 @@ export function TradesDataProvider({ children }: { children: ReactNode }) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Keyed on the id, not the object — same reasoning as the notes-fetch
+  // effect in app/notes/page.tsx (spurious object-identity churn from
+  // AccountContext shouldn't re-trigger this fetch).
   const refreshTrades = useCallback(async () => {
     if (!selectedAccount) {
       setTrades([]);
@@ -52,6 +55,7 @@ export function TradesDataProvider({ children }: { children: ReactNode }) {
     const { data } = await fetchTrades(selectedAccount.id);
     if (data) setTrades(data as Trade[]);
     setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   // Re-fetch whenever the selected account changes (including the initial

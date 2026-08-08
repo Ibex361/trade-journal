@@ -132,6 +132,9 @@ export default function TradesPage() {
   // otherwise silently go stale. Synthesized into TagSettingItem shape
   // (BulkActionsBar only reads .id/.value) so the bar itself needed no
   // changes.
+  // Keyed on the id, not the object — same reasoning as the notes-fetch
+  // effect in app/notes/page.tsx (spurious object-identity churn from
+  // AccountContext shouldn't re-trigger this fetch).
   useEffect(() => {
     if (!selectedAccount) {
       setTagSettings([]);
@@ -142,6 +145,7 @@ export default function TradesPage() {
         tags.map((value) => ({ id: value, value }))
       );
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   useEffect(() => {
