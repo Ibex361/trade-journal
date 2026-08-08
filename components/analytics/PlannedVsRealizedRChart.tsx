@@ -97,8 +97,9 @@ function PlannedVsRealizedRChart({
     points.length > 0 ? (summary.metOrExceededCount / points.length) * 100 : null;
 
   const handlePointClick = useCallback(
-    (data: any) => {
-      const p: PlannedVsRealizedPoint | undefined = data?.payload ?? data;
+    (data: { payload?: PlannedVsRealizedPoint } | PlannedVsRealizedPoint) => {
+      const p: PlannedVsRealizedPoint | undefined =
+        "payload" in data && data.payload ? data.payload : (data as PlannedVsRealizedPoint);
       if (p?.id) onSelectPoint(selectedId === p.id ? null : p.id);
     },
     [onSelectPoint, selectedId]

@@ -22,7 +22,7 @@ function formatDateLabel(d: string) {
 
 type CustomTooltipProps = {
   active?: boolean;
-  payload?: { payload: EquityPoint }[];
+  payload?: { payload?: EquityPoint }[];
   currency: string;
 };
 
@@ -30,7 +30,8 @@ type CustomTooltipProps = {
 // fresh render when the active point hasn't actually changed.
 const CustomTooltip = memo(function CustomTooltip({ active, payload, currency }: CustomTooltipProps) {
   if (!active || !payload || !payload.length) return null;
-  const point = payload[0].payload as EquityPoint;
+  const point = payload[0].payload;
+  if (!point) return null;
   const label =
     point.date === "start"
       ? "Starting balance"
@@ -67,7 +68,9 @@ export default function EquityCurveGraph({
   height?: string;
 }) {
   const renderTooltip = useCallback(
-    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    (props: { active?: boolean; payload?: { payload?: EquityPoint }[] }) => (
+      <CustomTooltip {...props} currency={currency} />
+    ),
     [currency]
   );
 

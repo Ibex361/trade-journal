@@ -6,7 +6,13 @@ import { HoldingTimeBucket, pickWinRate } from "@/lib/metrics";
 import { useWinRateMode } from "@/lib/WinRateModeContext";
 import Card from "@/components/shared/Card";
 
-type TooltipPayloadItem = { payload: HoldingTimeBucket };
+type TooltipPayloadItem = { payload?: HoldingTimeBucket };
+
+// Minimal shape of Recharts' onClick chart-state argument — only the piece
+// this handler actually reads. Recharts' own CategoricalChartState type
+// isn't exported from the package root, so this is a narrow, accurate
+// local substitute rather than a blanket `any`.
+type ChartClickState = { activePayload?: TooltipPayloadItem[] };
 
 // Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
 // fresh render (and a fresh context read) when the active bar hasn't changed.
@@ -22,6 +28,7 @@ const CustomTooltip = memo(function CustomTooltip({
   const { mode } = useWinRateMode();
   if (!active || !payload || !payload.length) return null;
   const b = payload[0].payload;
+  if (!b) return null;
   if (b.count === 0) {
     return (
       <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass">
@@ -66,16 +73,18 @@ function HoldingTimeChart({
   const hasTrades = buckets.some((b) => b.count > 0);
 
   const renderTooltip = useCallback(
-    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    (props: { active?: boolean; payload?: TooltipPayloadItem[] }) => (
+      <CustomTooltip {...props} currency={currency} />
+    ),
     [currency]
   );
 
   const handleChartClick = useCallback(
-    (state: any) => {
+    (state: ChartClickState) => {
       const payload = state?.activePayload?.[0]?.payload;
       const key = payload?.key;
       const count = payload?.count;
-      if (key && count > 0) onSelectBucket(selectedKey === key ? null : key);
+      if (key && count != null && count > 0) onSelectBucket(selectedKey === key ? null : key);
     },
     [onSelectBucket, selectedKey]
   );

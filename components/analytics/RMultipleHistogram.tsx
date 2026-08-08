@@ -5,7 +5,13 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContaine
 import { RMultipleBucket } from "@/lib/metrics";
 import Card from "@/components/shared/Card";
 
-type TooltipPayloadItem = { payload: RMultipleBucket };
+type TooltipPayloadItem = { payload?: RMultipleBucket };
+
+// Minimal shape of Recharts' onClick chart-state argument — only the piece
+// this handler actually reads. Recharts' own CategoricalChartState type
+// isn't exported from the package root, so this is a narrow, accurate
+// local substitute rather than a blanket `any`.
+type ChartClickState = { activePayload?: TooltipPayloadItem[] };
 
 // Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
 // fresh render when the active bucket hasn't actually changed.
@@ -20,6 +26,7 @@ const CustomTooltip = memo(function CustomTooltip({
 }) {
   if (!active || !payload || !payload.length) return null;
   const b = payload[0].payload;
+  if (!b) return null;
   if (b.count === 0) {
     return (
       <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass">
@@ -61,16 +68,18 @@ function RMultipleHistogram({
   const hasTrades = buckets.some((b) => b.count > 0);
 
   const renderTooltip = useCallback(
-    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    (props: { active?: boolean; payload?: TooltipPayloadItem[] }) => (
+      <CustomTooltip {...props} currency={currency} />
+    ),
     [currency]
   );
 
   const handleChartClick = useCallback(
-    (state: any) => {
+    (state: ChartClickState) => {
       const payload = state?.activePayload?.[0]?.payload;
       const key = payload?.key;
       const count = payload?.count;
-      if (key && count > 0) onSelectBucket(selectedKey === key ? null : key);
+      if (key && count != null && count > 0) onSelectBucket(selectedKey === key ? null : key);
     },
     [onSelectBucket, selectedKey]
   );

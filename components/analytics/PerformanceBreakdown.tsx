@@ -6,7 +6,13 @@ import { BREAKDOWN_DIMENSIONS, BreakdownDimension, BreakdownGroup, pickWinRate }
 import { useWinRateMode } from "@/lib/WinRateModeContext";
 import Card from "@/components/shared/Card";
 
-type TooltipPayloadItem = { payload: BreakdownGroup };
+type TooltipPayloadItem = { payload?: BreakdownGroup };
+
+// Minimal shape of Recharts' onClick chart-state argument — only the piece
+// this handler actually reads. Recharts' own CategoricalChartState type
+// isn't exported from the package root, so this is a narrow, accurate
+// local substitute rather than a blanket `any`.
+type ChartClickState = { activePayload?: TooltipPayloadItem[] };
 
 // Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
 // fresh render (and a fresh context read) when the active bar hasn't changed.
@@ -22,6 +28,7 @@ const CustomTooltip = memo(function CustomTooltip({
   const { mode } = useWinRateMode();
   if (!active || !payload || !payload.length) return null;
   const g = payload[0].payload;
+  if (!g) return null;
   const winRate = pickWinRate(g, mode);
   const color = g.totalPnl >= 0 ? "text-gain" : "text-loss";
   const sign = g.totalPnl > 0 ? "+" : "";
@@ -64,12 +71,14 @@ function PerformanceBreakdown({
   subtitle?: string;
 }) {
   const renderTooltip = useCallback(
-    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    (props: { active?: boolean; payload?: TooltipPayloadItem[] }) => (
+      <CustomTooltip {...props} currency={currency} />
+    ),
     [currency]
   );
 
   const handleChartClick = useCallback(
-    (state: any) => {
+    (state: ChartClickState) => {
       const key = state?.activePayload?.[0]?.payload?.key;
       if (key) onSelectGroup(selectedKey === key ? null : key);
     },

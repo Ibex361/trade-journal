@@ -11,7 +11,7 @@ const GRANULARITIES: { value: PeriodGranularity; label: string }[] = [
   { value: "month", label: "Month" },
 ];
 
-type TooltipPayloadItem = { payload: PeriodBucket };
+type TooltipPayloadItem = { payload?: PeriodBucket };
 
 // Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
 // fresh render when the active bucket hasn't actually changed.
@@ -26,6 +26,7 @@ const CustomTooltip = memo(function CustomTooltip({
 }) {
   if (!active || !payload || !payload.length) return null;
   const bucket = payload[0].payload;
+  if (!bucket) return null;
   const color = bucket.pnl >= 0 ? "text-gain" : "text-loss";
   const sign = bucket.pnl > 0 ? "+" : "";
   return (
@@ -54,7 +55,9 @@ function PnlByPeriodChart({
   onGranularityChange: (g: PeriodGranularity) => void;
 }) {
   const renderTooltip = useCallback(
-    (props: any) => <CustomTooltip {...props} currency={currency} />,
+    (props: { active?: boolean; payload?: TooltipPayloadItem[] }) => (
+      <CustomTooltip {...props} currency={currency} />
+    ),
     [currency]
   );
 

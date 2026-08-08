@@ -69,7 +69,7 @@ function ExitReasonByStrategyChart({
   const chartHeight = Math.max(120, rows.length * 48);
 
   const makeClickHandler = useCallback(
-    (reason: ExitReason) => (data: any) => {
+    (reason: ExitReason) => (data: TooltipPayloadItem) => {
       const row: StrategyExitBreakdown | undefined = data?.payload;
       if (row) onSelectSegment(row.key, reason);
     },
