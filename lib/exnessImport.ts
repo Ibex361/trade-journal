@@ -1,6 +1,7 @@
 import { TradeInput, ExitReason } from "./trades";
 import { parseCsvRows, parseNumber, ImportRowIssue, ParsedImport } from "./csvUtils";
 import { calculateRMultiple } from "./metrics";
+import { contractSizeFor } from "./exnessContractSize";
 
 // Exness exports opening_time_utc in UTC. This journal logs everything in
 // East Africa Time (UTC+3), the user's local time, so imported timestamps
@@ -99,6 +100,13 @@ function closeReasonToExitReason(reason: string): ExitReason | null {
  * - Each row's broker "ticket" is kept as broker_ticket, so a re-import of
  *   an overlapping date range can be de-duplicated by the caller instead
  *   of creating repeat trades.
+ * - size is converted from Exness "lots" into the same units convention
+ *   the manual trade form uses (lots × contract size — e.g. 0.01 lots of
+ *   an instrument with a 100,000 contract size becomes 1000), via
+ *   contractSizeFor() in exnessContractSize.ts, so the size field reads
+ *   consistently whether a trade was imported or logged by hand. This is
+ *   cosmetic only — pnl above is always the broker-reported net result,
+ *   never derived from size, so this conversion can't affect P&L.
  * - take_profit is kept as take_profit_price. equity and margin_level
  *   still have no matching field in this app and are dropped rather than
  *   stuffed somewhere they don't belong.
@@ -200,7 +208,10 @@ export function parseExnessCsv(csvText: string): ParsedImport {
       exit_price: exitPrice,
       stop_loss_price: stopLossPrice,
       take_profit_price: takeProfitPrice,
-      size: parseNumber(cell(cells, "lots")),
+      size: (() => {
+        const lots = parseNumber(cell(cells, "lots"));
+        return lots === null ? null : lots * contractSizeFor(symbol);
+      })(),
       pnl: Math.round((profit + commission + swap) * 100) / 100,
       r_multiple: calculateRMultiple(direction, entryPrice, exitPrice, stopLossPrice),
       rules_followed: null,
