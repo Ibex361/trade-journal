@@ -337,7 +337,6 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
         window.history.back();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Warn on closing the browser tab / refreshing too, not just in-app

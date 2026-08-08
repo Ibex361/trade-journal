@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, memo } from "react";
+import { useCallback, memo } from "react";
 import { SlHitRateRow, SlHitRateSegment } from "@/lib/metrics";
 import { StopMovement } from "@/lib/trades";
 import Card from "@/components/shared/Card";

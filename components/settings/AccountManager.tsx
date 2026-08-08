@@ -7,7 +7,7 @@ import SettingsCard from "./SettingsCard";
 import Button from "@/components/shared/Button";
 
 export default function AccountManager() {
-  const { accounts, archivedAccounts, refreshAccounts, selectAccount } = useAccount();
+  const { accounts, archivedAccounts, refreshAccounts } = useAccount();
   const [showNew, setShowNew] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -245,7 +245,7 @@ export default function AccountManager() {
                   />
                 </div>
                 <p className="text-xs text-ink-muted">
-                  Changing starting balance recalculates this account's equity curve and returns from that new baseline.
+                  Changing starting balance recalculates this account&apos;s equity curve and returns from that new baseline.
                 </p>
                 {editDetailsError && <p className="text-xs text-loss">{editDetailsError}</p>}
                 <div className="flex gap-3">
@@ -364,7 +364,7 @@ export default function AccountManager() {
                   {deletingId === acc.id && (
                     <div className="mt-3 pt-3 border-t border-surface-border">
                       <p className="text-xs text-loss mb-2">
-                        This deletes "{acc.name}" and every trade in it, forever.
+                        This deletes &quot;{acc.name}&quot; and every trade in it, forever.
                         Type the account name to confirm.
                       </p>
                       <div className="flex gap-2">

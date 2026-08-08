@@ -20,7 +20,9 @@ import { getSavedScroll, saveScroll } from "@/lib/scrollRestoration";
 export default function ScrollRestoration() {
   const pathname = usePathname();
   const pathRef = useRef(pathname);
-  pathRef.current = pathname;
+  useEffect(() => {
+    pathRef.current = pathname;
+  }, [pathname]);
 
   useEffect(() => {
     let frame = 0;

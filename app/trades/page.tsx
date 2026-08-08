@@ -111,18 +111,18 @@ export default function TradesPage() {
     setSelectedIds(new Set([id]));
   }, []);
 
-  async function loadDropdowns() {
+  const loadDropdowns = useCallback(async () => {
     if (!selectedAccount) return;
     setDropdownsLoading(true);
     const { data } = await fetchDropdownItems(selectedAccount.id);
     if (data) setDropdowns(data as DropdownItem[]);
     setDropdownsLoading(false);
-  }
+  }, [selectedAccount]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadDropdowns' setDropdownsLoading(true) runs before its first await.
     loadDropdowns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAccount?.id]);
+  }, [loadDropdowns]);
 
   // Tag setting migration part 2: tags now come from the dedicated
   // Tag setting migration part 2 (updated): the "+ Tag" bulk-add chip list

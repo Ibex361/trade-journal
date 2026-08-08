@@ -135,7 +135,14 @@ export default function NotesPage() {
   // keystrokes typed into it — those still need Save before leaving.
   const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
 
+  // Resets the stale error banner when switching notes. Deliberately an
+  // effect rather than replicated at each of the 4 places activeNoteId
+  // changes (new note, select note, delete note, close) — one spot instead
+  // of 4 call sites that would be easy to let drift out of sync. The extra
+  // same-tick render this can cause is harmless here (saveError going back
+  // to false a tick after activeNoteId changes isn't visible to the user).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaveError(false);
   }, [activeNoteId]);
 
@@ -147,7 +154,10 @@ export default function NotesPage() {
   // (NotesBulkActionsBar only reads .id/.value) so the bar itself needed no
   // changes.
   useEffect(() => {
+    // No account selected (e.g. logged out, no accounts yet) — clear
+    // rather than leave a stale list from a previously selected account.
     if (!selectedAccount) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTagSettings([]);
       return;
     }
@@ -156,10 +166,17 @@ export default function NotesPage() {
         tags.map((value) => ({ id: value, value }))
       );
     });
+    // Keyed on the id, not the object — same reasoning as the notes-fetch
+    // effect below (spurious object-identity churn from AccountContext
+    // shouldn't re-trigger this fetch).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   useEffect(() => {
+    // Same as the tag-settings effect above: no account selected, clear
+    // rather than show a stale list.
     if (!selectedAccount) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotes([]);
       setLoading(false);
       return;
@@ -191,6 +208,10 @@ export default function NotesPage() {
   }, [selectedAccount?.id]);
 
   useEffect(() => {
+    // Clears any selection referencing notes that may no longer be visible
+    // once filters change, so bulk actions can't silently apply to a
+    // now-hidden note.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     exitSelectionMode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
@@ -225,7 +246,7 @@ export default function NotesPage() {
   // an option with zero matching notes would be a dead end in this dropdown.
   const availableStrategies = useMemo(() => getUsedStrategies(notes), [notes]);
 
-  async function handleNewNote() {
+  const handleNewNote = useCallback(async () => {
     if (!selectedAccount || creating) return;
     setCreating(true);
     const { data, error } = await createNote(selectedAccount.id);
@@ -234,7 +255,7 @@ export default function NotesPage() {
     const newNote = data as Note;
     setNotes((current) => [newNote, ...current]);
     setActiveNoteId(newNote.id);
-  }
+  }, [selectedAccount, creating, setActiveNoteId]);
 
   // Picks up a "new note" request set by MobileTabBar's FAB (the plus
   // button's "New note" choice) via NotesPageStateContext.pendingNewNote
@@ -248,9 +269,13 @@ export default function NotesPage() {
   // again mid-request.
   useEffect(() => {
     if (!pendingNewNote || !selectedAccount) return;
+    // Consumes a flag set by MobileTabBar's FAB before navigating here —
+    // there's no local event handler to move this into, since the trigger
+    // is "this page just mounted with the flag already set."
     setPendingNewNote(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- handleNewNote's setCreating(true) runs before its first await; same "consuming an external flag on mount" case as above.
     handleNewNote();
-  }, [pendingNewNote, selectedAccount, setPendingNewNote]);
+  }, [pendingNewNote, selectedAccount, setPendingNewNote, handleNewNote]);
 
   function handleSelectNote(note: Note) {
     setActiveNoteId(note.id);

@@ -310,7 +310,9 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
   // once via editorProps, not re-created per render) always see the
   // current values instead of closing over stale ones.
   const accountIdRef = useRef(accountId);
-  accountIdRef.current = accountId;
+  useEffect(() => {
+    accountIdRef.current = accountId;
+  }, [accountId]);
   // editorProps below is only read at editor-creation time by Tiptap, so
   // handlePaste/handleDrop go through this ref rather than calling
   // insertImageFile directly — it's defined further down (it needs the
@@ -439,7 +441,6 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         setUploadingCount((n) => n - 1);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor]
   );
 

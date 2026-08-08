@@ -45,7 +45,7 @@ export default class NoteEditorErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass p-4 text-sm text-ink-secondary space-y-2">
-          <p>Something went wrong displaying this note's editor. Your other notes and data are unaffected — try closing and reopening this note.</p>
+          <p>Something went wrong displaying this note&apos;s editor. Your other notes and data are unaffected — try closing and reopening this note.</p>
           {this.state.details && (
             <p className="text-[11px] text-ink-muted font-mono break-words">{this.state.details}</p>
           )}

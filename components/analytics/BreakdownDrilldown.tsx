@@ -26,7 +26,6 @@ function PnlText({ value }: { value: number }) {
 function BreakdownDrilldown({
   groupLabel,
   trades,
-  currency,
   onClose,
 }: {
   groupLabel: string;

@@ -291,7 +291,7 @@ export default function TagSettingCard() {
 
       {selectedTag && mode === "renaming" && (
         <div className="bg-surface-2 border border-surface-border rounded-md px-3 py-2.5 mt-3 space-y-2">
-          <p className="text-[11px] text-ink-secondary">Rename "{selectedTag}" to:</p>
+          <p className="text-[11px] text-ink-secondary">Rename &quot;{selectedTag}&quot; to:</p>
           <div className="flex items-center gap-2">
             <input
               value={renameValue}

@@ -88,7 +88,7 @@ function HoldingTimeChart({
       {!hasTrades ? (
         <div className="h-56 flex items-center justify-center">
           <p className="text-ink-muted text-sm max-w-sm text-center">
-            No trades with both an entry and exit time logged in this range, so holding time can't be calculated
+            No trades with both an entry and exit time logged in this range, so holding time can&apos;t be calculated
             yet.
           </p>
         </div>

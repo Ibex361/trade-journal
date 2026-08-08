@@ -310,7 +310,9 @@ export default function NoteEditPanel({
   // render; a ref keeps it reaching the *current* handleClose instead of
   // closing over a stale one from the render it was attached in.
   const handleCloseRef = useRef(handleClose);
-  handleCloseRef.current = handleClose;
+  useEffect(() => {
+    handleCloseRef.current = handleClose;
+  });
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") handleCloseRef.current();

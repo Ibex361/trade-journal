@@ -209,7 +209,7 @@ function PlannedVsRealizedRChart({
       {missingCount > 0 && (
         <p className="text-[11px] text-ink-muted mt-3">
           {missingCount} trade{missingCount === 1 ? "" : "s"} in this range excluded — no take-profit price set (so
-          there's no plan to compare against) or no realized R-multiple recorded.
+          there&apos;s no plan to compare against) or no realized R-multiple recorded.
         </p>
       )}
     </Card>
