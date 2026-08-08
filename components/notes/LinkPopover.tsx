@@ -68,6 +68,9 @@ function useLinkHandler(editor: Editor | null) {
     if (!editor) return;
     const { href } = editor.getAttributes("link");
     if (isLinkActive(editor) && url === null) {
+      // Syncs from the editor's own link mark (an external system) the
+      // first time it becomes active for this editor instance.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrl(href || "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,6 +191,9 @@ export function LinkPopover({ editor, autoOpenOnLinkActive = true }: LinkPopover
 
   React.useEffect(() => {
     if (autoOpenOnLinkActive && isActive) {
+      // Syncs the popover's open state with the editor's own selection
+      // (an external system) — opens when the cursor lands inside a link.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsOpen(true);
     }
   }, [autoOpenOnLinkActive, isActive]);

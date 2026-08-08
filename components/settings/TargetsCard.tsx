@@ -20,6 +20,9 @@ export default function TargetsCard() {
   // AccountContext shouldn't re-trigger this fetch).
   useEffect(() => {
     if (!selectedAccount) return;
+    // Syncs the form fields from the selected account (an external
+    // source of truth) whenever the account changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRisk(selectedAccount.target_risk_pct?.toString() ?? "");
     setMonthlyPnl(selectedAccount.target_monthly_pnl?.toString() ?? "");
     setWinrate(selectedAccount.target_monthly_winrate?.toString() ?? "");

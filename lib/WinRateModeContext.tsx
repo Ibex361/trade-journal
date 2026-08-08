@@ -35,6 +35,8 @@ export function WinRateModeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    // Syncs from localStorage (an external system) on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored === "strict" || stored === "decided") setModeState(stored);
   }, []);
 

@@ -138,6 +138,9 @@ export function useMenuNavigation<T>({
 
   React.useEffect(() => {
     if (query) {
+      // Resets the selection as the search query changes, so a stale
+      // index from the previous filtered list isn't left selected.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIndex(autoSelectFirstItem ? 0 : -1);
     }
   }, [query, autoSelectFirstItem]);

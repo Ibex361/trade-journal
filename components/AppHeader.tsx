@@ -50,6 +50,9 @@ export default function AppHeader() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
+    // Closes the overflow drawer on navigation, so it doesn't stay open
+    // over the newly-loaded page.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMoreOpen(false);
   }, [pathname]);
 

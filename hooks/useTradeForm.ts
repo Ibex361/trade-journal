@@ -414,16 +414,21 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
   // Keep the P&L / R-multiple text fields in sync while in auto mode.
   useEffect(() => {
     if (pnlAuto && computedPnl != null) {
+      // Syncs the P&L text field from the computed value while in auto
+      // mode — a derived-state sync, not driven by an external system,
+      // but keeping it here (rather than at each of computedPnl's own
+      // dependency sites) avoids duplicating the auto-mode gating logic.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm((f) => ({ ...f, pnl: String(roundForStorage(computedPnl)) }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computedPnl, pnlAuto]);
 
   useEffect(() => {
     if (rAuto && computedR != null) {
+      // Same as the P&L sync above, for the R-multiple field.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm((f) => ({ ...f, r_multiple: String(roundForStorage(computedR)) }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computedR, rAuto]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {

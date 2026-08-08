@@ -137,6 +137,7 @@ export default function TradesPage() {
   // AccountContext shouldn't re-trigger this fetch).
   useEffect(() => {
     if (!selectedAccount) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- no account selected; clear rather than leave a stale list from a previously selected account.
       setTagSettings([]);
       return;
     }
@@ -149,6 +150,10 @@ export default function TradesPage() {
   }, [selectedAccount?.id]);
 
   useEffect(() => {
+    // Clears any selection referencing trades that may no longer be visible
+    // once filters change, so bulk actions can't silently apply to a
+    // now-hidden trade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     exitSelectionMode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
@@ -205,6 +210,7 @@ export default function TradesPage() {
   useEffect(() => {
     if (!pendingTradeId || tradesLoading) return;
     const target = trades.find((t) => t.id === pendingTradeId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opens the trade panel in response to a one-shot external flag (TradesPageStateContext.pendingTradeId), not deriving render state.
     if (target) openEdit(target);
     setPendingTradeId(null);
   }, [pendingTradeId, tradesLoading, trades, openEdit, setPendingTradeId]);
@@ -217,6 +223,7 @@ export default function TradesPage() {
   useEffect(() => {
     if (!pendingNewTrade || tradesLoading) return;
     setPendingNewTrade(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opens the new-trade panel in response to a one-shot external flag (TradesPageStateContext.pendingNewTrade), same as pendingTradeId above.
     openNew();
   }, [pendingNewTrade, tradesLoading, setPendingNewTrade]);
 

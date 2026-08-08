@@ -115,6 +115,7 @@ export default function DropdownLists() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load's setLoading(true) runs before its first await, same as loadDropdowns in app/trades/page.tsx.
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);

@@ -50,6 +50,7 @@ export default function TagInput({
 
   // Keep the highlighted option in range as the filtered list changes.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHighlightedIndex(0);
   }, [filteredSuggestions.length, draft]);
 

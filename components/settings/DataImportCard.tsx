@@ -54,11 +54,17 @@ export default function DataImportCard() {
 
   useEffect(() => {
     if (!parsed || parsed.trades.length === 0) {
+      // No file parsed yet, or it parsed to zero rows — reflect that
+      // directly rather than leaving a stale readyTrades/duplicateCount
+      // from a previous file.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReadyTrades(parsed?.trades ?? null);
       setDuplicateCount(0);
       return;
     }
     if (!effectiveAccountId || !parsed.trades.some((t) => t.broker_ticket)) {
+      // No account to check duplicates against, or nothing to dedupe on —
+      // every parsed row is ready as-is.
       setReadyTrades(parsed.trades);
       setDuplicateCount(0);
       return;

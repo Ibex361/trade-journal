@@ -57,6 +57,7 @@ export default function TagSettingCard() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load's setLoading(true) runs before its first await, same as loadDropdowns in app/trades/page.tsx.
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
@@ -70,6 +71,8 @@ export default function TagSettingCard() {
   const showPanel = isOpen && filteredMatches.length > 0;
 
   useEffect(() => {
+    // Keeps the highlighted option in range as the filtered list changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHighlightedIndex(0);
   }, [filteredMatches.length, query]);
 
@@ -100,6 +103,7 @@ export default function TagSettingCard() {
   // computed here from the input's own bounding rect instead.
   useEffect(() => {
     if (!showPanel) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- panel closed; clear the computed position rather than leave a stale rect.
       setPanelRect(null);
       return;
     }

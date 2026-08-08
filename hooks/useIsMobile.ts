@@ -18,6 +18,9 @@ export function useIsMobile(breakpoint = 768) {
       setIsMobile(window.innerWidth < breakpoint);
     };
     mql.addEventListener("change", onChange);
+    // Syncs from window.innerWidth (an external system) on mount, kept
+    // matching Tiptap's real upstream source per the file header above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobile(window.innerWidth < breakpoint);
     return () => mql.removeEventListener("change", onChange);
   }, [breakpoint]);

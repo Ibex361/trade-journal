@@ -62,6 +62,7 @@ export function TradesDataProvider({ children }: { children: ReactNode }) {
   // resolve from AccountContext). Every other trigger to refresh is
   // explicit, via the pages/components below calling `refreshTrades()`.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshTrades' setLoading(true)/setTrades([]) run before its first await, same as loadDropdowns in app/trades/page.tsx.
     refreshTrades();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
