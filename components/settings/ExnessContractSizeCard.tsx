@@ -133,6 +133,18 @@ export default function ExnessContractSizeCard() {
     else setNewSymbol(symbol);
   }
 
+  function commitQuery() {
+    if (showPanel) {
+      pickSymbol(filteredMatches[highlightedIndex]);
+    } else if (query.trim() && query.trim().toUpperCase() !== activeSymbol) {
+      // No autocomplete match (or panel closed) — treat whatever's typed
+      // as a symbol to look up or create, same as TagSettingCard's
+      // exact-match fallback, but here a non-match is expected and fine
+      // (a fresh symbol) rather than a no-op.
+      pickSymbol(query.trim().toUpperCase());
+    }
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (showPanel && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
@@ -142,15 +154,7 @@ export default function ExnessContractSizeCard() {
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      if (showPanel) {
-        pickSymbol(filteredMatches[highlightedIndex]);
-      } else if (query.trim()) {
-        // No autocomplete match (or panel closed) — treat whatever's
-        // typed as a symbol to look up or create, same as TagSettingCard's
-        // exact-match fallback, but here a non-match is expected and fine
-        // (a fresh symbol) rather than a no-op.
-        pickSymbol(query.trim().toUpperCase());
-      }
+      commitQuery();
       return;
     }
     if (e.key === "Escape" && showPanel) {
@@ -222,6 +226,15 @@ export default function ExnessContractSizeCard() {
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
+          onBlur={() => {
+            // Mobile keyboards (Samsung Internet's included) often don't
+            // fire a real Enter keydown on the "Go"/"Done" action key, so
+            // tapping away is the only reliable signal that the user is
+            // finished typing a symbol — commit on blur as a fallback to
+            // the Enter handler above, not a replacement for it.
+            setIsOpen(false);
+            commitQuery();
+          }}
           placeholder={loading ? "Loading…" : "Type a symbol, e.g. XAUUSD…"}
           disabled={loading}
           role="combobox"
