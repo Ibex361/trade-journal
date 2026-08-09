@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import Card from "@/components/shared/Card";
 import Badge from "@/components/shared/Badge";
 import type { Note } from "@/lib/notes";
@@ -110,6 +110,8 @@ const NoteCard = memo(function NoteCard({
 
 export default function NotesList({
   notes,
+  totalCount,
+  onLoadMore,
   onSelectNote,
   selectionMode,
   selectedIds,
@@ -118,6 +120,22 @@ export default function NotesList({
   onEnterSelectionMode,
 }: {
   notes: Note[];
+  /**
+   * Count of all notes matching the current filter, before the reveal-count
+   * slice in app/notes/page.tsx is applied — i.e. `notes.length` is what's
+   * currently rendered, `totalCount` is what's rendered once every "load
+   * more" batch has fired. Drives the "Showing N of M" label and whether
+   * the scroll sentinel below has anything left to reveal. Mirrors
+   * TradesList's identically-named prop.
+   */
+  totalCount: number;
+  /**
+   * Called when the scroll sentinel enters the viewport. Owner (the Notes
+   * page) is responsible for growing revealCount — this component has no
+   * opinion on batch size, it only reports "the user scrolled to the end
+   * of what's currently shown."
+   */
+  onLoadMore: () => void;
   onSelectNote: (note: Note) => void;
   selectionMode: boolean;
   selectedIds: Set<string>;
@@ -125,7 +143,13 @@ export default function NotesList({
   onToggleSelectAll: () => void;
   onEnterSelectionMode: (id: string) => void;
 }) {
-  const allSelected = notes.length > 0 && notes.every((n) => selectedIds.has(n.id));
+  // Compared against totalCount (every note matching the current filter),
+  // not notes.length (just what's currently revealed) — otherwise, with
+  // more unrevealed notes below the fold, checking every visible card would
+  // show this as "all selected" while onToggleSelectAll (which operates on
+  // the full filtered set in app/notes/page.tsx) would still have more to
+  // select. Same fix TradesList needed when it gained its own reveal cap.
+  const allSelected = totalCount > 0 && selectedIds.size === totalCount;
 
   // Long-press (or mouse-hold) support so selection mode can be entered by
   // pressing a note card directly, same convention as the Trades list —
@@ -166,6 +190,29 @@ export default function NotesList({
     [selectionMode, onToggleSelect, onSelectNote]
   );
 
+  // Infinite-scroll trigger: an IntersectionObserver on a sentinel div below
+  // the grid, same approach as TradesList (avoids scroll-event throttling
+  // and works regardless of card height, which varies here with tag count
+  // and preview length). Re-observes whenever there's more to reveal
+  // (notes.length < totalCount); once everything is revealed the sentinel
+  // unmounts and observation stops.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = notes.length < totalCount;
+
+  useEffect(() => {
+    if (!hasMore) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { rootMargin: "400px" } // fire a bit before the sentinel is actually on-screen, so the next batch is ready by the time the user scrolls to it
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore]);
+
   return (
     <div className="space-y-3">
       {selectionMode && (
@@ -195,6 +242,17 @@ export default function NotesList({
           />
         ))}
       </div>
+
+      {/* Reveal-count status + scroll sentinel — same convention as
+          TradesList. Shown even once hasMore is false (as "Showing M of M")
+          so the count doesn't just disappear; only the sentinel itself is
+          conditionally rendered. */}
+      <div className="flex items-center justify-center py-4">
+        <span className="text-[11px] text-ink-muted">
+          Showing {notes.length} of {totalCount} note{totalCount === 1 ? "" : "s"}
+        </span>
+      </div>
+      {hasMore && <div ref={sentinelRef} aria-hidden="true" className="h-px" />}
     </div>
   );
 }

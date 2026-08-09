@@ -29,6 +29,15 @@ import NotesFilterBar, { NoteFilters, NO_STRATEGY, isNoteFiltersActive } from "@
 import Button from "@/components/shared/Button";
 import type { Trade } from "@/lib/trades";
 
+// Mirrors the Trades page's TRADES_PAGE_SIZE / revealCount pattern (see
+// app/trades/page.tsx) — client-side "infinite scroll" over an already
+// client-side-filtered array, not real server pagination. Notes still
+// fetches every note for the account up front (fetchNotes has no
+// limit/range) since availableTags/availableStrategies and the "open this
+// note" lookup by id both need the *full* set, not just what's on screen —
+// only what's rendered in NotesList is capped.
+const NOTES_PAGE_SIZE = 30;
+
 /**
  * Phase 3 part 2: search (title + full body text) and tag filtering.
  * Phase 6: extended with trade-linkage, strategy, and a date range — all
@@ -279,9 +288,34 @@ export default function NotesPage() {
   }, [notes]);
 
   const deferredFilters = useDeferredValue(filters);
+  // The full filtered set. availableTags/availableStrategies, "select all",
+  // and the empty-vs-no-matches check below all need to reason about every
+  // note matching the current filter — not just what's currently revealed —
+  // so this stays the full list; only `revealedNotes` below is capped.
   const visibleNotes = useMemo(
     () => applyFilters(notes, deferredFilters, searchTextById),
     [notes, deferredFilters, searchTextById]
+  );
+
+  // How many of the filtered notes are currently revealed in the grid — the
+  // client-side "infinite scroll" cursor, same pattern as Trades'
+  // revealCount. Resets to NOTES_PAGE_SIZE whenever the filters change, so
+  // the revealed count is always relative to the *current* filter rather
+  // than however deep the user had scrolled into a different filter view.
+  const [revealCount, setRevealCount] = useState(NOTES_PAGE_SIZE);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the reveal cursor is a direct response to the filters identity changing, same pattern as the exitSelectionMode effect above.
+    setRevealCount(NOTES_PAGE_SIZE);
+  }, [filters]);
+  const handleLoadMore = useCallback(() => {
+    setRevealCount((prev) => prev + NOTES_PAGE_SIZE);
+  }, []);
+
+  // What's actually rendered in NotesList: the same filtered set, capped at
+  // revealCount. This is the "infinite scroll" slice.
+  const revealedNotes = useMemo(
+    () => visibleNotes.slice(0, revealCount),
+    [visibleNotes, revealCount]
   );
 
   // tagSettings is now itself "tags in use" (see the effect above), so this
@@ -580,7 +614,9 @@ export default function NotesPage() {
             </div>
           ) : (
             <NotesList
-              notes={visibleNotes}
+              notes={revealedNotes}
+              totalCount={visibleNotes.length}
+              onLoadMore={handleLoadMore}
               onSelectNote={handleSelectNote}
               selectionMode={selectionMode}
               selectedIds={selectedIds}
