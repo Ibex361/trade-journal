@@ -25,7 +25,7 @@ export default function TradeFormPanel({
   trade: Trade | null;
   duplicateFrom?: Trade | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (savedTrade: Trade) => void;
   // Only meaningful for an existing trade (a brand-new/duplicated trade
   // has no id yet to link a diary entry to) — see app/trades/page.tsx's
   // handleOpenDiary for what this actually does (find-or-create the

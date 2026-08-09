@@ -73,7 +73,13 @@ function applySort(trades: Trade[], sort: SortState): Trade[] {
 
 export default function TradesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const { trades, loading: tradesLoading, refreshTrades } = useTradesData();
+  const {
+    trades,
+    loading: tradesLoading,
+    upsertTradeLocal,
+    removeTradesLocal,
+    patchTradesLocal,
+  } = useTradesData();
   const router = useRouter();
   const { setActiveNoteId } = useNotesPageState();
   const [openingDiaryId, setOpeningDiaryId] = useState<string | null>(null);
@@ -271,9 +277,9 @@ export default function TradesPage() {
     setDuplicateSource(null);
   }
 
-  async function handleSaved() {
+  function handleSaved(savedTrade: Trade) {
     closePanel();
-    await refreshTrades();
+    upsertTradeLocal(savedTrade);
   }
 
   /**
@@ -315,7 +321,7 @@ export default function TradesPage() {
     if (trade?.screenshot_url) {
       deleteScreenshot({ url: trade.screenshot_url, fileId: trade.screenshot_file_id ?? null }).catch(() => {});
     }
-    await refreshTrades();
+    removeTradesLocal([id]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trades]);
 
@@ -355,25 +361,40 @@ export default function TradesPage() {
       }
     });
     exitSelectionMode();
-    await refreshTrades();
+    removeTradesLocal(ids);
   }
 
+  // Tag add/remove is fully deterministic client-side — array_append/
+  // array_remove of a known tag on a known set of rows, mirroring exactly
+  // what migrations/021_bulk_tag_functions.sql does server-side — so the
+  // result doesn't need to come back from Supabase to be applied locally.
+  // The RPC functions return void (a plain SETOF-less SQL function), so
+  // there's nothing to .select() back here even if we wanted to.
   async function handleBulkAddTag(tag: string) {
     const ids = Array.from(selectedIds);
-    await bulkAddTradeTag(ids, tag);
-    await refreshTrades();
+    const { error } = await bulkAddTradeTag(ids, tag);
+    if (error) return;
+    patchTradesLocal(ids, (t) => ({
+      ...t,
+      tags: [...(t.tags ?? []).filter((existing) => existing !== tag), tag],
+    }));
   }
 
   async function handleBulkRemoveTag(tag: string) {
     const ids = Array.from(selectedIds);
-    await bulkRemoveTradeTag(ids, tag);
-    await refreshTrades();
+    const { error } = await bulkRemoveTradeTag(ids, tag);
+    if (error) return;
+    patchTradesLocal(ids, (t) => ({
+      ...t,
+      tags: (t.tags ?? []).filter((existing) => existing !== tag),
+    }));
   }
 
   async function handleBulkSetRules(value: boolean) {
     const ids = Array.from(selectedIds);
-    await bulkUpdateTradeRules(ids, value);
-    await refreshTrades();
+    const { error } = await bulkUpdateTradeRules(ids, value);
+    if (error) return;
+    patchTradesLocal(ids, (t) => ({ ...t, rules_followed: value }));
   }
 
   function handleBulkExport() {

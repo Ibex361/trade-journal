@@ -95,11 +95,23 @@ export async function getExistingBrokerTickets(accountId: string): Promise<Set<s
   return new Set((data ?? []).map((r) => r.broker_ticket as string).filter(Boolean));
 }
 
+/**
+ * Selects the inserted row back (rather than a bare insert with no
+ * response body) so the caller can patch its local trade cache with the
+ * server's authoritative copy — including any column Postgres itself
+ * filled in (id, created_at) — instead of re-fetching the whole account's
+ * trade history just to learn about this one new row. See
+ * TradesDataContext's docstring.
+ */
 export async function createTrade(accountId: string, input: TradeInput) {
-  const result = await supabase.from("trades").insert({
-    account_id: accountId,
-    ...input,
-  });
+  const result = await supabase
+    .from("trades")
+    .insert({
+      account_id: accountId,
+      ...input,
+    })
+    .select()
+    .single();
   if (result.error) console.error("createTrade failed:", result.error);
   return result;
 }
@@ -125,8 +137,9 @@ export async function createTrades(accountId: string, inputs: TradeInput[]) {
   return { inserted, error: null };
 }
 
+/** Selects the updated row back — same reasoning as createTrade above. */
 export async function updateTrade(id: string, input: TradeInput) {
-  const result = await supabase.from("trades").update(input).eq("id", id);
+  const result = await supabase.from("trades").update(input).eq("id", id).select().single();
   if (result.error) console.error("updateTrade failed:", result.error);
   return result;
 }

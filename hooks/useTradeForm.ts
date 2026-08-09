@@ -147,7 +147,11 @@ export type UseTradeFormArgs = {
   trade: Trade | null;
   duplicateFrom?: Trade | null;
   onClose: () => void;
-  onSaved: () => void;
+  // Receives the server's authoritative row for the trade that was just
+  // created or updated, so the caller can patch its local cache directly
+  // instead of re-fetching the whole trade list — see
+  // TradesDataContext's docstring.
+  onSaved: (savedTrade: Trade) => void;
   onOpenDiary?: (trade: Trade) => void;
 };
 
@@ -564,12 +568,12 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
       broker_ticket: trade?.broker_ticket ?? null,
     };
 
-    const { error: dbError } = trade
+    const { data: savedTrade, error: dbError } = trade
       ? await updateTrade(trade.id, input)
       : await createTrade(selectedAccount.id, input);
 
     setSaving(false);
-    if (dbError) {
+    if (dbError || !savedTrade) {
       setErrors(["Something went wrong saving this trade. Please try again."]);
       return;
     }
@@ -582,7 +586,7 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
       deleteScreenshot({ url: previousUrl, fileId: previousFileId }).catch(() => {});
     }
 
-    onSaved();
+    onSaved(savedTrade as Trade);
   }
 
   return {
