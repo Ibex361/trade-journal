@@ -43,6 +43,12 @@ function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
   });
 }
 
+// Infinite-scroll batch size for the Trades list. Chosen to comfortably
+// cover a typical active month of day-trading activity on first load while
+// staying cheap to render; grows by the same amount each time the scroll
+// sentinel in TradesList fires.
+const TRADES_PAGE_SIZE = 50;
+
 function applySort(trades: Trade[], sort: SortState): Trade[] {
   const sorted = [...trades].sort((a, b) => {
     let cmp = 0;
@@ -97,6 +103,21 @@ export default function TradesPage() {
   // deferring `filters` alone but not `sort` is exactly what caused the
   // 736ms INP warning on the mobile sort dropdown.
   const deferredView = useDeferredValue({ filters, sort });
+  // How many of the filtered+sorted trades are currently revealed on the
+  // page — the client-side "infinite scroll" cursor. Grows by
+  // TRADES_PAGE_SIZE each time the sentinel in TradesList fires, and resets
+  // back to TRADES_PAGE_SIZE below whenever filters or sort change, so the
+  // revealed count is always relative to the *current* filter/sort rather
+  // than however deep the user had previously scrolled into a different
+  // view of the list.
+  const [revealCount, setRevealCount] = useState(TRADES_PAGE_SIZE);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the reveal cursor is a direct response to the filters/sort identity changing, same pattern as the exitSelectionMode effect below.
+    setRevealCount(TRADES_PAGE_SIZE);
+  }, [filters, sort]);
+  const handleLoadMore = useCallback(() => {
+    setRevealCount((prev) => prev + TRADES_PAGE_SIZE);
+  }, []);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -171,9 +192,20 @@ export default function TradesPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // The full filtered+sorted set. Summary stats, "select all", and CSV
+  // export all need to reason about every trade matching the current
+  // filter — not just the slice currently revealed on screen — so this
+  // stays the full list; only `revealedTrades` below is capped.
   const visibleTrades = useMemo(
     () => applySort(applyFilters(trades, deferredView.filters), deferredView.sort),
     [trades, deferredView]
+  );
+
+  // What's actually rendered in TradesList: the same filtered+sorted set,
+  // capped at revealCount. This is the "infinite scroll" slice.
+  const revealedTrades = useMemo(
+    () => visibleTrades.slice(0, revealCount),
+    [visibleTrades, revealCount]
   );
 
   const summary = useMemo(() => summarizeTrades(visibleTrades), [visibleTrades]);
@@ -438,7 +470,9 @@ export default function TradesPage() {
             </div>
           )}
           <TradesList
-            trades={visibleTrades}
+            trades={revealedTrades}
+            totalCount={visibleTrades.length}
+            onLoadMore={handleLoadMore}
             onEdit={openEdit}
             onDuplicate={openDuplicate}
             onDelete={handleDelete}

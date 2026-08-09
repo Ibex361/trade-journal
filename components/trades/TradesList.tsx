@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
 import { getTradeRowEmphasis } from "@/lib/metrics";
 import { Select } from "@/components/shared/Select";
@@ -26,6 +26,8 @@ const LONG_PRESS_MS = 450;
 // mobile card shells that both row components render into.
 function TradesList({
   trades,
+  totalCount,
+  onLoadMore,
   onEdit,
   onDuplicate,
   onDelete,
@@ -39,6 +41,21 @@ function TradesList({
   onEnterSelectionMode,
 }: {
   trades: Trade[];
+  /**
+   * Count of all trades matching the current filter/sort, before the
+   * reveal-count slice below is applied — i.e. `trades.length` is what's
+   * currently rendered, `totalCount` is what's rendered once every "load
+   * more" batch has fired. Drives the "Showing N of M" label and whether
+   * the scroll sentinel below has anything left to reveal.
+   */
+  totalCount: number;
+  /**
+   * Called when the scroll sentinel enters the viewport. Owner (the Trades
+   * page) is responsible for growing revealCount — this component has no
+   * opinion on batch size, it only reports "the user scrolled to the end
+   * of what's currently shown."
+   */
+  onLoadMore: () => void;
   onEdit: (trade: Trade) => void;
   onDuplicate: (trade: Trade) => void;
   onDelete: (id: string) => void;
@@ -53,7 +70,14 @@ function TradesList({
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
-  const allSelected = trades.length > 0 && trades.every((t) => selectedIds.has(t.id));
+  // Compared against totalCount (every trade matching the current filter),
+  // not trades.length (just what's currently revealed) — otherwise, with
+  // more unrevealed trades below the fold, checking every visible row would
+  // show this as "all selected" while onToggleSelectAll (which operates on
+  // the full filtered set) would still have more to select. Keeping this
+  // checkbox's checked state and its click behavior talking about the same
+  // set avoids that mismatch.
+  const allSelected = totalCount > 0 && selectedIds.size === totalCount;
 
   // Content-aware: scale each row's P&L bar to the largest mover currently
   // in view, and flag the single best/worst visible trade — mirrors the
@@ -130,6 +154,30 @@ function TradesList({
   );
 
   const openScreenshot = useCallback((url: string) => setLightboxUrl(url), []);
+
+  // Infinite-scroll trigger: an IntersectionObserver on a sentinel div below
+  // the last rendered row, rather than an onScroll pixel-threshold listener.
+  // Avoids scroll-event throttling and works regardless of row height, which
+  // varies here (desktop table rows vs. mobile cards, and either can grow
+  // when a screenshot thumb or long notes value is present). Re-observes
+  // whenever there's more to reveal (trades.length < totalCount); once
+  // everything is revealed the sentinel unmounts and observation stops.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = trades.length < totalCount;
+
+  useEffect(() => {
+    if (!hasMore) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { rootMargin: "400px" } // fire a bit before the sentinel is actually on-screen, so the next batch is ready by the time the user scrolls to it
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore]);
 
   const rowCallbacks: RowCallbacks = {
     onEdit,
@@ -266,6 +314,18 @@ function TradesList({
           />
         ))}
       </div>
+
+      {/* Reveal-count status + scroll sentinel. Shown even once hasMore is
+          false (as "Showing M of M") so the count doesn't just disappear —
+          only the sentinel itself is conditionally rendered, since an
+          IntersectionObserver on a permanently-offscreen div would never
+          need to fire once everything's loaded. */}
+      <div className="flex items-center justify-center py-4">
+        <span className="text-[11px] text-ink-muted">
+          Showing {trades.length} of {totalCount} trade{totalCount === 1 ? "" : "s"}
+        </span>
+      </div>
+      {hasMore && <div ref={sentinelRef} aria-hidden="true" className="h-px" />}
 
       {lightboxUrl && (
         <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
