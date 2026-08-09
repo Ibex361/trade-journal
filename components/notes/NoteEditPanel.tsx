@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
 import Button from "@/components/shared/Button";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
@@ -256,13 +256,27 @@ export default function NoteEditPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
-  const strategyOptions = dropdowns
-    .filter((d) => d.category === "strategy")
-    .sort((a, b) => a.sort_order - b.sort_order);
+  // Efficiency fix (Aug 9 review pass 2): this panel also owns title/content
+  // state, so it re-renders on every keystroke in the title or body. Before
+  // this fix, strategyOptions' filter+sort over `dropdowns` re-ran on every
+  // one of those renders even though `dropdowns` only changes once (on
+  // mount, via the fetch effect above) and `linkedStrategy` changes far less
+  // often than the title/body do. useMemo keeps this to just the renders
+  // where one of its two real inputs actually changed.
+  const strategyOptions = useMemo(
+    () =>
+      dropdowns
+        .filter((d) => d.category === "strategy")
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [dropdowns]
+  );
   // Same orphan treatment as tags above — a linked strategy that's since
   // been removed from Settings stays selected rather than silently
   // clearing, so saving the note again doesn't quietly drop it.
-  const strategyIsOrphaned = linkedStrategy !== "" && !strategyOptions.some((o) => o.value === linkedStrategy);
+  const strategyIsOrphaned = useMemo(
+    () => linkedStrategy !== "" && !strategyOptions.some((o) => o.value === linkedStrategy),
+    [linkedStrategy, strategyOptions]
+  );
 
   function handleTitleChange(value: string) {
     setTitle(value);
