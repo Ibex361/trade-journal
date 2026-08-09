@@ -79,12 +79,17 @@ const PATTERN_RULES: Array<{ test: (symbol: string) => boolean; size: number }> 
 
 /**
  * Returns the contract size (units per lot) for a cleaned Exness symbol.
- * Falls back to 1 for anything not explicitly known — correct for most
- * indices, and a safe no-op multiplier for anything else, rather than
- * guessing.
+ * If `overrides` is given (a symbol -> size map, e.g. from
+ * fetchContractSizeOverrides in exnessContractOverrides.ts) and it has an
+ * entry for this symbol, that value wins over everything below — user
+ * overrides always take priority over the built-in table. Otherwise falls
+ * back through the exact-symbol table, then the pattern rules, then a
+ * default of 1 — correct for most indices, and a safe no-op multiplier for
+ * anything else, rather than guessing.
  */
-export function contractSizeFor(symbol: string): number {
+export function contractSizeFor(symbol: string, overrides?: Map<string, number>): number {
   const s = symbol.toUpperCase();
+  if (overrides?.has(s)) return overrides.get(s)!;
   if (s in EXACT_CONTRACT_SIZES) return EXACT_CONTRACT_SIZES[s];
   for (const rule of PATTERN_RULES) {
     if (rule.test(s)) return rule.size;

@@ -106,7 +106,11 @@ function closeReasonToExitReason(reason: string): ExitReason | null {
  *   contractSizeFor() in exnessContractSize.ts, so the size field reads
  *   consistently whether a trade was imported or logged by hand. This is
  *   cosmetic only — pnl above is always the broker-reported net result,
- *   never derived from size, so this conversion can't affect P&L.
+ *   never derived from size, so this conversion can't affect P&L. The
+ *   optional `overrides` param lets a caller pass this account's saved
+ *   contract-size overrides (fetchContractSizeOverrides in
+ *   exnessContractOverrides.ts) — set in the "Broker import" settings
+ *   card — which take priority over the built-in table per symbol.
  * - take_profit is kept as take_profit_price. equity and margin_level
  *   still have no matching field in this app and are dropped rather than
  *   stuffed somewhere they don't belong.
@@ -115,7 +119,7 @@ function closeReasonToExitReason(reason: string): ExitReason | null {
  *   as prose. sl_movement/tp_movement are left unset — Exness doesn't
  *   report whether a stop or target was moved during the trade.
  */
-export function parseExnessCsv(csvText: string): ParsedImport {
+export function parseExnessCsv(csvText: string, overrides?: Map<string, number>): ParsedImport {
   const rows = parseCsvRows(csvText).filter((r) => !(r.length === 1 && r[0].trim() === ""));
   const issues: ImportRowIssue[] = [];
   const trades: TradeInput[] = [];
@@ -210,7 +214,7 @@ export function parseExnessCsv(csvText: string): ParsedImport {
       take_profit_price: takeProfitPrice,
       size: (() => {
         const lots = parseNumber(cell(cells, "lots"));
-        return lots === null ? null : lots * contractSizeFor(symbol);
+        return lots === null ? null : lots * contractSizeFor(symbol, overrides);
       })(),
       pnl: Math.round((profit + commission + swap) * 100) / 100,
       r_multiple: calculateRMultiple(direction, entryPrice, exitPrice, stopLossPrice),

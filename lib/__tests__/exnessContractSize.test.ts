@@ -57,4 +57,29 @@ describe("contractSizeFor", () => {
   it("is case-insensitive", () => {
     expect(contractSizeFor("eurusd")).toBe(100000);
   });
+
+  it("prefers a user override over the built-in table for a known symbol", () => {
+    const overrides = new Map([["EURUSD", 12345]]);
+    expect(contractSizeFor("EURUSD", overrides)).toBe(12345);
+  });
+
+  it("prefers a user override over the size-1 fallback for an unknown symbol", () => {
+    const overrides = new Map([["XPTUSD", 100]]);
+    expect(contractSizeFor("XPTUSD", overrides)).toBe(100);
+  });
+
+  it("falls through to the built-in table when overrides don't cover this symbol", () => {
+    const overrides = new Map([["EURUSD", 12345]]);
+    expect(contractSizeFor("GBPUSD", overrides)).toBe(100000);
+  });
+
+  it("matches overrides case-insensitively, same as the built-in table", () => {
+    const overrides = new Map([["EURUSD", 500]]);
+    expect(contractSizeFor("eurusd", overrides)).toBe(500);
+  });
+
+  it("behaves exactly as before when no overrides map is passed", () => {
+    expect(contractSizeFor("EURUSD")).toBe(100000);
+    expect(contractSizeFor("SOMETHING_WEIRD")).toBe(1);
+  });
 });

@@ -6,6 +6,7 @@ import { useTradesData } from "@/lib/TradesDataContext";
 import { createTrades, getExistingBrokerTickets, TradeInput } from "@/lib/trades";
 import { parseTradesCsv } from "@/lib/csvImport";
 import { parseExnessCsv } from "@/lib/exnessImport";
+import { fetchContractSizeOverrides } from "@/lib/exnessContractOverrides";
 import { ParsedImport, ImportRowIssue } from "@/lib/csvUtils";
 import SettingsCard from "./SettingsCard";
 import Button from "@/components/shared/Button";
@@ -50,7 +51,26 @@ export default function DataImportCard() {
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
 
+  // Raw CSV text, kept so an Exness file can be re-parsed if the target
+  // account changes after parsing — contract-size overrides are per
+  // account, so switching "Import into account" must re-resolve sizes
+  // against the newly selected account's overrides, not the ones fetched
+  // for whichever account was selected at file-choose time.
+  const rawTextRef = useRef<string | null>(null);
+
   const effectiveAccountId = targetAccountId || selectedAccount?.id || accounts[0]?.id || "";
+
+  useEffect(() => {
+    if (source !== "exness" || !rawTextRef.current || !effectiveAccountId) return;
+    let cancelled = false;
+    fetchContractSizeOverrides(effectiveAccountId).then((overrides) => {
+      if (cancelled || !rawTextRef.current) return;
+      setParsed(parseExnessCsv(rawTextRef.current, overrides));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveAccountId, source]);
 
   useEffect(() => {
     if (!parsed || parsed.trades.length === 0) {
@@ -90,6 +110,7 @@ export default function DataImportCard() {
     setDuplicateCount(0);
     setResult(null);
     setError(null);
+    rawTextRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -104,12 +125,24 @@ export default function DataImportCard() {
     setResult(null);
     setError(null);
     setFileName(file.name);
+    const accountForImport = targetAccountId || selectedAccount?.id || accounts[0]?.id || "";
     if (!targetAccountId && selectedAccount) setTargetAccountId(selectedAccount.id);
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const text = typeof reader.result === "string" ? reader.result : "";
-      setParsed(source === "exness" ? parseExnessCsv(text) : parseTradesCsv(text));
+      rawTextRef.current = source === "exness" ? text : null;
+      if (source === "exness") {
+        // Contract-size overrides are account-scoped (see the "Broker
+        // import" settings card), so they need fetching before parsing.
+        // accountForImport is captured above, at file-selection time; if
+        // the user later switches "Import into account", the effect above
+        // re-parses rawTextRef against the newly selected account instead.
+        const overrides = accountForImport ? await fetchContractSizeOverrides(accountForImport) : new Map<string, number>();
+        setParsed(parseExnessCsv(text, overrides));
+      } else {
+        setParsed(parseTradesCsv(text));
+      }
     };
     reader.onerror = () => setError("Couldn't read that file. Please try again.");
     reader.readAsText(file);
