@@ -4,8 +4,8 @@
 -- (project ref xflmxulzjoohnlbklaml) on 2026-08-09.
 --
 -- This is a REFERENCE DOCUMENT, not a migration to run. It reflects
--- the database as it actually is right now, after all 21 migrations
--- in supabase/migrations/ have been applied (000 through 020).
+-- the database as it actually is right now, after all 22 migrations
+-- in supabase/migrations/ have been applied (000 through 021).
 --
 -- The migration files remain the source of truth for how the schema
 -- got here and in what order. Regenerate this file after any future
@@ -144,3 +144,55 @@ create policy "authenticated read/write notes" on notes
 alter table exness_contract_overrides enable row level security;
 create policy "authenticated read/write exness_contract_overrides" on exness_contract_overrides
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- Functions
+-- Server-side bulk tag mutation helpers (migrations/021_bulk_tag_functions.sql).
+-- SECURITY INVOKER (runs as the calling user, subject to the RLS
+-- policies above — not a privilege-escalation path). Each does a
+-- single UPDATE ... WHERE id = ANY(...) so a bulk tag action from
+-- the UI fires one network request instead of one per selected row.
+-- Bulk "rules followed" updates need no function — every selected
+-- row gets the same value, so the UI does a plain
+-- .update(...).in("id", ids) call instead.
+-- ============================================================
+
+create or replace function bulk_add_trade_tag(trade_ids uuid[], tag_to_add text)
+returns void
+language sql
+security invoker
+as $$
+  update trades
+  set tags = array_append(array_remove(tags, tag_to_add), tag_to_add)
+  where id = any(trade_ids);
+$$;
+
+create or replace function bulk_remove_trade_tag(trade_ids uuid[], tag_to_remove text)
+returns void
+language sql
+security invoker
+as $$
+  update trades
+  set tags = array_remove(tags, tag_to_remove)
+  where id = any(trade_ids);
+$$;
+
+create or replace function bulk_add_note_tag(note_ids uuid[], tag_to_add text)
+returns void
+language sql
+security invoker
+as $$
+  update notes
+  set tags = array_append(array_remove(tags, tag_to_add), tag_to_add)
+  where id = any(note_ids);
+$$;
+
+create or replace function bulk_remove_note_tag(note_ids uuid[], tag_to_remove text)
+returns void
+language sql
+security invoker
+as $$
+  update notes
+  set tags = array_remove(tags, tag_to_remove)
+  where id = any(note_ids);
+$$;
