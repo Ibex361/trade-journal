@@ -107,8 +107,8 @@ function PlannedVsRealizedRChart({
 
   return (
     <Card
-      title="Planned vs. realized R"
-      description="Each trade's planned reward-to-risk against what it actually realized — click a point to view that trade"
+      title="Do you cut winners short or let losers run?"
+      description="Planned vs. realized R: each trade's planned reward-to-risk against what it actually realized — click a point to view that trade"
     >
       {hasData && (
         <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">

@@ -83,8 +83,8 @@ function ExitReasonByStrategyChart({
 
   return (
     <Card
-      title="SL/TP hit rate by strategy"
-      description="How each strategy's trades actually closed — click a segment to view those trades"
+      title="Which strategies actually work the way you designed them to?"
+      description="SL/TP hit rate by strategy: how each strategy's trades actually closed — click a segment to view those trades"
     >
       {!hasData ? (
         <div className="h-40 flex items-center justify-center">

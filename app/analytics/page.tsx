@@ -294,38 +294,10 @@ export default function AnalyticsPage() {
             granularity={granularity}
             onGranularityChange={setGranularity}
           />
-          <TimeOfDayChart
-            buckets={hourBuckets}
-            currency={selectedAccount.currency}
-            source={timeOfDaySource}
-            onSourceChange={setTimeOfDaySource}
-            missingCount={missingTimeOfDayCount}
-            selectedKey={selectedHourKey}
-            onSelectBucket={setSelectedHourKey}
-          />
-          {selectedHourBucket && (
-            <BreakdownDrilldown
-              groupLabel={selectedHourBucket.label}
-              trades={hourDrilldownTrades}
-              currency={selectedAccount.currency}
-              onClose={closeHourDrilldown}
-            />
-          )}
-          <HoldingTimeChart
-            buckets={holdingBuckets}
-            currency={selectedAccount.currency}
-            missingCount={missingHoldingTimeCount}
-            selectedKey={selectedHoldingKey}
-            onSelectBucket={setSelectedHoldingKey}
-          />
-          {selectedHoldingBucket && (
-            <BreakdownDrilldown
-              groupLabel={`Held ${selectedHoldingBucket.label}`}
-              trades={holdingDrilldownTrades}
-              currency={selectedAccount.currency}
-              onClose={closeHoldingDrilldown}
-            />
-          )}
+
+          {/* "Where are you making — and losing — money?" leads the
+              breakdown section, per the money -> leaks -> discipline ->
+              timing -> behavior narrative arc. */}
           <PerformanceBreakdown
             groups={breakdownGroups}
             currency={selectedAccount.currency}
@@ -343,15 +315,36 @@ export default function AnalyticsPage() {
             />
           )}
 
-          {/* R-multiple distribution and rules-followed both read as compact
-              comparison panels rather than dense time series, so they share
-              a row on wide screens instead of each claiming the full width
-              a chart like PnlByPeriodChart actually needs. Each chart's
-              drilldown lives inside its own column, directly beneath the
-              chart it belongs to — rather than after the row — so clicking
-              a bar always shows its trades right under the chart you
-              clicked, not under whichever chart happens to render second. */}
+          {/* "Leaks": where the money that was on the table didn't make it
+              home. Planned-vs-realized R and the R-multiple distribution
+              are both compact, trade-level panels (a scatter and a
+              histogram) rather than dense time series, so they share a row
+              on wide screens instead of each claiming full width. Each
+              chart's drilldown lives inside its own column, directly
+              beneath the chart it belongs to — rather than after the row —
+              so clicking a point/bar always shows its trades right under
+              the chart you clicked, not under whichever chart happens to
+              render second. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <PlannedVsRealizedRChart
+                points={plannedVsRealizedPoints}
+                summary={plannedVsRealizedSummary}
+                missingCount={missingPlannedRCount}
+                selectedId={selectedPlannedRId}
+                onSelectPoint={setSelectedPlannedRId}
+              />
+              {selectedPlannedRPoint && selectedPlannedRTrade && (
+                <BreakdownDrilldown
+                  groupLabel={`${selectedPlannedRPoint.label} · planned ${selectedPlannedRPoint.plannedR.toFixed(
+                    2
+                  )}R vs. realized ${selectedPlannedRPoint.realizedR.toFixed(2)}R`}
+                  trades={[selectedPlannedRTrade]}
+                  currency={selectedAccount.currency}
+                  onClose={closePlannedRDrilldown}
+                />
+              )}
+            </div>
             <div className="space-y-4">
               <RMultipleHistogram
                 buckets={rBuckets}
@@ -369,42 +362,68 @@ export default function AnalyticsPage() {
                 />
               )}
             </div>
+          </div>
+
+          {/* "Discipline": does following your own rules actually pay off. */}
+          <RulesFollowedComparison
+            groups={rulesGroups}
+            currency={selectedAccount.currency}
+            selectedKey={selectedRulesKey}
+            onSelectGroup={setSelectedRulesKey}
+          />
+          {selectedRulesGroup && (
+            <BreakdownDrilldown
+              groupLabel={selectedRulesGroup.label}
+              trades={rulesDrilldownTrades}
+              currency={selectedAccount.currency}
+              onClose={closeRulesDrilldown}
+            />
+          )}
+
+          {/* "Timing": when you trade and how long you hold. Both are
+              dense bar-chart time series of similar shape, so they share a
+              row on wide screens for the same reason the leaks row above
+              does — same drilldown-directly-beneath-its-chart rule applies. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-4">
-              <RulesFollowedComparison
-                groups={rulesGroups}
+              <TimeOfDayChart
+                buckets={hourBuckets}
                 currency={selectedAccount.currency}
-                selectedKey={selectedRulesKey}
-                onSelectGroup={setSelectedRulesKey}
+                source={timeOfDaySource}
+                onSourceChange={setTimeOfDaySource}
+                missingCount={missingTimeOfDayCount}
+                selectedKey={selectedHourKey}
+                onSelectBucket={setSelectedHourKey}
               />
-              {selectedRulesGroup && (
+              {selectedHourBucket && (
                 <BreakdownDrilldown
-                  groupLabel={selectedRulesGroup.label}
-                  trades={rulesDrilldownTrades}
+                  groupLabel={selectedHourBucket.label}
+                  trades={hourDrilldownTrades}
                   currency={selectedAccount.currency}
-                  onClose={closeRulesDrilldown}
+                  onClose={closeHourDrilldown}
+                />
+              )}
+            </div>
+            <div className="space-y-4">
+              <HoldingTimeChart
+                buckets={holdingBuckets}
+                currency={selectedAccount.currency}
+                missingCount={missingHoldingTimeCount}
+                selectedKey={selectedHoldingKey}
+                onSelectBucket={setSelectedHoldingKey}
+              />
+              {selectedHoldingBucket && (
+                <BreakdownDrilldown
+                  groupLabel={`Held ${selectedHoldingBucket.label}`}
+                  trades={holdingDrilldownTrades}
+                  currency={selectedAccount.currency}
+                  onClose={closeHoldingDrilldown}
                 />
               )}
             </div>
           </div>
 
-          <PlannedVsRealizedRChart
-            points={plannedVsRealizedPoints}
-            summary={plannedVsRealizedSummary}
-            missingCount={missingPlannedRCount}
-            selectedId={selectedPlannedRId}
-            onSelectPoint={setSelectedPlannedRId}
-          />
-          {selectedPlannedRPoint && selectedPlannedRTrade && (
-            <BreakdownDrilldown
-              groupLabel={`${selectedPlannedRPoint.label} · planned ${selectedPlannedRPoint.plannedR.toFixed(
-                2
-              )}R vs. realized ${selectedPlannedRPoint.realizedR.toFixed(2)}R`}
-              trades={[selectedPlannedRTrade]}
-              currency={selectedAccount.currency}
-              onClose={closePlannedRDrilldown}
-            />
-          )}
-
+          {/* "Behavior": how strategies actually execute in practice. */}
           <ExitReasonByStrategyChart
             rows={exitStrategyRows}
             selectedKey={

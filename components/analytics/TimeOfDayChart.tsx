@@ -95,8 +95,8 @@ function TimeOfDayChart({
 
   return (
     <Card
-      title="Performance by time of day"
-      description="P&L by the hour a trade was taken or closed (local time) — click a bar to drill in"
+      title="When do you perform best — and worst?"
+      description="Performance by time of day: P&L by the hour a trade was taken or closed (local time) — click a bar to view those trades"
       action={
         <div className="inline-flex items-center bg-surface-2 backdrop-blur-md border border-surface-border rounded-full p-1">
           {TIME_OF_DAY_SOURCES.map((s) => (

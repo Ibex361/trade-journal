@@ -33,10 +33,10 @@ export default function Card({
       className={`bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass ${pad} ${className}`}
     >
       {(title || action) && (
-        <div className="flex items-start justify-between gap-3 mb-5">
-          <div className="flex items-start gap-3">
+        <div className="flex items-start justify-between gap-3 mb-5 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
             {title && <span className="signal-bar h-6 mt-0.5 shrink-0" />}
-            <div>
+            <div className="min-w-0">
               {title && <h2 className="font-display text-lg font-medium">{title}</h2>}
               {description && (
                 <p className="text-ink-secondary text-sm mt-0.5">{description}</p>

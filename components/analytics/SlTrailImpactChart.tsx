@@ -87,8 +87,8 @@ function SlTrailImpactChart({
 
   return (
     <Card
-      title="SL-hit rate by stop management"
-      description="How often the stop actually got hit, by strategy and by whether it was held, tightened, or widened — click a row to view those trades"
+      title="Is adjusting your stop helping or hurting you?"
+      description="SL-hit rate by stop management: how often the stop actually got hit, by strategy and by whether it was held, tightened, or widened — click a row to view those trades"
     >
       {!hasData ? (
         <div className="h-40 flex items-center justify-center">

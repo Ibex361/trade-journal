@@ -91,8 +91,8 @@ function HoldingTimeChart({
 
   return (
     <Card
-      title="Performance by holding time"
-      description="P&L by how long a trade was open, from scalps to multi-day swings — click a bar to drill in"
+      title="Are you holding trades too long — or not long enough?"
+      description="Performance by holding time: P&L from scalps to multi-day swings — click a bar to view those trades"
     >
       {!hasTrades ? (
         <div className="h-56 flex items-center justify-center">

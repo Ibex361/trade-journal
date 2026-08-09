@@ -102,7 +102,10 @@ function RulesFollowedComparison({
   const unspecified = groups.find((g) => g.key === "unspecified" && g.count > 0);
 
   return (
-    <Card title="Rules followed vs. not" description="Click a side to see those trades">
+    <Card
+      title="Does following your rules actually pay off?"
+      description="Rules followed vs. not — click a side to view those trades"
+    >
       <div className="flex flex-wrap gap-3">
         <ComparisonColumn
           group={followed}

@@ -57,8 +57,8 @@ function PerformanceBreakdown({
   onDimensionChange,
   selectedKey,
   onSelectGroup,
-  title = "Performance breakdown",
-  subtitle = "Win rate, avg R, and P&L by group — click a bar to drill in",
+  title = "Where are you making — and losing — money?",
+  subtitle = "Performance breakdown: win rate, avg R, and P&L by group — click a bar to view those trades",
 }: {
   groups: BreakdownGroup[];
   currency: string;

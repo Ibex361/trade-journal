@@ -86,8 +86,8 @@ function RMultipleHistogram({
 
   return (
     <Card
-      title="R-multiple distribution"
-      description="How many trades land in each R-multiple range — click a bar to drill in"
+      title="Are your wins big enough to justify your losses?"
+      description="R-multiple distribution: how many trades land in each R-multiple range — click a bar to view those trades"
     >
       {!hasTrades ? (
         <div className="h-56 flex items-center justify-center">
