@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { NoteFilters, EMPTY_NOTE_FILTERS } from "@/components/notes/NotesFilterBar";
 
@@ -55,25 +55,24 @@ export function NotesPageStateProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedAccount?.id]);
 
-  function resetFilters() {
+  const resetFilters = useCallback(() => {
     setFilters(EMPTY_NOTE_FILTERS);
-  }
+  }, []);
 
-  return (
-    <NotesPageStateContext.Provider
-      value={{
-        filters,
-        setFilters,
-        resetFilters,
-        activeNoteId,
-        setActiveNoteId,
-        pendingNewNote,
-        setPendingNewNote,
-      }}
-    >
-      {children}
-    </NotesPageStateContext.Provider>
+  const value = useMemo(
+    () => ({
+      filters,
+      setFilters,
+      resetFilters,
+      activeNoteId,
+      setActiveNoteId,
+      pendingNewNote,
+      setPendingNewNote,
+    }),
+    [filters, resetFilters, activeNoteId, pendingNewNote]
   );
+
+  return <NotesPageStateContext.Provider value={value}>{children}</NotesPageStateContext.Provider>;
 }
 
 export function useNotesPageState() {

@@ -2,8 +2,10 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   ReactNode,
 } from "react";
@@ -35,7 +37,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function refreshAccounts() {
+  const refreshAccounts = useCallback(async () => {
     const { data, error } = await supabase
       .from("accounts")
       .select("*")
@@ -57,7 +59,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     }
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -82,33 +84,55 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     // initial firing (it fires once immediately with whatever session is
     // already known) — init() above already covers that first load, so
     // acting on it too would just be a redundant duplicate fetch.
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+    //
+    // Filtered to SIGNED_IN/SIGNED_OUT only — the account list can't change
+    // from anything else this event fires for. In particular, Supabase's
+    // client auto-refreshes the access token in the background roughly
+    // hourly for as long as a tab stays open, firing TOKEN_REFRESHED each
+    // time; previously this handler ignored the event type entirely and
+    // refetched on every firing, meaning every open tab silently re-ran the
+    // accounts query and rebuilt new accounts/selectedAccount object
+    // references on a timer, with no user action — which then re-rendered
+    // every context consumer down the tree (see the memoized `value` below
+    // and the same fix applied to the other root-mounted providers). Also
+    // ignores USER_UPDATED/PASSWORD_RECOVERY/MFA events for the same reason.
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
       if (!initialFetchDone) return;
-      refreshAccounts();
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") refreshAccounts();
     });
 
     return () => {
       active = false;
       listener.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshAccounts is stable (useCallback, empty deps); omitting it here matches the original effect's empty dep array and avoids re-subscribing the listener on every render.
   }, []);
 
-  function selectAccount(id: string) {
+  const selectAccount = useCallback((id: string) => {
     setSelectedId(id);
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY, id);
     }
-  }
+  }, []);
 
-  const selectedAccount = accounts.find((a) => a.id === selectedId) || null;
-
-  return (
-    <AccountContext.Provider
-      value={{ accounts, archivedAccounts, selectedAccount, selectAccount, loading, refreshAccounts }}
-    >
-      {children}
-    </AccountContext.Provider>
+  const selectedAccount = useMemo(
+    () => accounts.find((a) => a.id === selectedId) || null,
+    [accounts, selectedId]
   );
+
+  // Memoized so a re-render of this provider only produces a new context
+  // value object when one of these fields actually changed — without this,
+  // every consumer of useAccount() anywhere in the app (and every provider
+  // nested below this one that itself calls useAccount(), e.g.
+  // TradesDataProvider, TradesPageStateProvider, NotesPageStateProvider,
+  // StrategiesPageStateProvider) re-renders on every render of this
+  // component, cascading down the whole tree in app/layout.tsx.
+  const value = useMemo(
+    () => ({ accounts, archivedAccounts, selectedAccount, selectAccount, loading, refreshAccounts }),
+    [accounts, archivedAccounts, selectedAccount, selectAccount, loading, refreshAccounts]
+  );
+
+  return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }
 
 export function useAccount() {

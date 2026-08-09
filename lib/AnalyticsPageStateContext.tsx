@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, Dispatch, SetStateAction } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, ReactNode, Dispatch, SetStateAction } from "react";
 import { ExitReason, StopMovement } from "@/lib/trades";
 import { DateRange, PeriodGranularity, BreakdownDimension, TimeOfDaySource } from "@/lib/metrics";
 
@@ -63,7 +63,7 @@ export function AnalyticsPageStateProvider({ children }: { children: ReactNode }
   // were wiping the very selections we just persisted. Clearing synchronously
   // inside the setter — only when the setter is actually called — fixes that:
   // it only ever fires on a real change, never on a remount.
-  function setRange(next: DateRange) {
+  const setRange = useCallback((next: DateRange) => {
     setRangeState(next);
     setSelectedHourKey(null);
     setSelectedHoldingKey(null);
@@ -73,50 +73,65 @@ export function AnalyticsPageStateProvider({ children }: { children: ReactNode }
     setSelectedExitStrategy(null);
     setSelectedSlMovement(null);
     setSelectedPlannedRId(null);
-  }
+  }, []);
 
-  function setTimeOfDaySource(next: TimeOfDaySource) {
+  const setTimeOfDaySource = useCallback((next: TimeOfDaySource) => {
     setTimeOfDaySourceState(next);
     setSelectedHourKey(null);
-  }
+  }, []);
 
-  function setBreakdownDimension(next: BreakdownDimension) {
+  const setBreakdownDimension = useCallback((next: BreakdownDimension) => {
     setBreakdownDimensionState(next);
     setSelectedGroupKey(null);
-  }
+  }, []);
 
-  return (
-    <AnalyticsPageStateContext.Provider
-      value={{
-        range,
-        setRange,
-        granularity,
-        setGranularity,
-        timeOfDaySource,
-        setTimeOfDaySource,
-        selectedHourKey,
-        setSelectedHourKey,
-        selectedHoldingKey,
-        setSelectedHoldingKey,
-        breakdownDimension,
-        setBreakdownDimension,
-        selectedGroupKey,
-        setSelectedGroupKey,
-        selectedRBucketKey,
-        setSelectedRBucketKey,
-        selectedRulesKey,
-        setSelectedRulesKey,
-        selectedExitStrategy,
-        setSelectedExitStrategy,
-        selectedSlMovement,
-        setSelectedSlMovement,
-        selectedPlannedRId,
-        setSelectedPlannedRId,
-      }}
-    >
-      {children}
-    </AnalyticsPageStateContext.Provider>
+  const value = useMemo(
+    () => ({
+      range,
+      setRange,
+      granularity,
+      setGranularity,
+      timeOfDaySource,
+      setTimeOfDaySource,
+      selectedHourKey,
+      setSelectedHourKey,
+      selectedHoldingKey,
+      setSelectedHoldingKey,
+      breakdownDimension,
+      setBreakdownDimension,
+      selectedGroupKey,
+      setSelectedGroupKey,
+      selectedRBucketKey,
+      setSelectedRBucketKey,
+      selectedRulesKey,
+      setSelectedRulesKey,
+      selectedExitStrategy,
+      setSelectedExitStrategy,
+      selectedSlMovement,
+      setSelectedSlMovement,
+      selectedPlannedRId,
+      setSelectedPlannedRId,
+    }),
+    [
+      range,
+      setRange,
+      granularity,
+      timeOfDaySource,
+      setTimeOfDaySource,
+      selectedHourKey,
+      selectedHoldingKey,
+      breakdownDimension,
+      setBreakdownDimension,
+      selectedGroupKey,
+      selectedRBucketKey,
+      selectedRulesKey,
+      selectedExitStrategy,
+      selectedSlMovement,
+      selectedPlannedRId,
+    ]
   );
+
+  return <AnalyticsPageStateContext.Provider value={value}>{children}</AnalyticsPageStateContext.Provider>;
 }
 
 export function useAnalyticsPageState() {

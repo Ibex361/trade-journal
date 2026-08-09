@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode, Dispatch, SetStateAction } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode, Dispatch, SetStateAction } from "react";
 import { useAccount } from "@/lib/AccountContext";
 
 type StrategiesPageStateContextType = {
@@ -34,11 +34,12 @@ export function StrategiesPageStateProvider({ children }: { children: ReactNode 
     }
   }, [selectedAccount?.id]);
 
-  return (
-    <StrategiesPageStateContext.Provider value={{ selectedStrategyKey, setSelectedStrategyKey }}>
-      {children}
-    </StrategiesPageStateContext.Provider>
+  const value = useMemo(
+    () => ({ selectedStrategyKey, setSelectedStrategyKey }),
+    [selectedStrategyKey]
   );
+
+  return <StrategiesPageStateContext.Provider value={value}>{children}</StrategiesPageStateContext.Provider>;
 }
 
 export function useStrategiesPageState() {

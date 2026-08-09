@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   ReactNode,
 } from "react";
@@ -67,11 +68,14 @@ export function TradesDataProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
-  return (
-    <TradesDataContext.Provider value={{ trades, loading, refreshTrades }}>
-      {children}
-    </TradesDataContext.Provider>
-  );
+  // Memoized so this provider only hands consumers (Dashboard, Trades,
+  // Analytics, Reports, Strategies) a new context value when trades/loading
+  // actually changed — otherwise every re-render of this component (e.g.
+  // triggered by re-rendering as a consumer of AccountContext) would pass a
+  // brand-new object down and re-render all of them for no reason.
+  const value = useMemo(() => ({ trades, loading, refreshTrades }), [trades, loading, refreshTrades]);
+
+  return <TradesDataContext.Provider value={value}>{children}</TradesDataContext.Provider>;
 }
 
 export function useTradesData() {

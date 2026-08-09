@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { TradeFilters, EMPTY_FILTERS } from "@/components/trades/TradesFilterBar";
 import { SortState } from "@/components/trades/TradesList";
@@ -60,27 +60,26 @@ export function TradesPageStateProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedAccount?.id]);
 
-  function resetFilters() {
+  const resetFilters = useCallback(() => {
     setFilters(EMPTY_FILTERS);
-  }
+  }, []);
 
-  return (
-    <TradesPageStateContext.Provider
-      value={{
-        filters,
-        setFilters,
-        sort,
-        setSort,
-        resetFilters,
-        pendingTradeId,
-        setPendingTradeId,
-        pendingNewTrade,
-        setPendingNewTrade,
-      }}
-    >
-      {children}
-    </TradesPageStateContext.Provider>
+  const value = useMemo(
+    () => ({
+      filters,
+      setFilters,
+      sort,
+      setSort,
+      resetFilters,
+      pendingTradeId,
+      setPendingTradeId,
+      pendingNewTrade,
+      setPendingNewTrade,
+    }),
+    [filters, sort, resetFilters, pendingTradeId, pendingNewTrade]
   );
+
+  return <TradesPageStateContext.Provider value={value}>{children}</TradesPageStateContext.Provider>;
 }
 
 export function useTradesPageState() {
