@@ -12,7 +12,7 @@ import { fetchDistinctTags, TagSettingItem } from "@/lib/tagSettings";
 import { deleteScreenshot } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
-import { createNote, findNoteLinkedToTrade } from "@/lib/notes";
+import { createNote, findNoteLinkedToTrade, autoTitleFromTrade } from "@/lib/notes";
 import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
 import TradesFilterBar, { TradeFilters } from "@/components/trades/TradesFilterBar";
@@ -298,7 +298,8 @@ export default function TradesPage() {
     const { data: existing } = await findNoteLinkedToTrade(selectedAccount.id, trade.id);
     let noteId = existing?.id ?? null;
     if (!noteId) {
-      const { data: created, error } = await createNote(selectedAccount.id, [trade.id]);
+      const autoTitle = autoTitleFromTrade(trade.instrument, trade.pnl, trade.entry_date);
+      const { data: created, error } = await createNote(selectedAccount.id, [trade.id], autoTitle);
       if (error || !created) {
         setOpeningDiaryId(null);
         return;
