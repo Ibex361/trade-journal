@@ -13,7 +13,8 @@ import {
   updateNote,
   deleteNote,
   deleteNotes,
-  updateNoteTags,
+  bulkAddNoteTag,
+  bulkRemoveNoteTag,
   extractFullText,
   getUsedStrategies,
   type Note,
@@ -319,8 +320,7 @@ export default function NotesPage() {
 
   async function handleBulkAddTag(tag: string) {
     const ids = Array.from(selectedIds);
-    const targets = notes.filter((n) => ids.includes(n.id) && !(n.tags ?? []).includes(tag));
-    await Promise.all(targets.map((n) => updateNoteTags(n.id, [...(n.tags ?? []), tag])));
+    await bulkAddNoteTag(ids, tag);
     setNotes((current) =>
       current.map((n) =>
         ids.includes(n.id) && !(n.tags ?? []).includes(tag)
@@ -332,10 +332,7 @@ export default function NotesPage() {
 
   async function handleBulkRemoveTag(tag: string) {
     const ids = Array.from(selectedIds);
-    const targets = notes.filter((n) => ids.includes(n.id) && (n.tags ?? []).includes(tag));
-    await Promise.all(
-      targets.map((n) => updateNoteTags(n.id, (n.tags ?? []).filter((existing) => existing !== tag)))
-    );
+    await bulkRemoveNoteTag(ids, tag);
     setNotes((current) =>
       current.map((n) =>
         ids.includes(n.id) ? { ...n, tags: (n.tags ?? []).filter((existing) => existing !== tag) } : n

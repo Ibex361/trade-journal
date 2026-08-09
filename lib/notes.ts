@@ -125,10 +125,23 @@ export async function deleteNotes(ids: string[]) {
   return result;
 }
 
-/** Narrow update used by the bulk add/remove-tag actions — only touches tags, mirrors updateTradeTags. */
-export async function updateNoteTags(id: string, tags: string[]) {
-  const result = await supabase.from("notes").update({ tags }).eq("id", id);
-  if (result.error) console.error("updateNoteTags failed:", result.error);
+/**
+ * Bulk "+ tag"/"- tag" actions — one Postgres round-trip for the whole
+ * selection instead of one per-row `.update()` call, mirroring
+ * bulkAddTradeTag/bulkRemoveTradeTag in lib/trades.ts (each row needs its
+ * own tags array recomputed, so this can't be a single plain `.update()`
+ * the way `deleteNotes` can; see migrations/021_bulk_tag_functions.sql for
+ * the server-side array_append/array_remove logic these call into).
+ */
+export async function bulkAddNoteTag(ids: string[], tag: string) {
+  const result = await supabase.rpc("bulk_add_note_tag", { note_ids: ids, tag_to_add: tag });
+  if (result.error) console.error("bulkAddNoteTag failed:", result.error);
+  return result;
+}
+
+export async function bulkRemoveNoteTag(ids: string[], tag: string) {
+  const result = await supabase.rpc("bulk_remove_note_tag", { note_ids: ids, tag_to_remove: tag });
+  if (result.error) console.error("bulkRemoveNoteTag failed:", result.error);
   return result;
 }
 

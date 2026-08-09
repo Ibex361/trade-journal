@@ -144,16 +144,33 @@ export async function deleteTrades(ids: string[]) {
   return result;
 }
 
-/** Narrow update used by the bulk "add/remove tag" actions — only touches the tags column. */
-export async function updateTradeTags(id: string, tags: string[]) {
-  const result = await supabase.from("trades").update({ tags }).eq("id", id);
-  if (result.error) console.error("updateTradeTags failed:", result.error);
+/**
+ * Bulk "+ tag"/"- tag" actions — one Postgres round-trip for the whole
+ * selection instead of one per-row `.update()` call (each row needs its
+ * own tags array recomputed, so this can't be expressed as a single plain
+ * `.update()` the way `deleteTrades`/`bulkUpdateTradeRules` can; see
+ * migrations/021_bulk_tag_functions.sql for the server-side
+ * array_append/array_remove logic these call into).
+ */
+export async function bulkAddTradeTag(ids: string[], tag: string) {
+  const result = await supabase.rpc("bulk_add_trade_tag", { trade_ids: ids, tag_to_add: tag });
+  if (result.error) console.error("bulkAddTradeTag failed:", result.error);
   return result;
 }
 
-/** Narrow update used by the bulk "mark rules followed" action — only touches rules_followed. */
-export async function updateTradeRules(id: string, rules_followed: boolean | null) {
-  const result = await supabase.from("trades").update({ rules_followed }).eq("id", id);
-  if (result.error) console.error("updateTradeRules failed:", result.error);
+export async function bulkRemoveTradeTag(ids: string[], tag: string) {
+  const result = await supabase.rpc("bulk_remove_trade_tag", { trade_ids: ids, tag_to_remove: tag });
+  if (result.error) console.error("bulkRemoveTradeTag failed:", result.error);
+  return result;
+}
+
+/**
+ * Bulk "mark rules followed" action — every selected row gets the same
+ * value, so (unlike the per-row tag functions above) this needs no RPC:
+ * a single `.update(...).in("id", ids)` already expresses it in one request.
+ */
+export async function bulkUpdateTradeRules(ids: string[], rules_followed: boolean | null) {
+  const result = await supabase.from("trades").update({ rules_followed }).in("id", ids);
+  if (result.error) console.error("bulkUpdateTradeRules failed:", result.error);
   return result;
 }

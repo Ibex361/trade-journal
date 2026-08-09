@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAccount } from "@/lib/AccountContext";
 import { useTradesPageState } from "@/lib/TradesPageStateContext";
 import { useNotesPageState } from "@/lib/NotesPageStateContext";
-import { deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
+import { deleteTrade, deleteTrades, bulkAddTradeTag, bulkRemoveTradeTag, bulkUpdateTradeRules, Trade } from "@/lib/trades";
 import { useTradesData } from "@/lib/TradesDataContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { fetchDistinctTags, TagSettingItem } from "@/lib/tagSettings";
@@ -360,21 +360,19 @@ export default function TradesPage() {
 
   async function handleBulkAddTag(tag: string) {
     const ids = Array.from(selectedIds);
-    const targets = trades.filter((t) => ids.includes(t.id) && !(t.tags ?? []).includes(tag));
-    await Promise.all(targets.map((t) => updateTradeTags(t.id, [...t.tags, tag])));
+    await bulkAddTradeTag(ids, tag);
     await refreshTrades();
   }
 
   async function handleBulkRemoveTag(tag: string) {
     const ids = Array.from(selectedIds);
-    const targets = trades.filter((t) => ids.includes(t.id) && (t.tags ?? []).includes(tag));
-    await Promise.all(targets.map((t) => updateTradeTags(t.id, t.tags.filter((existing) => existing !== tag))));
+    await bulkRemoveTradeTag(ids, tag);
     await refreshTrades();
   }
 
   async function handleBulkSetRules(value: boolean) {
     const ids = Array.from(selectedIds);
-    await Promise.all(ids.map((id) => updateTradeRules(id, value)));
+    await bulkUpdateTradeRules(ids, value);
     await refreshTrades();
   }
 
