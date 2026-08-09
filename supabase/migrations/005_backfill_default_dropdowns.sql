@@ -1,7 +1,7 @@
 -- ============================================================
 -- Trade journal — Phase 2c migration
 -- Run this in the Supabase SQL editor as a NEW query,
--- AFTER phase2b_storage_migration.sql has already been run.
+-- AFTER 004_screenshot_storage_bucket.sql has already been run.
 --
 -- Backfills the standard asset class / strategy / session / emotion
 -- options onto every EXISTING account that doesn't already have them,

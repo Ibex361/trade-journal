@@ -1,7 +1,7 @@
 -- ============================================================
 -- Trade journal — Phase 12 migration (Notes/diary — Phase 3 part 3)
 -- Run this in the Supabase SQL editor as a NEW query,
--- AFTER all earlier migrations (including phase11_notes_tags_migration.sql).
+-- AFTER all earlier migrations (including 015_notes_tags.sql).
 --
 -- Adds optional note-to-trade and note-to-strategy linking:
 --   - linked_trade_ids: uuid[], references trades a note is about. Plain

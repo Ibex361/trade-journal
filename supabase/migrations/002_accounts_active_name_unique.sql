@@ -1,7 +1,7 @@
 -- ============================================================
 -- Trade journal — Phase 1b migration
 -- Run this in the Supabase SQL editor as a NEW query,
--- AFTER schema.sql and phase1_migration.sql have already been run.
+-- AFTER 000_initial_schema.sql and 001_accounts_is_archived.sql have already been run.
 --
 -- Prevents two ACTIVE (non-archived) accounts from sharing the
 -- same name (case-insensitive, e.g. "Main" and "main" both blocked).

@@ -2,7 +2,7 @@
 -- Phase 14 — Exness contract-size overrides
 -- ============================================================
 -- Run this in the Supabase SQL editor as a NEW query, AFTER all earlier
--- migrations (including phase13_drop_tag_settings.sql).
+-- migrations (including 019_drop_tag_settings.sql).
 --
 -- Backs the new "Broker import" Settings card: lets the user type any
 -- Exness instrument symbol and set/override the contract size used to
@@ -11,7 +11,7 @@
 -- priority over the app's built-in lookup table for that symbol on that
 -- account — it doesn't replace the built-in table, it patches it.
 --
--- Modeled on tag_settings' shape (phase12_tag_settings_migration.sql):
+-- Modeled on tag_settings' shape (017_tag_settings_table.sql):
 -- account-scoped, one row per (account_id, symbol), same RLS policy.
 -- ============================================================
 

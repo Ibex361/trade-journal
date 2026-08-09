@@ -2,7 +2,7 @@
 -- Phase 12 (Tag setting, part 1) — dedicated tag_settings table
 -- ============================================================
 -- Run this in the Supabase SQL editor as a NEW query, AFTER all earlier
--- migrations (including phase11_notes_tags_migration.sql).
+-- migrations (including 015_notes_tags.sql).
 --
 -- This is the first step of decoupling tag management from the generic
 -- dropdown_settings category system. It creates a dedicated tag_settings

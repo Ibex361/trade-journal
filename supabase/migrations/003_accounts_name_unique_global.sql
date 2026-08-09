@@ -1,7 +1,7 @@
 -- ============================================================
 -- Trade journal — Phase 1c migration
 -- Run this in the Supabase SQL editor as a NEW query,
--- AFTER phase1b_migration.sql has already been run.
+-- AFTER 002_accounts_active_name_unique.sql has already been run.
 --
 -- Replaces the "active accounts only" uniqueness rule with a
 -- global one: no two accounts may share a name (case-insensitive),

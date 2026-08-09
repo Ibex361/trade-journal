@@ -1,0 +1,21 @@
+-- ============================================================
+-- Trade journal — stop loss price column
+-- RECONSTRUCTED FILE: this column already exists live in the database
+-- but was added by hand in the Supabase SQL editor at some point, with
+-- no migration file ever saved for it. Written to be safely re-runnable
+-- (IF NOT EXISTS), so applying it now is a no-op against the live DB —
+-- it now exists in source so a fresh/rebuilt database has parity.
+--
+-- Timing: cannot be pinned down exactly. Git history has no record of
+-- it at all (it was never applied through a committed file), and
+-- Supabase's Postgres query logs only retain ~24 hours, far too short
+-- to cover this project's history back to late July 2026. The only
+-- hard evidence is the take-profit migration's original comment
+-- ("mirroring stop_loss_price"), confirming this column already
+-- existed by 2026-07-31, when that migration was written. Placed here,
+-- immediately before that migration, on that basis — this is the
+-- latest point in the sequence it's confirmed to predate, not a
+-- claim about exactly when it was run.
+-- ============================================================
+
+alter table trades add column if not exists stop_loss_price numeric;

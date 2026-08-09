@@ -3,7 +3,7 @@
 -- dropdown_settings now that tag_settings is the source of truth
 -- ============================================================
 -- Run this in the Supabase SQL editor as a NEW query, AFTER
--- phase12_tag_settings_migration.sql AND after deploying the part 2
+-- 017_tag_settings_table.sql AND after deploying the part 2
 -- code changes (TradeFormPanel, NoteEditPanel, trades/notes pages all
 -- now read tag suggestions from tag_settings instead of
 -- dropdown_settings' 'tag' category — see lib/tagSettings.ts).

@@ -1,7 +1,7 @@
 -- ============================================================
 -- Trade journal — Phase 11 migration (Notes/diary — Phase 3 part 1)
 -- Run this in the Supabase SQL editor as a NEW query,
--- AFTER all earlier migrations (including phase10_notes_migration.sql).
+-- AFTER all earlier migrations (including 014_notes_table.sql).
 --
 -- Adds a tags column to notes, mirroring trades.tags exactly (text[],
 -- default '{}'). Tags are NOT a separate notes-only vocabulary — notes
