@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/react";
 import { useAccount } from "@/lib/AccountContext";
@@ -40,15 +40,29 @@ import type { Trade } from "@/lib/trades";
  * perf pass, so typing in the search box doesn't block re-render on every
  * keystroke.
  *
+ * Efficiency finding (Aug 9 review, #4): extractFullText's Tiptap JSON walk
+ * used to run for every note on every call to applyFilters — and since
+ * applyFilters is re-invoked (via the useMemo below) whenever *any* filter
+ * changes, not just search, a keystroke in the search box, or toggling the
+ * tag/linkage/strategy/date filters, re-walked every note's full body from
+ * scratch even though the notes themselves hadn't changed. Fixed by
+ * building a `searchTextById` cache (below) once per `notes` array change
+ * and having applyFilters look up each note's precomputed lowercased
+ * "title + body" haystack instead of re-extracting it. The cache itself is
+ * keyed by note id and only recomputes an entry when that note's `content`
+ * reference changes (i.e. on save/create — notes are patched into local
+ * state immutably elsewhere in this file, so identical content keeps the
+ * same object reference and is skipped).
+ *
  * Date range is inclusive on both ends and compares calendar dates (not
  * timestamps) against updated_at, so picking the same day for From and To
  * captures the whole day regardless of what time a note was last touched.
  */
-function applyFilters(notes: Note[], filters: NoteFilters): Note[] {
+function applyFilters(notes: Note[], filters: NoteFilters, searchTextById: Map<string, string>): Note[] {
   const search = filters.search.trim().toLowerCase();
   return notes.filter((n) => {
     if (search) {
-      const haystack = `${n.title} ${extractFullText(n.content)}`.toLowerCase();
+      const haystack = searchTextById.get(n.id) ?? "";
       if (!haystack.includes(search)) return false;
     }
     if (filters.tag && !(n.tags ?? []).includes(filters.tag)) return false;
@@ -230,8 +244,45 @@ export default function NotesPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Cache of note id -> lowercased "title body" search text, rebuilt only
+  // when the `notes` array itself changes — not on every filter/search
+  // keystroke (see the applyFilters comment above for why this exists).
+  // Lives in state (populated post-render by the effect below) rather than
+  // a ref, since reading/writing a ref during render is disallowed by this
+  // project's react-hooks lint rules; the one-render lag before a brand-new
+  // note's entry appears in the cache is harmless — applyFilters falls back
+  // to "" for a cache miss, and the effect immediately corrects it.
+  const [searchTextById, setSearchTextById] = useState(new Map<string, string>());
+  const searchTextCacheRef = useRef(new Map<string, { content: JSONContent; text: string }>());
+  useEffect(() => {
+    const previous = searchTextCacheRef.current;
+    let changed = previous.size !== notes.length;
+    const next = new Map<string, { content: JSONContent; text: string }>();
+    const result = new Map<string, string>();
+    for (const n of notes) {
+      const cached = previous.get(n.id);
+      if (cached && cached.content === n.content) {
+        next.set(n.id, cached);
+        result.set(n.id, cached.text);
+      } else {
+        changed = true;
+        const text = `${n.title} ${extractFullText(n.content)}`.toLowerCase();
+        next.set(n.id, { content: n.content, text });
+        result.set(n.id, text);
+      }
+    }
+    searchTextCacheRef.current = next;
+    // Only trigger a re-render (new Map identity) when something in the
+    // cache actually changed — otherwise every unrelated notes-array
+    // identity churn would still force this state update.
+    if (changed) setSearchTextById(result);
+  }, [notes]);
+
   const deferredFilters = useDeferredValue(filters);
-  const visibleNotes = useMemo(() => applyFilters(notes, deferredFilters), [notes, deferredFilters]);
+  const visibleNotes = useMemo(
+    () => applyFilters(notes, deferredFilters, searchTextById),
+    [notes, deferredFilters, searchTextById]
+  );
 
   // tagSettings is now itself "tags in use" (see the effect above), so this
   // union with notes' own tags is redundant but harmless — kept as a
