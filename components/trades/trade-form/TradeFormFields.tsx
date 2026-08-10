@@ -8,6 +8,12 @@ import { EXIT_REASON_OPTIONS, MOVEMENT_OPTIONS, UseTradeFormReturn } from "@/hoo
 const selectClass =
   "mt-1 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-sm";
 const labelClass = "text-xs text-ink-secondary";
+// Swapped in for selectClass's border when a field has a validation error
+// — same input, just a red border plus focus ring so it's visually
+// distinct without changing the layout.
+const errorInputClass =
+  "mt-1 w-full bg-surface-2 border border-loss rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-loss";
+const fieldErrorTextClass = "mt-1 text-[11px] text-loss";
 
 /**
  * All the field markup for TradeFormPanel — dates, instrument, direction,
@@ -29,13 +35,19 @@ export default function TradeFormFields({
     <div className="p-6 space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <label className="block">
-          <span className={labelClass}>Entry date</span>
+          <span className={labelClass}>
+            Entry date <span className="text-loss">*</span>
+          </span>
           <input
+            ref={f.registerFieldRef("entry_date")}
             type="date"
             value={form.entry_date}
             onChange={(e) => set("entry_date", e.target.value)}
-            className={`${selectClass} font-mono`}
+            className={`${f.fieldErrors.entry_date ? errorInputClass : selectClass} font-mono`}
           />
+          {f.fieldErrors.entry_date && (
+            <p className={fieldErrorTextClass}>{f.fieldErrors.entry_date}</p>
+          )}
         </label>
         <label className="block">
           <span className={labelClass}>Entry time</span>
@@ -73,13 +85,19 @@ export default function TradeFormFields({
       </div>
 
       <label className="block">
-        <span className={labelClass}>Instrument</span>
+        <span className={labelClass}>
+          Instrument <span className="text-loss">*</span>
+        </span>
         <input
+          ref={f.registerFieldRef("instrument")}
           value={form.instrument}
           onChange={(e) => set("instrument", e.target.value)}
           placeholder="e.g. EUR/USD"
-          className={selectClass}
+          className={f.fieldErrors.instrument ? errorInputClass : selectClass}
         />
+        {f.fieldErrors.instrument && (
+          <p className={fieldErrorTextClass}>{f.fieldErrors.instrument}</p>
+        )}
       </label>
 
       <div className="grid grid-cols-2 gap-4">
@@ -168,12 +186,14 @@ export default function TradeFormFields({
         <label className="block">
           <span className={labelClass}>Size</span>
           <input
+            ref={f.registerFieldRef("size")}
             type="number"
             step="any"
             value={form.size}
             onChange={(e) => set("size", e.target.value)}
-            className={`${selectClass} font-mono`}
+            className={`${f.fieldErrors.size ? errorInputClass : selectClass} font-mono`}
           />
+          {f.fieldErrors.size && <p className={fieldErrorTextClass}>{f.fieldErrors.size}</p>}
         </label>
       </div>
 
@@ -268,12 +288,14 @@ export default function TradeFormFields({
             )}
           </div>
           <input
+            ref={f.registerFieldRef("pnl")}
             type="number"
             step="any"
             value={form.pnl}
             onChange={(e) => f.handlePnlChange(e.target.value)}
-            className={`${selectClass} font-mono`}
+            className={`${f.fieldErrors.pnl ? errorInputClass : selectClass} font-mono`}
           />
+          {f.fieldErrors.pnl && <p className={fieldErrorTextClass}>{f.fieldErrors.pnl}</p>}
           {f.pnlAuto && f.computedPnl != null && (
             <span className="text-[11px] text-ink-muted">
               Auto-calculated from entry, exit &amp; size
@@ -380,16 +402,15 @@ export default function TradeFormFields({
         />
       </label>
 
-      {f.errors.length > 0 && (
+      {Object.keys(f.fieldErrors).length > 0 && (
+        <p className="text-xs text-loss">
+          This trade couldn&apos;t be logged — check the highlighted field
+          {Object.keys(f.fieldErrors).length > 1 ? "s" : ""} above.
+        </p>
+      )}
+      {f.formError && (
         <div className="rounded-md border border-loss/30 bg-loss/10 px-4 py-3">
-          <p className="text-xs font-medium text-loss mb-1">
-            This trade couldn&apos;t be logged. Please fill in:
-          </p>
-          <ul className="text-xs text-loss list-disc list-inside space-y-0.5">
-            {f.errors.map((e) => (
-              <li key={e}>{e}</li>
-            ))}
-          </ul>
+          <p className="text-xs text-loss">{f.formError}</p>
         </div>
       )}
 

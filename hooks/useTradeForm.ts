@@ -96,6 +96,12 @@ const FIELD_LABELS: Record<string, string> = {
   pnl: "P&L (or fill in entry price, exit price, and size so it can be calculated)",
 };
 
+// Keys validate() can attach an error to. "size" covers the
+// greater-than-0 check; a missing/invalid P&L is reported on "pnl" even
+// though it can be satisfied indirectly via entry/exit/size, since that's
+// the field the user actually sees the message next to.
+export type TradeFormFieldKey = "entry_date" | "instrument" | "size" | "pnl";
+
 export const EXIT_REASON_OPTIONS: { value: ExitReason; label: string }[] = [
   { value: "stop_loss", label: "Stop loss hit" },
   { value: "take_profit", label: "Take profit hit" },
@@ -190,7 +196,24 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  // Field-level errors, keyed so TradeFormFields can render each message
+  // right under the input it describes (red border + inline text) instead
+  // of a single generic list the user has to match back to a field by
+  // memory. formError carries anything that isn't about one specific
+  // field (a failed screenshot upload, a save request that errored) and
+  // still renders as the old top-of-form banner.
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<TradeFormFieldKey, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  // One ref per validatable field, so a failed submit can scroll to and
+  // focus the first invalid one instead of leaving the user to hunt for
+  // it — the field list order here doubles as the "first error wins"
+  // priority order.
+  const fieldRefs = useRef<Partial<Record<TradeFormFieldKey, HTMLElement | null>>>({});
+  function registerFieldRef(key: TradeFormFieldKey) {
+    return (el: HTMLElement | null) => {
+      fieldRefs.current[key] = el;
+    };
+  }
 
   // Whether the P&L / R-multiple fields should keep tracking the
   // auto-calculation, or have been taken over by manual entry.
@@ -437,6 +460,16 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+    // Clear that field's red border/message as soon as the user edits it,
+    // rather than leaving it lit until the next submit attempt re-runs
+    // validate() — the user has already acted on the message.
+    if (key in fieldErrors) {
+      setFieldErrors((e) => {
+        const rest = { ...e };
+        delete rest[key as unknown as TradeFormFieldKey];
+        return rest;
+      });
+    }
   }
 
   function handlePnlChange(value: string) {
@@ -483,13 +516,13 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
     setScreenshotError(null);
   }
 
-  function validate(): string[] {
-    const missing: string[] = [];
-    if (!form.entry_date) missing.push(FIELD_LABELS.entry_date);
-    if (!form.instrument.trim()) missing.push(FIELD_LABELS.instrument);
+  function validate(): Partial<Record<TradeFormFieldKey, string>> {
+    const missing: Partial<Record<TradeFormFieldKey, string>> = {};
+    if (!form.entry_date) missing.entry_date = `${FIELD_LABELS.entry_date} is required.`;
+    if (!form.instrument.trim()) missing.instrument = `${FIELD_LABELS.instrument} is required.`;
 
     if (sizeNum != null && sizeNum <= 0) {
-      missing.push("Size must be greater than 0");
+      missing.size = "Size must be greater than 0.";
     }
 
     // P&L is the one figure every trade needs. It's fine if it comes from
@@ -498,21 +531,38 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
     const hasManualPnl = form.pnl.trim() !== "" && !Number.isNaN(parseFloat(form.pnl));
     const hasAutoPnlInputs = entryNum != null && exitNum != null && sizeNum != null;
     if (!hasManualPnl && !hasAutoPnlInputs) {
-      missing.push(FIELD_LABELS.pnl);
+      missing.pnl = `${FIELD_LABELS.pnl}.`;
     }
 
     return missing;
+  }
+
+  // Order fields are checked in when deciding which one gets focus — top
+  // of the form first, matching the order a user would naturally tab
+  // through it.
+  const FIELD_FOCUS_ORDER: TradeFormFieldKey[] = ["entry_date", "instrument", "size", "pnl"];
+
+  function focusFirstError(missing: Partial<Record<TradeFormFieldKey, string>>) {
+    const firstKey = FIELD_FOCUS_ORDER.find((k) => missing[k]);
+    if (!firstKey) return;
+    const el = fieldRefs.current[firstKey];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.focus();
   }
 
   async function handleSubmit() {
     if (!selectedAccount) return;
 
     const missing = validate();
-    if (missing.length > 0) {
-      setErrors(missing);
+    if (Object.keys(missing).length > 0) {
+      setFieldErrors(missing);
+      setFormError(null);
+      focusFirstError(missing);
       return;
     }
-    setErrors([]);
+    setFieldErrors({});
+    setFormError(null);
     setSaving(true);
 
     // Resolve the screenshot first so a failed upload doesn't leave the
@@ -526,7 +576,7 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
       setUploadingScreenshot(false);
       if (uploadError || !url) {
         setSaving(false);
-        setErrors([uploadError || "Screenshot upload failed. Please try again."]);
+        setFormError(uploadError || "Screenshot upload failed. Please try again.");
         return;
       }
       finalScreenshotUrl = url;
@@ -574,7 +624,7 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
 
     setSaving(false);
     if (dbError || !savedTrade) {
-      setErrors(["Something went wrong saving this trade. Please try again."]);
+      setFormError("Something went wrong saving this trade. Please try again.");
       return;
     }
 
@@ -593,7 +643,9 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
     selectedAccount,
     form,
     set,
-    errors,
+    fieldErrors,
+    formError,
+    registerFieldRef,
     saving,
 
     // discard-confirm flow
