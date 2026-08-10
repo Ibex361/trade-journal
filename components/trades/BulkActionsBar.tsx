@@ -19,8 +19,8 @@ function Chip({
     tone === "danger"
       ? "border-loss/40 text-loss hover:bg-loss/10"
       : tone === "positive"
-      ? "border-gain/40 text-gain hover:bg-gain/10"
-      : "border-surface-border text-ink-secondary hover:text-ink-primary hover:bg-surface-1";
+        ? "border-gain/40 text-gain hover:bg-gain/10"
+        : "border-surface-border text-ink-secondary hover:text-ink-primary hover:bg-surface-1";
   return (
     <button
       onClick={onClick}
@@ -92,80 +92,106 @@ export default function BulkActionsBar({
   }
 
   return (
-    <div className="sticky top-[52px] md:top-[68px] z-20 -mx-4 px-4 md:mx-0 md:px-0 mb-4 pointer-events-none">
-      <div className="bg-glow/15 border border-glow/50 rounded-2xl shadow-lg shadow-black/30 pointer-events-auto overflow-hidden ring-1 ring-glow/20 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-glow/20">
-          <span className="flex items-center gap-2 text-xs font-semibold text-glow tracking-wide">
-            <span className="signal-bar h-4" />
-            {count} selected
-          </span>
-          <button
-            onClick={onClear}
-            className="text-xs text-ink-secondary hover:text-ink-primary font-medium"
-          >
-            Done
-          </button>
-        </div>
+    <>
+      <div className="sticky top-[52px] md:top-[68px] z-20 -mx-4 px-4 md:mx-0 md:px-0 mb-4 pointer-events-none">
+        <div className="bg-glow/15 border border-glow/50 rounded-2xl shadow-lg shadow-black/30 pointer-events-auto overflow-hidden ring-1 ring-glow/20 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-glow/20">
+            <span className="flex items-center gap-2 text-xs font-semibold text-glow tracking-wide">
+              <span className="signal-bar h-4" />
+              {count} selected
+            </span>
+            <button
+              onClick={onClear}
+              className="text-xs text-ink-secondary hover:text-ink-primary font-medium"
+            >
+              Done
+            </button>
+          </div>
 
-        <div className="flex items-center gap-2 px-4 pt-2.5 pb-3.5 overflow-x-auto no-scrollbar">
-          {tagOptions.length > 0 && (
-            <Chip onClick={() => { setAddTagOpen((v) => !v); setRemoveTagOpen(false); }} disabled={busy}>
-              + Tag
+          <div className="flex items-center gap-2 px-4 pt-2.5 pb-3.5 overflow-x-auto no-scrollbar">
+            {tagOptions.length > 0 && (
+              <Chip
+                onClick={() => {
+                  setAddTagOpen((v) => !v);
+                  setRemoveTagOpen(false);
+                }}
+                disabled={busy}
+              >
+                + Tag
+              </Chip>
+            )}
+
+            {removableTags.length > 0 && (
+              <Chip
+                onClick={() => {
+                  setRemoveTagOpen((v) => !v);
+                  setAddTagOpen(false);
+                }}
+                disabled={busy}
+              >
+                − Tag
+              </Chip>
+            )}
+
+            <Chip
+              onClick={() => handleSetRules(true)}
+              disabled={busy}
+              tone="positive"
+            >
+              Rules ✓
             </Chip>
-          )}
-
-          {removableTags.length > 0 && (
-            <Chip onClick={() => { setRemoveTagOpen((v) => !v); setAddTagOpen(false); }} disabled={busy}>
-              − Tag
+            <Chip
+              onClick={() => handleSetRules(false)}
+              disabled={busy}
+              tone="danger"
+            >
+              Rules ✕
             </Chip>
-          )}
 
-          <Chip onClick={() => handleSetRules(true)} disabled={busy} tone="positive">
-            Rules ✓
-          </Chip>
-          <Chip onClick={() => handleSetRules(false)} disabled={busy} tone="danger">
-            Rules ✕
-          </Chip>
+            <div className="w-px h-5 bg-surface-border shrink-0" />
 
-          <div className="w-px h-5 bg-surface-border shrink-0" />
+            <Chip onClick={onExport} disabled={busy}>
+              Export
+            </Chip>
 
-          <Chip onClick={onExport} disabled={busy}>
-            Export
-          </Chip>
+            <Chip
+              onClick={() => setConfirmingDelete(true)}
+              disabled={busy}
+              tone="danger"
+            >
+              Delete
+            </Chip>
+          </div>
 
-          <Chip onClick={() => setConfirmingDelete(true)} disabled={busy} tone="danger">
-            Delete
-          </Chip>
-        </div>
-
-        {/* Tag pickers render as an inline panel in normal document flow rather
+          {/* Tag pickers render as an inline panel in normal document flow rather
             than an absolutely-positioned popover — the chip row above scrolls
             horizontally, and an overflow-x-auto container also clips vertical
             overflow, which was cutting the popover off. */}
-        {(addTagOpen || removableTags.length > 0 && removeTagOpen) && (
-          <div className="border-t border-glow/20 px-4 py-2.5 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-            {addTagOpen &&
-              tagOptions.map((o) => (
-                <button
-                  key={o.id}
-                  onClick={() => handlePickAddTag(o.value)}
-                  className="text-xs text-ink-secondary border border-surface-border rounded-full px-3 py-1 hover:text-ink-primary hover:bg-surface-1"
-                >
-                  {o.value}
-                </button>
-              ))}
-            {removeTagOpen &&
-              removableTags.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => handlePickRemoveTag(tag)}
-                  className="text-xs text-ink-secondary border border-surface-border rounded-full px-3 py-1 hover:text-ink-primary hover:bg-surface-1"
-                >
-                  {tag}
-                </button>
-              ))}
-          </div>
-        )}
+          {(addTagOpen || (removableTags.length > 0 && removeTagOpen)) && (
+            <div className="border-t border-glow/20 px-4 py-2.5 flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+              {addTagOpen &&
+                tagOptions.map((o) => (
+                  <button
+                    key={o.id}
+                    onClick={() => handlePickAddTag(o.value)}
+                    className="text-xs text-ink-secondary border border-surface-border rounded-full px-3 py-1 hover:text-ink-primary hover:bg-surface-1"
+                  >
+                    {o.value}
+                  </button>
+                ))}
+              {removeTagOpen &&
+                removableTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => handlePickRemoveTag(tag)}
+                    className="text-xs text-ink-secondary border border-surface-border rounded-full px-3 py-1 hover:text-ink-primary hover:bg-surface-1"
+                  >
+                    {tag}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <ConfirmDialog
@@ -177,6 +203,6 @@ export default function BulkActionsBar({
         onCancel={() => setConfirmingDelete(false)}
         onConfirm={handleDelete}
       />
-    </div>
+    </>
   );
 }
