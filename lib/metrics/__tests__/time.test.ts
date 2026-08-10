@@ -223,10 +223,23 @@ describe("getDailyPnlForMonth", () => {
     expect(days.every((d) => d.pnl === 0 && d.count === 0)).toBe(true);
   });
 
-  it("excludes trades outside the given month", () => {
+  it("aggregates whatever trades it's given, without re-checking their month itself", () => {
+    // getDailyPnlForMonth now trusts its caller to have already scoped
+    // trades to the target month via getTradesInMonth (see its docstring) —
+    // it only uses year/month to know how many day-buckets to build, not to
+    // filter. A trade outside the month lands on whatever day number its
+    // own entry_date has, same as any other trade it's handed.
     const trades = [makeTrade({ entry_date: "2026-03-01", pnl: 999 })];
     const days = getDailyPnlForMonth(trades, 2026, 2);
-    expect(days.reduce((s, d) => s + d.pnl, 0)).toBe(0);
+    expect(days.reduce((s, d) => s + d.pnl, 0)).toBe(0); // March 1 has no day-28 bucket in Feb
+  });
+
+  it("integrates with getTradesInMonth the way Reports now calls it: filter once, then aggregate", () => {
+    const inMonth = makeTrade({ entry_date: "2026-02-05", pnl: 40 });
+    const outOfMonth = makeTrade({ entry_date: "2026-03-05", pnl: 999 });
+    const monthTrades = getTradesInMonth([inMonth, outOfMonth], 2026, 2);
+    const days = getDailyPnlForMonth(monthTrades, 2026, 2);
+    expect(days.reduce((s, d) => s + d.pnl, 0)).toBe(40);
   });
 });
 

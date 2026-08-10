@@ -23,6 +23,29 @@ function sortTradesChronologically(trades: Trade[]): Trade[] {
   });
 }
 
+/**
+ * Sorts once and hands the same array to buildEquityCurve/getCurrentStreak/
+ * getBalanceBeforeTrade when a caller needs more than one of them on the
+ * *same* trade set — see sortOnceForDashboard below. Every existing
+ * single-function caller keeps working unchanged: each of the three still
+ * defaults to sorting its own input when not told it's already sorted.
+ */
+function resolveSortedTrades(trades: Trade[], alreadySorted: boolean): Trade[] {
+  return alreadySorted ? trades : sortTradesChronologically(trades);
+}
+
+/**
+ * Sorts a trade list chronologically once, for a caller (currently just the
+ * Dashboard) that's about to pass the same trades into more than one of
+ * buildEquityCurve/getCurrentStreak/getBalanceBeforeTrade — each of those
+ * independently re-sorting the same full account history is 3x the O(n log
+ * n) cost for identical work. Pass the result to each function's
+ * `alreadySorted: true` param instead of the raw trades array.
+ */
+export function sortOnceForDashboard(trades: Trade[]): Trade[] {
+  return sortTradesChronologically(trades);
+}
+
 export type EquityPoint = {
   /** The trade's entry_date, or "start" for the seed point before any trades. */
   date: string;
@@ -36,8 +59,12 @@ export type EquityPoint = {
  * it exactly consistent with summarizeTrades' totals with no separate
  * date-bucketing logic to drift out of sync.
  */
-export function buildEquityCurve(trades: Trade[], startingBalance: number): EquityPoint[] {
-  const sorted = sortTradesChronologically(trades);
+export function buildEquityCurve(
+  trades: Trade[],
+  startingBalance: number,
+  alreadySorted = false
+): EquityPoint[] {
+  const sorted = resolveSortedTrades(trades, alreadySorted);
 
   let balance = startingBalance;
   const points: EquityPoint[] = [{ date: "start", balance }];
@@ -61,8 +88,12 @@ export function buildEquityCurve(trades: Trade[], startingBalance: number): Equi
  * the account, not just on whichever subset you're currently averaging
  * over (e.g. this month). Look results up by trade id afterward.
  */
-export function getBalanceBeforeTrade(trades: Trade[], startingBalance: number): Map<string, number> {
-  const sorted = sortTradesChronologically(trades);
+export function getBalanceBeforeTrade(
+  trades: Trade[],
+  startingBalance: number,
+  alreadySorted = false
+): Map<string, number> {
+  const sorted = resolveSortedTrades(trades, alreadySorted);
   const map = new Map<string, number>();
   let balance = startingBalance;
   for (const t of sorted) {
@@ -83,8 +114,8 @@ export type Streak = {
  * either side. Trades are sorted the same way as buildEquityCurve so this
  * always agrees with the equity curve's chronological order.
  */
-export function getCurrentStreak(trades: Trade[]): Streak {
-  const sorted = sortTradesChronologically(trades);
+export function getCurrentStreak(trades: Trade[], alreadySorted = false): Streak {
+  const sorted = resolveSortedTrades(trades, alreadySorted);
 
   let type: "win" | "loss" | null = null;
   let count = 0;

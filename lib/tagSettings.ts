@@ -73,28 +73,40 @@ async function fetchRowsWithTag(
 /**
  * Renames a tag everywhere it appears across this account's trades and
  * notes — the "Rename" action on the reshaped Tag setting card (Part 2).
- * Case-insensitive match against the old value; every matching row's tags
- * array gets that entry swapped for the new value (deduped, in case the
- * row already separately had the new value too).
+ * Does the id lookup client-side (fetchRowsWithTag, exact-match against the
+ * old value — see its docstring) but the actual array rewrite server-side
+ * via the bulk_rename_trade_tag/bulk_rename_note_tag RPCs (see
+ * migrations/022_bulk_tag_rename_functions.sql) — one UPDATE per table
+ * instead of one per row. Previously this issued one UPDATE request per
+ * matching trade/note (Promise.all over N individual `.update()` calls),
+ * the same N+1 pattern migrations/021_bulk_tag_functions.sql already fixed
+ * for the Trades/Notes bulk +tag/-tag actions; renaming a tag used on 300
+ * trades meant 300 concurrent requests with no chunking and no atomicity.
+ * See 022's header comment for the case-sensitivity note on the RPC path.
  */
 export async function renameTagEverywhere(accountId: string, oldValue: string, newValue: string) {
-  const oldLower = oldValue.toLowerCase();
-  const apply = (tags: string[]) => {
-    const withoutOld = tags.filter((t) => t.toLowerCase() !== oldLower);
-    const hasNew = withoutOld.some((t) => t.toLowerCase() === newValue.toLowerCase());
-    return hasNew ? withoutOld : [...withoutOld, newValue];
-  };
-
   const [tradeRows, noteRows] = await Promise.all([
     fetchRowsWithTag("trades", accountId, oldValue),
     fetchRowsWithTag("notes", accountId, oldValue),
   ]);
 
   const results = await Promise.all([
-    ...tradeRows.map((row) => supabase.from("trades").update({ tags: apply(row.tags ?? []) }).eq("id", row.id)),
-    ...noteRows.map((row) => supabase.from("notes").update({ tags: apply(row.tags ?? []) }).eq("id", row.id)),
+    tradeRows.length > 0
+      ? supabase.rpc("bulk_rename_trade_tag", {
+          trade_ids: tradeRows.map((r) => r.id),
+          tag_from: oldValue,
+          tag_to: newValue,
+        })
+      : null,
+    noteRows.length > 0
+      ? supabase.rpc("bulk_rename_note_tag", {
+          note_ids: noteRows.map((r) => r.id),
+          tag_from: oldValue,
+          tag_to: newValue,
+        })
+      : null,
   ]);
-  const error = results.find((r) => r.error)?.error ?? null;
+  const error = results.find((r) => r?.error)?.error ?? null;
   if (error) console.error("renameTagEverywhere failed:", error);
   return { error, count: tradeRows.length + noteRows.length };
 }
@@ -102,22 +114,27 @@ export async function renameTagEverywhere(accountId: string, oldValue: string, n
 /**
  * Removes a tag everywhere it appears across this account's trades and
  * notes — the "Delete" action on the reshaped Tag setting card (Part 2).
- * Case-insensitive match, same row-fetch-then-update approach as rename.
+ * Same id-lookup-then-bulk-RPC shape as renameTagEverywhere above, but
+ * reuses the EXISTING bulk_remove_trade_tag/bulk_remove_note_tag RPCs from
+ * migrations/021_bulk_tag_functions.sql — no new SQL needed for delete,
+ * since "remove this value from every row's array" is exactly what those
+ * already do.
  */
 export async function deleteTagEverywhere(accountId: string, value: string) {
-  const lower = value.toLowerCase();
-  const apply = (tags: string[]) => tags.filter((t) => t.toLowerCase() !== lower);
-
   const [tradeRows, noteRows] = await Promise.all([
     fetchRowsWithTag("trades", accountId, value),
     fetchRowsWithTag("notes", accountId, value),
   ]);
 
   const results = await Promise.all([
-    ...tradeRows.map((row) => supabase.from("trades").update({ tags: apply(row.tags ?? []) }).eq("id", row.id)),
-    ...noteRows.map((row) => supabase.from("notes").update({ tags: apply(row.tags ?? []) }).eq("id", row.id)),
+    tradeRows.length > 0
+      ? supabase.rpc("bulk_remove_trade_tag", { trade_ids: tradeRows.map((r) => r.id), tag_to_remove: value })
+      : null,
+    noteRows.length > 0
+      ? supabase.rpc("bulk_remove_note_tag", { note_ids: noteRows.map((r) => r.id), tag_to_remove: value })
+      : null,
   ]);
-  const error = results.find((r) => r.error)?.error ?? null;
+  const error = results.find((r) => r?.error)?.error ?? null;
   if (error) console.error("deleteTagEverywhere failed:", error);
   return { error, count: tradeRows.length + noteRows.length };
 }

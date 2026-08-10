@@ -6,15 +6,23 @@ import { Trade } from "../trades";
 import { localDateString } from "../date";
 import { summarizeTrades } from "./pnl";
 
+/**
+ * "YYYY-MM" prefix for a given year and 0-indexed month — matches directly
+ * against entry_date's own "YYYY-MM-DD" prefix instead of constructing a
+ * Date object per trade. getTradesInMonth below takes a 1-indexed month
+ * (matching its public Trade-filtering siblings) and builds the same kind
+ * of prefix inline, since it's a one-line difference not worth a shared
+ * helper with a confusing 0- vs 1-indexed split.
+ */
+function monthPrefix(year: number, month0Indexed: number): string {
+  return `${year}-${String(month0Indexed + 1).padStart(2, "0")}`;
+}
+
 /** Trades whose entry_date falls in the current calendar month (local time). */
 export function getTradesInCurrentMonth(trades: Trade[]): Trade[] {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  return trades.filter((t) => {
-    const d = new Date(t.entry_date + "T00:00:00");
-    return d.getFullYear() === year && d.getMonth() === month;
-  });
+  const prefix = monthPrefix(now.getFullYear(), now.getMonth());
+  return trades.filter((t) => t.entry_date.startsWith(prefix));
 }
 
 export type PeriodGranularity = "day" | "week" | "month";
@@ -266,10 +274,13 @@ export function countMissingHoldingTime(trades: Trade[]): number {
 
 /** Trades whose entry_date falls within the given calendar month. `month` is 1-indexed (Jan = 1). */
 export function getTradesInMonth(trades: Trade[], year: number, month: number): Trade[] {
-  return trades.filter((t) => {
-    const d = new Date(t.entry_date + "T00:00:00");
-    return d.getFullYear() === year && d.getMonth() + 1 === month;
-  });
+  // entry_date is already a zero-padded "YYYY-MM-DD" string, so a prefix
+  // match answers "is this trade in this month" without constructing a
+  // Date object (and running getFullYear/getMonth) for every trade in the
+  // account's full history — see getDailyPnlForMonth below, which builds
+  // on this function's result instead of re-scanning `trades` itself.
+  const prefix = `${year}-${String(month).padStart(2, "0")}`;
+  return trades.filter((t) => t.entry_date.startsWith(prefix));
 }
 
 export type MonthlyDayPnl = {
@@ -284,14 +295,20 @@ export type MonthlyDayPnl = {
  * One entry per calendar day in the given month (1-indexed), with summed
  * P&L and trade count — zeros for days with no trades. Used for the
  * Reports calendar heatmap.
+ *
+ * Takes the month's trades directly (already filtered by getTradesInMonth)
+ * rather than the full account history — the Reports page previously called
+ * this with the same full `trades` array it also passed to getTradesInMonth,
+ * so every month switch did two independent full-history passes (each
+ * constructing a Date per trade) to answer overlapping questions. Callers
+ * should compute monthTrades once via getTradesInMonth and pass that here;
+ * this function no longer needs to re-check year/month itself.
  */
-export function getDailyPnlForMonth(trades: Trade[], year: number, month: number): MonthlyDayPnl[] {
+export function getDailyPnlForMonth(monthTrades: Trade[], year: number, month: number): MonthlyDayPnl[] {
   const daysInMonth = new Date(year, month, 0).getDate();
   const byDate = new Map<string, { pnl: number; count: number }>();
 
-  for (const t of trades) {
-    const d = new Date(t.entry_date + "T00:00:00");
-    if (d.getFullYear() !== year || d.getMonth() + 1 !== month) continue;
+  for (const t of monthTrades) {
     const existing = byDate.get(t.entry_date);
     if (existing) {
       existing.pnl += t.pnl;

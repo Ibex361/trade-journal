@@ -38,9 +38,14 @@ export default function ReportsPage() {
     () => getTradesInMonth(trades, deferredYear, deferredMonth),
     [trades, deferredYear, deferredMonth]
   );
+  // Derived from monthTrades (already filtered) rather than re-scanning the
+  // full account history a second time — see getDailyPnlForMonth's
+  // docstring. Together with getTradesInMonth switching to a string-prefix
+  // match instead of per-trade Date parsing, a month switch now does one
+  // full-history pass instead of two, with no Date allocation in either.
   const dailyPnls = useMemo(
-    () => getDailyPnlForMonth(trades, deferredYear, deferredMonth),
-    [trades, deferredYear, deferredMonth]
+    () => getDailyPnlForMonth(monthTrades, deferredYear, deferredMonth),
+    [monthTrades, deferredYear, deferredMonth]
   );
   const summary = useMemo(() => summarizeTrades(monthTrades), [monthTrades]);
   const { best, worst } = useMemo(() => getBestWorstDay(dailyPnls), [dailyPnls]);

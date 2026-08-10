@@ -12,6 +12,7 @@ import {
   getAvgRiskPct,
   getBalanceBeforeTrade,
   pickWinRate,
+  sortOnceForDashboard,
 } from "@/lib/metrics";
 import { useWinRateMode, WIN_RATE_MODE_LABELS } from "@/lib/WinRateModeContext";
 import DashboardHero from "@/components/dashboard/DashboardHero";
@@ -28,19 +29,28 @@ export default function DashboardPage() {
 
   const summary = useMemo(() => summarizeTrades(trades), [trades]);
 
+  // Sorted once here and reused by buildEquityCurve/getCurrentStreak/
+  // getBalanceBeforeTrade below (via their alreadySorted param) instead of
+  // each of those three independently re-sorting the same full account
+  // history — same idea as the equity-curve double-sort fix in Analytics,
+  // just spread across three call sites on this page instead of nested in
+  // one function. Safe to reuse the same sorted array across all three
+  // since none of them mutate it.
+  const sortedTrades = useMemo(() => sortOnceForDashboard(trades), [trades]);
+
   // Keyed on starting_balance, not the account object — same reasoning as
   // the selectedAccount?.id-keyed effects elsewhere (avoids recomputing on
   // AccountContext's spurious object-identity churn from Supabase's
   // background token refresh).
   const equityCurve = useMemo(
-    () => (selectedAccount ? buildEquityCurve(trades, selectedAccount.starting_balance) : []),
+    () => (selectedAccount ? buildEquityCurve(sortedTrades, selectedAccount.starting_balance, true) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [trades, selectedAccount?.starting_balance]
+    [sortedTrades, selectedAccount?.starting_balance]
   );
 
   const accountBalance = (selectedAccount?.starting_balance ?? 0) + summary.totalPnl;
 
-  const streak = useMemo(() => getCurrentStreak(trades), [trades]);
+  const streak = useMemo(() => getCurrentStreak(sortedTrades, true), [sortedTrades]);
   const drawdown = useMemo(() => getDrawdown(equityCurve), [equityCurve]);
 
   const monthTrades = useMemo(() => getTradesInCurrentMonth(trades), [trades]);
@@ -49,9 +59,12 @@ export default function DashboardPage() {
   // the time, not today's balance — see getAvgRiskPct / getBalanceBeforeTrade.
   // Same starting_balance-keying reasoning as equityCurve above.
   const balanceBeforeByTradeId = useMemo(
-    () => (selectedAccount ? getBalanceBeforeTrade(trades, selectedAccount.starting_balance) : new Map<string, number>()),
+    () =>
+      selectedAccount
+        ? getBalanceBeforeTrade(sortedTrades, selectedAccount.starting_balance, true)
+        : new Map<string, number>(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [trades, selectedAccount?.starting_balance]
+    [sortedTrades, selectedAccount?.starting_balance]
   );
   const avgRiskPct = useMemo(
     () => getAvgRiskPct(monthTrades, balanceBeforeByTradeId),
