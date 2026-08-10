@@ -27,7 +27,7 @@ export default function ScreenshotUploader({
 }) {
   return (
     <div className="block">
-      <span className={`${labelClass} block mb-1`}>Chart screenshot</span>
+      <span className={`${labelClass} block mb-1.5`}>Chart screenshot</span>
       <input
         ref={fileInputRef}
         type="file"
@@ -36,7 +36,7 @@ export default function ScreenshotUploader({
         className="hidden"
       />
       {screenshotPreview ? (
-        <div className="relative w-full max-w-[220px] aspect-video rounded-md overflow-hidden border border-surface-border">
+        <div className="relative w-full max-w-[260px] aspect-video rounded-xl overflow-hidden border border-surface-border shadow-glass">
           {isRemoteScreenshotUrl(screenshotPreview) ? (
             <Image
               loader={imagekitLoader}
@@ -75,17 +75,38 @@ export default function ScreenshotUploader({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="w-full rounded-md border border-dashed border-surface-border bg-surface-2 px-3 py-4 text-center text-xs text-ink-secondary hover:text-ink-primary hover:border-glow/50 transition-colors"
+          className="group w-full rounded-xl border border-dashed border-surface-border bg-surface-2/60 px-4 py-6 flex flex-col items-center gap-2 text-center transition-all duration-fast hover:border-glow/50 hover:bg-glow/5"
         >
-          + Add screenshot
+          <span className="w-9 h-9 rounded-full bg-surface-2 border border-surface-border flex items-center justify-center text-ink-secondary transition-colors group-hover:border-glow/50 group-hover:text-glow">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-4 h-4"
+            >
+              <rect x="3" y="5" width="18" height="14" rx="2.5" />
+              <circle cx="9" cy="10.5" r="1.75" />
+              <path d="M21 16l-5.5-5.5a1.5 1.5 0 0 0-2.1 0L4 19" />
+            </svg>
+          </span>
+          <span className="text-xs font-medium text-ink-secondary group-hover:text-ink-primary transition-colors">
+            Add chart screenshot
+          </span>
+          <span className="text-[11px] text-ink-muted">PNG, JPG, or WEBP · up to 5MB</span>
         </button>
       )}
       {uploadingScreenshot && (
-        <p className="mt-1 text-[11px] text-ink-muted">Uploading screenshot…</p>
+        <p className="mt-1.5 text-[11px] text-ink-muted">Uploading screenshot…</p>
       )}
-      {screenshotError && <p className="mt-1 text-[11px] text-loss">{screenshotError}</p>}
-      {!screenshotError && !uploadingScreenshot && (
-        <p className="mt-1 text-[11px] text-ink-muted">PNG, JPG, or WEBP, up to 5MB.</p>
+      {screenshotError && <p className="mt-1.5 text-[11px] text-loss">{screenshotError}</p>}
+      {/* The empty-state dropzone already states the format/size limit
+          inline, so this line only repeats it once a screenshot exists
+          (a preview no longer shows that hint itself). */}
+      {screenshotPreview && !screenshotError && !uploadingScreenshot && (
+        <p className="mt-1.5 text-[11px] text-ink-muted">PNG, JPG, or WEBP, up to 5MB.</p>
       )}
     </div>
   );

@@ -39,13 +39,22 @@ export default function TradeFormPanel({
     <>
       <div className="fixed inset-0 z-40 flex justify-end">
         <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={f.requestClose} />
-        <div className="relative w-full sm:max-w-lg h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
-          <div className="sticky top-0 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
+        <div className="relative w-full sm:max-w-xl h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
+          <div className="sticky top-0 z-10 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="signal-bar h-6" />
-              <h2 className="font-display text-lg font-medium">
-                {trade ? "Edit trade" : duplicateFrom ? "Duplicate trade" : "New trade"}
-              </h2>
+              <span className="signal-bar h-7" />
+              <div>
+                <h2 className="font-display text-lg font-medium leading-tight">
+                  {trade ? "Edit trade" : duplicateFrom ? "Duplicate trade" : "New trade"}
+                </h2>
+                <p className="text-[11px] text-ink-muted leading-tight mt-0.5">
+                  {trade
+                    ? "Update the details of this trade"
+                    : duplicateFrom
+                      ? "Starts from the trade you copied"
+                      : "Log a trade to your journal"}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {trade && onOpenDiary && (
@@ -61,10 +70,20 @@ export default function TradeFormPanel({
               )}
               <button
                 onClick={f.requestClose}
-                className="text-ink-muted hover:text-ink-primary text-sm px-2 py-1"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-ink-muted hover:text-ink-primary hover:bg-surface-2 transition-colors"
                 aria-label="Close"
               >
-                ✕
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-4 h-4"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
               </button>
             </div>
           </div>
