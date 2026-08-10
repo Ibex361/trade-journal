@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_TABS } from "@/lib/navTabs";
 import { useTradesPageState } from "@/lib/TradesPageStateContext";
@@ -38,6 +39,14 @@ export default function MobileTabBar() {
   const router = useRouter();
   const { setPendingNewTrade } = useTradesPageState();
   const { setPendingNewNote } = useNotesPageState();
+  // Radix's Popover (unlike DropdownMenu) doesn't auto-close on an inside
+  // item click — only on outside click/Escape. handleNewTrade/handleNewNote
+  // navigate away via router.push instead of unmounting this bar (it lives
+  // in the root layout, see app/layout.tsx, so it never unmounts on route
+  // change), so without an explicit close the popover stayed open and
+  // floated over the destination page. Controlling `open` here lets the
+  // handlers close it before navigating.
+  const [open, setOpen] = useState(false);
 
   if (pathname === "/login") return null;
 
@@ -63,11 +72,13 @@ export default function MobileTabBar() {
   }
 
   function handleNewTrade() {
+    setOpen(false);
     setPendingNewTrade(true);
     router.push("/trades");
   }
 
   function handleNewNote() {
+    setOpen(false);
     setPendingNewNote(true);
     router.push("/notes");
   }
@@ -85,7 +96,7 @@ export default function MobileTabBar() {
             absolutely positioned so it can float above the bar's top edge
             like the mockup shows. */}
         <div className="flex items-center justify-center">
-          <Popover>
+          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <button
                 aria-label="Create new"
