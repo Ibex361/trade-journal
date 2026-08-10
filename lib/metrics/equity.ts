@@ -9,11 +9,18 @@ import { localDateString } from "../date";
  * calculation below (buildEquityCurve, getCurrentStreak,
  * getBalanceBeforeTrade) — sorted here once so those can never disagree
  * with each other about trade order.
+ *
+ * Plain `<`/`>` rather than localeCompare: entry_date/created_at are
+ * zero-padded ISO strings, which already sort correctly with primitive
+ * comparison — localeCompare's locale-aware collation is pure overhead here,
+ * and this comparator runs on every equity-curve rebuild.
  */
 function sortTradesChronologically(trades: Trade[]): Trade[] {
-  return [...trades].sort(
-    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
-  );
+  return [...trades].sort((a, b) => {
+    if (a.entry_date !== b.entry_date) return a.entry_date < b.entry_date ? -1 : 1;
+    if (a.created_at !== b.created_at) return a.created_at < b.created_at ? -1 : 1;
+    return 0;
+  });
 }
 
 export type EquityPoint = {
@@ -180,20 +187,30 @@ export function filterTradesByRange(trades: Trade[], range: DateRange): Trade[] 
  * cutoff are folded into a single seed balance (so the curve still reflects
  * the account's true balance at the start of the range), then one point is
  * added per trade inside the range, exactly like buildEquityCurve.
+ *
+ * Single O(n) partition pass over the full trade list — no sort here. The
+ * "before" side only needs a sum (order doesn't matter for that), and the
+ * "within" side gets sorted exactly once, inside buildEquityCurve, instead
+ * of once here and then again there. This matters most for a short range
+ * (e.g. "7d") against a long trade history, where the old version sorted
+ * the entire history just to throw most of it away.
  */
 export function buildEquityCurveForRange(
   trades: Trade[],
   startingBalance: number,
   range: DateRange
 ): EquityPoint[] {
-  const sorted = [...trades].sort(
-    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
-  );
   const cutoffStr = getRangeCutoffDate(range);
 
-  const before = cutoffStr == null ? [] : sorted.filter((t) => t.entry_date < cutoffStr);
-  const within = cutoffStr == null ? sorted : sorted.filter((t) => t.entry_date >= cutoffStr);
+  let seedBalance = startingBalance;
+  const within: Trade[] = [];
+  for (const t of trades) {
+    if (cutoffStr != null && t.entry_date < cutoffStr) {
+      seedBalance += t.pnl;
+    } else {
+      within.push(t);
+    }
+  }
 
-  const seedBalance = startingBalance + before.reduce((s, t) => s + t.pnl, 0);
   return buildEquityCurve(within, seedBalance);
 }

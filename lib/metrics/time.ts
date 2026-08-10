@@ -27,42 +27,60 @@ export type PeriodBucket = {
   count: number;
 };
 
-function periodKey(dateStr: string, granularity: PeriodGranularity): { key: string; label: string } {
+/**
+ * Just the bucket key for a trade's entry_date — no Date object needed for
+ * "day" (the raw ISO string already IS the key). Cheap enough to call once
+ * per trade; the label (which needs an actual Date + locale formatting) is
+ * computed separately, only once per unique bucket — see getPnlByPeriod.
+ */
+function periodKeyOnly(dateStr: string, granularity: PeriodGranularity): string {
+  if (granularity === "day") return dateStr;
   const d = new Date(dateStr + "T00:00:00");
   if (granularity === "month") {
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
-    return { key, label };
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   }
-  if (granularity === "week") {
-    const monday = new Date(d);
-    const dow = (d.getDay() + 6) % 7; // 0 = Monday
-    monday.setDate(d.getDate() - dow);
-    const key = localDateString(monday);
-    const label = monday.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return { key, label };
+  const monday = new Date(d);
+  const dow = (d.getDay() + 6) % 7; // 0 = Monday
+  monday.setDate(d.getDate() - dow);
+  return localDateString(monday);
+}
+
+/** Display label for a bucket, given its key — see periodKeyOnly. */
+function periodLabel(key: string, granularity: PeriodGranularity): string {
+  if (granularity === "month") {
+    const [year, month] = key.split("-").map(Number);
+    const d = new Date(year, month - 1, 1);
+    return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
   }
-  const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return { key: dateStr, label };
+  // "week" and "day" keys are both plain ISO dates (the bucket's Monday, or
+  // the trade's own entry_date respectively) — same label format for both.
+  const d = new Date(key + "T00:00:00");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /**
  * Buckets trades' P&L by day, week (Monday-start), or month, sorted
  * chronologically. Used for the P&L-by-period bar chart on Analytics.
+ *
+ * The label (Date construction + locale formatting) is computed only once
+ * per unique bucket, not once per trade — with month/week granularity over
+ * a large trade history, the number of unique buckets is typically a tiny
+ * fraction of the trade count, so this avoids a lot of redundant Date/
+ * toLocaleDateString work on every recompute.
  */
 export function getPnlByPeriod(trades: Trade[], granularity: PeriodGranularity): PeriodBucket[] {
   const buckets = new Map<string, PeriodBucket>();
   for (const t of trades) {
-    const { key, label } = periodKey(t.entry_date, granularity);
+    const key = periodKeyOnly(t.entry_date, granularity);
     const existing = buckets.get(key);
     if (existing) {
       existing.pnl += t.pnl;
       existing.count += 1;
     } else {
-      buckets.set(key, { key, label, pnl: t.pnl, count: 1 });
+      buckets.set(key, { key, label: periodLabel(key, granularity), pnl: t.pnl, count: 1 });
     }
   }
-  return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key));
+  return Array.from(buckets.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
 /**
