@@ -91,6 +91,24 @@ body {
 }
 
 /*
+ * Belt-and-suspenders on top of Tailwind's own preflight reset: a native
+ * <button> carries browser UA chrome (opaque gray face, its own border,
+ * system font) that can be visible for a frame on elements that mount
+ * late into the DOM (e.g. inside a slide-over panel opened via client
+ * navigation) before the page's compiled CSS has been applied to that
+ * specific node — surfaced as a flash of a plain gray box on the trade
+ * form's screenshot dropzone. Forcing these here means no button in the
+ * app can show that native chrome even in that brief window.
+ */
+button {
+  appearance: none;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+}
+
+/*
  * Step 5 motion pass. Individual entrance animations use Tailwind's
  * `motion-reduce:` variant to opt out cleanly, but this is the safety net —
  * anything added later that forgets the variant still gets neutralized for

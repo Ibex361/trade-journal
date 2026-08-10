@@ -75,7 +75,15 @@ export default function ScreenshotUploader({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="group w-full rounded-xl border border-dashed border-surface-border bg-surface-2/60 px-4 py-6 flex flex-col items-center gap-2 text-center transition-all duration-fast hover:border-glow/50 hover:bg-glow/5"
+          // appearance-none + explicit solid bg (not the translucent
+          // bg-surface-2/60 this used to have): a <button> carries native
+          // UA chrome (opaque gray face, its own border) until the page's
+          // own CSS is fully applied to it, and a translucent fill lets
+          // that native gray show through underneath during that window
+          // instead of fully occluding it. Solid bg-surface-2 (over the
+          // dark panel backdrop) reads visually the same as the old
+          // translucent fill but removes the flash.
+          className="group appearance-none w-full rounded-xl border border-dashed border-surface-border bg-surface-2 text-ink-primary px-4 py-6 flex flex-col items-center gap-2 text-center transition-all duration-fast hover:border-glow/50 hover:bg-glow/5"
         >
           <span className="w-9 h-9 rounded-full bg-surface-2 border border-surface-border flex items-center justify-center text-ink-secondary transition-colors group-hover:border-glow/50 group-hover:text-glow">
             <svg
