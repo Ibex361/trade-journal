@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Image from "next/image";
 import { Trade } from "@/lib/trades";
 import imagekitLoader, { isRemoteScreenshotUrl } from "@/lib/imagekitLoader";
@@ -16,7 +16,9 @@ export type SortState = { column: SortColumn; direction: "asc" | "desc" };
 export type RowCallbacks = {
   onEdit: (trade: Trade) => void;
   onDuplicate: (trade: Trade) => void;
-  onDelete: (id: string) => void;
+  // Opens the shared confirm dialog for this row; the actual delete only
+  // fires once the user confirms there (see TradesList's requestDelete).
+  onRequestDelete: (id: string) => void;
   onOpenScreenshot: (url: string) => void;
   onRowClick: (e: React.MouseEvent, id: string) => void;
   onCheckboxClick: (e: React.MouseEvent<HTMLInputElement>, id: string, index: number) => void;
@@ -67,31 +69,21 @@ export function PnlText({ value, className = "" }: { value: number; className?: 
   );
 }
 
-export function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
-  const [confirming, setConfirming] = useState(false);
-
-  if (confirming) {
-    return (
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onConfirm}
-          className="text-xs text-loss font-medium hover:underline"
-        >
-          Confirm
-        </button>
-        <button
-          onClick={() => setConfirming(false)}
-          className="text-xs text-ink-muted hover:text-ink-primary"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
+// Opens the shared ConfirmDialog (mounted once by the list, not once per
+// row — see TradesList's requestDelete/confirmingId) rather than swapping
+// this button for a "Confirm" label in the same screen position. The old
+// in-place swap put the confirm target where "Delete" used to be, which on
+// touch made a fast double-tap (fat-finger, or double-tap-to-zoom muscle
+// memory) land on Delete then Confirm before the user could register the
+// label had changed — with no undo, since deleteTrade is a hard DB delete.
+// A modal breaks that: it's a different part of the screen, it needs a
+// deliberate tap on the dialog's own Confirm button, and it matches the
+// ConfirmDialog pattern TradeFormPanel/NoteEditPanel already use for their
+// destructive actions instead of a second, weaker pattern just for rows.
+export function DeleteButton({ onRequestDelete }: { onRequestDelete: () => void }) {
   return (
     <button
-      onClick={() => setConfirming(true)}
+      onClick={onRequestDelete}
       className="text-xs text-ink-muted hover:text-loss"
     >
       Delete

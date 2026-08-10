@@ -4,9 +4,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
 import { getTradeRowEmphasis } from "@/lib/metrics";
 import { Select } from "@/components/shared/Select";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import DesktopRow from "./trades-list/DesktopRow";
 import MobileCard from "./trades-list/MobileCard";
 import {
+  formatDate,
   RowCallbacks,
   ScreenshotLightbox,
   SortColumn,
@@ -70,6 +72,19 @@ function TradesList({
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  // One shared confirm dialog for the whole list, rather than the old
+  // per-row inline "Delete" -> "Confirm" swap (see DeleteButton in
+  // rowParts.tsx for why that pattern was risky). Holding just the id
+  // keeps this cheap even on a long revealed list.
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingDeleteTrade = pendingDeleteId ? trades.find((t) => t.id === pendingDeleteId) ?? null : null;
+
+  const requestDelete = useCallback((id: string) => setPendingDeleteId(id), []);
+  const cancelDelete = useCallback(() => setPendingDeleteId(null), []);
+  const confirmDelete = useCallback(() => {
+    if (pendingDeleteId) onDelete(pendingDeleteId);
+    setPendingDeleteId(null);
+  }, [pendingDeleteId, onDelete]);
   // Compared against totalCount (every trade matching the current filter),
   // not trades.length (just what's currently revealed) — otherwise, with
   // more unrevealed trades below the fold, checking every visible row would
@@ -182,7 +197,7 @@ function TradesList({
   const rowCallbacks: RowCallbacks = {
     onEdit,
     onDuplicate,
-    onDelete,
+    onRequestDelete: requestDelete,
     onOpenScreenshot: openScreenshot,
     onRowClick: handleRowClick,
     onCheckboxClick: handleCheckboxClick,
@@ -330,6 +345,20 @@ function TradesList({
       {lightboxUrl && (
         <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Delete this trade?"
+        description={
+          pendingDeleteTrade
+            ? `This permanently deletes the ${formatDate(pendingDeleteTrade.entry_date)} ${pendingDeleteTrade.instrument} trade. This can't be undone.`
+            : "This permanently deletes the trade. This can't be undone."
+        }
+        confirmLabel="Delete trade"
+        cancelLabel="Cancel"
+        onCancel={cancelDelete}
+        onConfirm={confirmDelete}
+      />
     </>
   );
 }

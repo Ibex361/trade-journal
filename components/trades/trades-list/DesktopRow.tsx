@@ -21,7 +21,7 @@ const DesktopRow = memo(function DesktopRow({
   maxAbsPnl,
   onEdit,
   onDuplicate,
-  onDelete,
+  onRequestDelete,
   onOpenScreenshot,
   onRowClick,
   onCheckboxClick,
@@ -116,7 +116,7 @@ const DesktopRow = memo(function DesktopRow({
           <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-glow">
             Duplicate
           </button>
-          <DeleteButton onConfirm={() => onDelete(t.id)} />
+          <DeleteButton onRequestDelete={() => onRequestDelete(t.id)} />
         </div>
       </td>
     </tr>

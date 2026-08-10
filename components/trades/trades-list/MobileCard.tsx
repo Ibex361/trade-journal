@@ -21,7 +21,7 @@ const MobileCard = memo(function MobileCard({
   maxAbsPnl,
   onEdit,
   onDuplicate,
-  onDelete,
+  onRequestDelete,
   onOpenScreenshot,
   onRowClick,
   onCheckboxClick,
@@ -138,7 +138,7 @@ const MobileCard = memo(function MobileCard({
         <button onClick={() => onDuplicate(t)} className="text-xs text-ink-secondary hover:text-glow">
           Duplicate
         </button>
-        <DeleteButton onConfirm={() => onDelete(t.id)} />
+        <DeleteButton onRequestDelete={() => onRequestDelete(t.id)} />
       </div>
     </div>
   );

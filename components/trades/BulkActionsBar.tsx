@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TagSettingItem } from "@/lib/tagSettings";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 function Chip({
   children,
@@ -55,6 +56,10 @@ export default function BulkActionsBar({
   const [addTagOpen, setAddTagOpen] = useState(false);
   const [removeTagOpen, setRemoveTagOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Was an inline chip-swap ("Delete" -> "Confirm" in the same spot) — same
+  // issue as the per-row DeleteButton (see rowParts.tsx), and arguably
+  // higher-stakes here since it deletes `count` trades at once. Routed
+  // through the shared ConfirmDialog modal instead.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function handlePickAddTag(tag: string) {
@@ -128,24 +133,9 @@ export default function BulkActionsBar({
             Export
           </Chip>
 
-          {confirmingDelete ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] text-ink-secondary whitespace-nowrap">Delete {count}?</span>
-              <Chip onClick={handleDelete} disabled={busy} tone="danger">
-                Confirm
-              </Chip>
-              <button
-                onClick={() => setConfirmingDelete(false)}
-                className="text-xs text-ink-muted hover:text-ink-primary whitespace-nowrap"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <Chip onClick={() => setConfirmingDelete(true)} disabled={busy} tone="danger">
-              Delete
-            </Chip>
-          )}
+          <Chip onClick={() => setConfirmingDelete(true)} disabled={busy} tone="danger">
+            Delete
+          </Chip>
         </div>
 
         {/* Tag pickers render as an inline panel in normal document flow rather
@@ -177,6 +167,16 @@ export default function BulkActionsBar({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${count} trade${count === 1 ? "" : "s"}?`}
+        description="This can't be undone."
+        confirmLabel={busy ? "Deleting…" : "Delete"}
+        cancelLabel="Cancel"
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
