@@ -72,6 +72,33 @@ body {
   box-shadow: 0 0 14px rgba(92, 230, 200, 0.5);
 }
 
+/*
+ * Trade form redesign (design-refinement, 2026-08). A dashed glow border
+ * plus a near-transparent fill marks a field as machine-derived (P&L when
+ * auto-calculated, R-multiple when auto-calculated) rather than typed by
+ * the user — the "auto" caption already said this, but nothing about the
+ * field itself looked different from a plain manual input. Kept as a CSS
+ * class rather than inline Tailwind since the dashed border needs a
+ * non-default width/color combo Tailwind's arbitrary-value syntax makes
+ * noisy to repeat at two call sites.
+ */
+.data-field {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(92, 230, 200, 0.3);
+}
+
+/*
+ * Trade-form section panels — each FormSection renders as a distinct
+ * bordered card (see FormSection.tsx) rather than a divider-separated
+ * stack, so a dense ~20-field form reads as grouped instrument panels
+ * (closer to a trading-terminal ticket) instead of one continuous scroll.
+ */
+.panel-card {
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+}
+
 ::selection {
   background: var(--glow);
   color: #090a11;
