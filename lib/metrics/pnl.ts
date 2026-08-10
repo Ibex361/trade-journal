@@ -95,21 +95,36 @@ export type TradeSummary = {
  * Aggregate stats for a set of trades (e.g. the currently filtered list on
  * the Trades page). Dashboard, Analytics, and Reports should reuse this
  * same function for any equivalent figure so the numbers never drift.
+ *
+ * Single pass over `trades` rather than chained .reduce/.filter/.map calls —
+ * this runs 15+ times per Analytics render alone (once for the range total,
+ * once per group in every breakdown), so collapsing ~5 scans into 1 is a
+ * real constant-factor win at that call volume, even though each individual
+ * call was already O(n).
  */
 export function summarizeTrades(trades: Trade[]): TradeSummary {
   const count = trades.length;
-  const totalPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
-  const wins = trades.filter((t) => t.pnl > 0).length;
-  const losses = trades.filter((t) => t.pnl < 0).length;
+  let totalPnl = 0;
+  let wins = 0;
+  let losses = 0;
+  let rSum = 0;
+  let rCount = 0;
+
+  for (const t of trades) {
+    totalPnl += t.pnl;
+    if (t.pnl > 0) wins++;
+    else if (t.pnl < 0) losses++;
+    if (t.r_multiple != null && !Number.isNaN(t.r_multiple)) {
+      rSum += t.r_multiple;
+      rCount++;
+    }
+  }
+
   const breakeven = count - wins - losses;
   const decided = wins + losses;
   const winRateStrict = count > 0 ? (wins / count) * 100 : null;
   const winRateDecided = decided > 0 ? (wins / decided) * 100 : null;
-
-  const rValues = trades
-    .map((t) => t.r_multiple)
-    .filter((r): r is number => r != null && !Number.isNaN(r));
-  const avgR = rValues.length > 0 ? rValues.reduce((s, r) => s + r, 0) / rValues.length : null;
+  const avgR = rCount > 0 ? rSum / rCount : null;
 
   return { count, totalPnl, winRateStrict, winRateDecided, avgR, wins, losses, breakeven };
 }
@@ -127,8 +142,13 @@ export function pickWinRate(
  * trades to divide by (undefined ratio) or no trades at all.
  */
 export function getProfitFactor(trades: Trade[]): number | null {
-  const grossProfit = trades.filter((t) => t.pnl > 0).reduce((s, t) => s + t.pnl, 0);
-  const grossLoss = Math.abs(trades.filter((t) => t.pnl < 0).reduce((s, t) => s + t.pnl, 0));
+  let grossProfit = 0;
+  let grossLoss = 0;
+  for (const t of trades) {
+    if (t.pnl > 0) grossProfit += t.pnl;
+    else if (t.pnl < 0) grossLoss += t.pnl;
+  }
+  grossLoss = Math.abs(grossLoss);
   if (grossLoss === 0) return null;
   return grossProfit / grossLoss;
 }
@@ -143,9 +163,18 @@ export type Expectancy = {
 /** Average result per trade — both in currency and in R, so either lens is available. */
 export function getExpectancy(trades: Trade[]): Expectancy {
   if (trades.length === 0) return { perTrade: null, perR: null };
-  const perTrade = trades.reduce((s, t) => s + t.pnl, 0) / trades.length;
-  const rValues = trades.map((t) => t.r_multiple).filter((r): r is number => r != null && !Number.isNaN(r));
-  const perR = rValues.length > 0 ? rValues.reduce((s, r) => s + r, 0) / rValues.length : null;
+  let pnlSum = 0;
+  let rSum = 0;
+  let rCount = 0;
+  for (const t of trades) {
+    pnlSum += t.pnl;
+    if (t.r_multiple != null && !Number.isNaN(t.r_multiple)) {
+      rSum += t.r_multiple;
+      rCount++;
+    }
+  }
+  const perTrade = pnlSum / trades.length;
+  const perR = rCount > 0 ? rSum / rCount : null;
   return { perTrade, perR };
 }
 
