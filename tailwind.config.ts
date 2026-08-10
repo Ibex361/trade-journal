@@ -49,7 +49,6 @@ const config: Config = {
       boxShadow: {
         glass: "0 20px 50px rgba(0,0,0,.35)",
         glow: "0 0 18px rgba(92,230,200,.5)",
-        "glow-loss": "0 0 18px rgba(251,113,133,.45)",
       },
       transitionDuration: {
         fast: "150ms",
