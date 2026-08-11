@@ -50,10 +50,20 @@ jobs:
       - name: Check out repo
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL 16 client tools
+      - name: Install PostgreSQL client tools
+        # pg_dump must be the same major version as the server (or newer) —
+        # Ubuntu's own apt repo only ships one fixed Postgres version (was
+        # 16, which broke once Supabase moved to Postgres 17), so this adds
+        # the official PGDG apt repo instead, which always carries the
+        # latest major version, and installs the unversioned "postgresql-client"
+        # meta-package so this keeps working automatically on Supabase's
+        # next major-version upgrade too.
         run: |
+          sudo apt-get install -y curl ca-certificates gnupg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
+          echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
+          sudo apt-get install -y postgresql-client
 
       - name: Verify SUPABASE_DB_URL secret is set
         env:
