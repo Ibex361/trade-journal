@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 
 /**
  * Two conventions for win rate, both computed off the same trades so they
@@ -35,19 +35,21 @@ export function WinRateModeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    // Syncs from localStorage (an external system) on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored === "strict" || stored === "decided") setModeState(stored);
   }, []);
 
-  function setMode(next: WinRateMode) {
+  const setMode = useCallback((next: WinRateMode) => {
     setModeState(next);
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY, next);
     }
-  }
+  }, []);
 
-  return (
-    <WinRateModeContext.Provider value={{ mode, setMode }}>{children}</WinRateModeContext.Provider>
-  );
+  const value = useMemo(() => ({ mode, setMode }), [mode, setMode]);
+
+  return <WinRateModeContext.Provider value={value}>{children}</WinRateModeContext.Provider>;
 }
 
 export function useWinRateMode() {

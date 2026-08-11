@@ -1,154 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
+import { getTradeRowEmphasis } from "@/lib/metrics";
+import { Select } from "@/components/shared/Select";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import DesktopRow from "./trades-list/DesktopRow";
+import MobileCard from "./trades-list/MobileCard";
+import {
+  formatDate,
+  RowCallbacks,
+  ScreenshotLightbox,
+  SortColumn,
+  SortHeader,
+  SortState,
+} from "./trades-list/rowParts";
 
-export type SortColumn = "entry_date" | "instrument" | "pnl" | "r_multiple";
-export type SortState = { column: SortColumn; direction: "asc" | "desc" };
+export type { SortColumn, SortState };
 
 const LONG_PRESS_MS = 450;
 
-function formatDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function PnlText({ value, className = "" }: { value: number; className?: string }) {
-  const color = value > 0 ? "text-gain" : value < 0 ? "text-loss" : "text-ink-secondary";
-  const sign = value > 0 ? "+" : "";
-  return (
-    <span className={`font-mono ${color} ${className}`}>
-      {sign}
-      {value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-    </span>
-  );
-}
-
-function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
-  const [confirming, setConfirming] = useState(false);
-
-  if (confirming) {
-    return (
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onConfirm}
-          className="text-xs text-loss font-medium hover:underline"
-        >
-          Confirm
-        </button>
-        <button
-          onClick={() => setConfirming(false)}
-          className="text-xs text-ink-muted hover:text-ink-primary"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={() => setConfirming(true)}
-      className="text-xs text-ink-muted hover:text-loss"
-    >
-      Delete
-    </button>
-  );
-}
-
-function RulesBadge({ value }: { value: boolean | null }) {
-  if (value === null) return <span className="text-ink-muted text-xs">—</span>;
-  return value ? (
-    <span className="text-gain text-xs">Yes</span>
-  ) : (
-    <span className="text-loss text-xs">No</span>
-  );
-}
-
-function ScreenshotThumb({ url, onOpen }: { url: string | null; onOpen: () => void }) {
-  if (!url) return <span className="text-ink-muted text-xs">—</span>;
-  return (
-    <button
-      onClick={onOpen}
-      className="w-9 h-9 rounded-md overflow-hidden border border-surface-border hover:border-brass/60 transition-colors"
-      aria-label="View chart screenshot"
-    >
-      <img src={url} alt="" className="w-full h-full object-cover" />
-    </button>
-  );
-}
-
-function ScreenshotLightbox({ url, onClose }: { url: string; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
-      <img
-        src={url}
-        alt="Trade chart screenshot"
-        className="relative max-w-full max-h-full rounded-lg border border-surface-border"
-      />
-      <button
-        onClick={onClose}
-        className="absolute top-6 right-6 text-ink-primary/80 hover:text-ink-primary text-2xl leading-none"
-        aria-label="Close"
-      >
-        ✕
-      </button>
-    </div>
-  );
-}
-
-function SortHeader({
-  label,
-  column,
-  sort,
-  onSortChange,
-  align = "left",
-}: {
-  label: string;
-  column: SortColumn;
-  sort: SortState;
-  onSortChange: (s: SortState) => void;
-  align?: "left" | "right";
-}) {
-  const active = sort.column === column;
-
-  function handleClick() {
-    if (active) {
-      onSortChange({ column, direction: sort.direction === "asc" ? "desc" : "asc" });
-    } else {
-      onSortChange({ column, direction: column === "instrument" ? "asc" : "desc" });
-    }
-  }
-
-  return (
-    <button
-      onClick={handleClick}
-      className={`flex items-center gap-1 font-medium transition-colors hover:text-ink-primary ${
-        active ? "text-ink-primary" : ""
-      } ${align === "right" ? "ml-auto" : ""}`}
-    >
-      {label}
-      <span className={`text-brass ${active ? "" : "opacity-0"}`}>
-        {sort.direction === "asc" ? "↑" : "↓"}
-      </span>
-    </button>
-  );
-}
-
-export default function TradesList({
+// Previously a single 712-line file. DesktopRow, MobileCard, and the small
+// shared row primitives (PnlText, DeleteButton, RulesBadge, ScreenshotThumb,
+// ScreenshotLightbox, SortHeader, formatDate/formatTime) now live under
+// ./trades-list — mirrors the trade-form/ split of TradeFormPanel.tsx.
+// This file keeps the selection/long-press state and the desktop table /
+// mobile card shells that both row components render into.
+function TradesList({
   trades,
+  totalCount,
+  onLoadMore,
   onEdit,
   onDuplicate,
   onDelete,
@@ -162,6 +43,21 @@ export default function TradesList({
   onEnterSelectionMode,
 }: {
   trades: Trade[];
+  /**
+   * Count of all trades matching the current filter/sort, before the
+   * reveal-count slice below is applied — i.e. `trades.length` is what's
+   * currently rendered, `totalCount` is what's rendered once every "load
+   * more" batch has fired. Drives the "Showing N of M" label and whether
+   * the scroll sentinel below has anything left to reveal.
+   */
+  totalCount: number;
+  /**
+   * Called when the scroll sentinel enters the viewport. Owner (the Trades
+   * page) is responsible for growing revealCount — this component has no
+   * opinion on batch size, it only reports "the user scrolled to the end
+   * of what's currently shown."
+   */
+  onLoadMore: () => void;
   onEdit: (trade: Trade) => void;
   onDuplicate: (trade: Trade) => void;
   onDelete: (id: string) => void;
@@ -176,7 +72,37 @@ export default function TradesList({
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
-  const allSelected = trades.length > 0 && trades.every((t) => selectedIds.has(t.id));
+  // One shared confirm dialog for the whole list, rather than the old
+  // per-row inline "Delete" -> "Confirm" swap (see DeleteButton in
+  // rowParts.tsx for why that pattern was risky). Holding just the id
+  // keeps this cheap even on a long revealed list.
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingDeleteTrade = pendingDeleteId ? trades.find((t) => t.id === pendingDeleteId) ?? null : null;
+
+  const requestDelete = useCallback((id: string) => setPendingDeleteId(id), []);
+  const cancelDelete = useCallback(() => setPendingDeleteId(null), []);
+  const confirmDelete = useCallback(() => {
+    if (pendingDeleteId) onDelete(pendingDeleteId);
+    setPendingDeleteId(null);
+  }, [pendingDeleteId, onDelete]);
+  // Compared against totalCount (every trade matching the current filter),
+  // not trades.length (just what's currently revealed) — otherwise, with
+  // more unrevealed trades below the fold, checking every visible row would
+  // show this as "all selected" while onToggleSelectAll (which operates on
+  // the full filtered set) would still have more to select. Keeping this
+  // checkbox's checked state and its click behavior talking about the same
+  // set avoids that mismatch.
+  const allSelected = totalCount > 0 && selectedIds.size === totalCount;
+
+  // Content-aware: scale each row's P&L bar to the largest mover currently
+  // in view, and flag the single best/worst visible trade — mirrors the
+  // same treatment on Dashboard's Recent trades feed and Reports' monthly
+  // table (both go through the same getTradeRowEmphasis helper so the
+  // three views can never disagree). Memoized on `trades` specifically —
+  // this used to re-scan the whole list on every render, including every
+  // row selection, which is exactly what showed up as a 520ms INP warning
+  // on tap.
+  const { maxAbsPnl, bestId, worstId } = useMemo(() => getTradeRowEmphasis(trades), [trades]);
 
   // Long-press (or mouse-hold) support so selection mode can be entered by
   // pressing a trade directly, the way most mobile apps handle multi-select,
@@ -184,50 +110,103 @@ export default function TradesList({
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
 
-  function clearPressTimer() {
+  const clearPressTimer = useCallback(() => {
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
-  }
+  }, []);
 
-  function startPress(id: string, target: EventTarget) {
-    if ((target as HTMLElement).closest("button, a, input")) return;
-    longPressFired.current = false;
-    clearPressTimer();
-    pressTimer.current = setTimeout(() => {
-      longPressFired.current = true;
-      onEnterSelectionMode(id);
-    }, LONG_PRESS_MS);
-  }
+  const startPress = useCallback(
+    (id: string, target: EventTarget) => {
+      if ((target as HTMLElement).closest("button, a, input")) return;
+      longPressFired.current = false;
+      clearPressTimer();
+      pressTimer.current = setTimeout(() => {
+        longPressFired.current = true;
+        onEnterSelectionMode(id);
+      }, LONG_PRESS_MS);
+    },
+    [clearPressTimer, onEnterSelectionMode]
+  );
+
+  const onContextMenuGuard = useCallback((e: React.MouseEvent) => {
+    if (longPressFired.current) e.preventDefault();
+  }, []);
 
   // In selection mode, tapping anywhere on the row (outside its buttons)
   // toggles that row, not just the checkbox — matching how mail/file apps
   // behave once you're already in a multi-select state.
-  function handleRowClick(e: React.MouseEvent, id: string) {
-    if (longPressFired.current) {
-      longPressFired.current = false;
-      return;
-    }
-    if (!selectionMode) return;
-    if ((e.target as HTMLElement).closest("button, a")) return;
-    onToggleSelect(id);
-  }
+  const handleRowClick = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      if (longPressFired.current) {
+        longPressFired.current = false;
+        return;
+      }
+      if (!selectionMode) return;
+      if ((e.target as HTMLElement).closest("button, a")) return;
+      onToggleSelect(id);
+    },
+    [selectionMode, onToggleSelect]
+  );
 
   // Shift-click extends the selection to every row between the last checkbox
   // clicked and this one (inclusive) — the standard file-manager convention,
   // so selecting a long run of trades doesn't mean clicking each one.
-  function handleCheckboxClick(e: React.MouseEvent<HTMLInputElement>, id: string, index: number) {
-    e.stopPropagation();
-    if (e.shiftKey && lastClickedIndex !== null) {
-      e.preventDefault();
-      const [start, end] = index < lastClickedIndex ? [index, lastClickedIndex] : [lastClickedIndex, index];
-      onSelectRange(trades.slice(start, end + 1).map((t) => t.id));
-    } else {
-      onToggleSelect(id);
-    }
-    setLastClickedIndex(index);
-  }
+  const handleCheckboxClick = useCallback(
+    (e: React.MouseEvent<HTMLInputElement>, id: string, index: number) => {
+      e.stopPropagation();
+      if (e.shiftKey && lastClickedIndex !== null) {
+        e.preventDefault();
+        const [start, end] = index < lastClickedIndex ? [index, lastClickedIndex] : [lastClickedIndex, index];
+        onSelectRange(trades.slice(start, end + 1).map((t) => t.id));
+      } else {
+        onToggleSelect(id);
+      }
+      setLastClickedIndex(index);
+    },
+    [lastClickedIndex, trades, onSelectRange, onToggleSelect]
+  );
+
+  const openScreenshot = useCallback((url: string) => setLightboxUrl(url), []);
+
+  // Infinite-scroll trigger: an IntersectionObserver on a sentinel div below
+  // the last rendered row, rather than an onScroll pixel-threshold listener.
+  // Avoids scroll-event throttling and works regardless of row height, which
+  // varies here (desktop table rows vs. mobile cards, and either can grow
+  // when a screenshot thumb or long notes value is present). Re-observes
+  // whenever there's more to reveal (trades.length < totalCount); once
+  // everything is revealed the sentinel unmounts and observation stops.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = trades.length < totalCount;
+
+  useEffect(() => {
+    if (!hasMore) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { rootMargin: "400px" } // fire a bit before the sentinel is actually on-screen, so the next batch is ready by the time the user scrolls to it
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore]);
+
+  const rowCallbacks: RowCallbacks = {
+    onEdit,
+    onDuplicate,
+    onRequestDelete: requestDelete,
+    onOpenScreenshot: openScreenshot,
+    onRowClick: handleRowClick,
+    onCheckboxClick: handleCheckboxClick,
+    onPointerDown: startPress,
+    onPointerUp: clearPressTimer,
+    onPointerLeave: clearPressTimer,
+    onPointerCancel: clearPressTimer,
+    onContextMenuGuard,
+  };
 
   if (trades.length === 0) {
     return (
@@ -251,12 +230,12 @@ export default function TradesList({
                     checked={allSelected}
                     onChange={onToggleSelectAll}
                     aria-label="Select all trades"
-                    className="accent-brass"
+                    className="accent-glow"
                   />
                 </th>
               )}
               <th className="px-4 py-3">
-                <SortHeader label="Date" column="entry_date" sort={sort} onSortChange={onSortChange} />
+                <SortHeader label="Entry" column="entry_date" sort={sort} onSortChange={onSortChange} />
               </th>
               <th className="px-4 py-3">
                 <SortHeader label="Instrument" column="instrument" sort={sort} onSortChange={onSortChange} />
@@ -278,73 +257,17 @@ export default function TradesList({
           </thead>
           <tbody>
             {trades.map((t, index) => (
-              <tr
+              <DesktopRow
                 key={t.id}
-                onPointerDown={(e) => startPress(t.id, e.target)}
-                onPointerUp={clearPressTimer}
-                onPointerLeave={clearPressTimer}
-                onPointerCancel={clearPressTimer}
-                onContextMenu={(e) => {
-                  if (longPressFired.current) e.preventDefault();
-                }}
-                onClick={(e) => handleRowClick(e, t.id)}
-                className={`border-b border-surface-border last:border-0 transition-colors select-none ${
-                  selectedIds.has(t.id) ? "bg-brass/10 hover:bg-brass/15" : "hover:bg-surface-2/50"
-                } ${selectionMode ? "cursor-pointer" : ""}`}
-                style={{ touchAction: "manipulation" }}
-              >
-                {selectionMode && (
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(t.id)}
-                      onChange={() => {}}
-                      onClick={(e) => handleCheckboxClick(e, t.id, index)}
-                      aria-label={`Select trade ${t.instrument}`}
-                      className="accent-brass"
-                    />
-                  </td>
-                )}
-                <td className="px-4 py-3 font-mono text-ink-secondary whitespace-nowrap">
-                  {formatDate(t.entry_date)}
-                </td>
-                <td className="px-4 py-3 font-medium">{t.instrument}</td>
-                <td className="px-4 py-3 capitalize text-ink-secondary">
-                  {t.direction ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-ink-secondary">{t.asset_class ?? "—"}</td>
-                <td className="px-4 py-3 text-ink-secondary">{t.strategy ?? "—"}</td>
-                <td className="px-4 py-3 text-ink-secondary">{t.session ?? "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <PnlText value={t.pnl} />
-                </td>
-                <td className="px-4 py-3 text-right font-mono text-ink-secondary">
-                  {t.r_multiple !== null ? t.r_multiple.toFixed(1) : "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <RulesBadge value={t.rules_followed} />
-                </td>
-                <td className="px-4 py-3">
-                  <ScreenshotThumb url={t.screenshot_url} onOpen={() => setLightboxUrl(t.screenshot_url)} />
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      onClick={() => onEdit(t)}
-                      className="text-xs text-ink-secondary hover:text-brass"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => onDuplicate(t)}
-                      className="text-xs text-ink-secondary hover:text-brass"
-                    >
-                      Duplicate
-                    </button>
-                    <DeleteButton onConfirm={() => onDelete(t.id)} />
-                  </div>
-                </td>
-              </tr>
+                trade={t}
+                index={index}
+                selectionMode={selectionMode}
+                isSelected={selectedIds.has(t.id)}
+                isBest={bestId === t.id}
+                isWorst={worstId === t.id}
+                maxAbsPnl={maxAbsPnl}
+                {...rowCallbacks}
+              />
             ))}
           </tbody>
         </table>
@@ -355,19 +278,19 @@ export default function TradesList({
           wasn't reachable at all on mobile. */}
       <div className="md:hidden flex items-center gap-2 mb-3">
         <span className="text-[11px] text-ink-secondary">Sort by</span>
-        <select
+        <Select
           value={sort.column}
-          onChange={(e) => {
-            const column = e.target.value as SortColumn;
+          onChange={(v) => {
+            const column = v as SortColumn;
             onSortChange({ column, direction: column === "instrument" ? "asc" : "desc" });
           }}
-          className="bg-surface-2 border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary"
-        >
-          <option value="entry_date">Date</option>
-          <option value="instrument">Instrument</option>
-          <option value="pnl">P&amp;L</option>
-          <option value="r_multiple">R</option>
-        </select>
+          options={[
+            { value: "entry_date", label: "Entry date" },
+            { value: "instrument", label: "Instrument" },
+            { value: "pnl", label: "P&L" },
+            { value: "r_multiple", label: "R" },
+          ]}
+        />
         <button
           type="button"
           onClick={() => onSortChange({ column: sort.column, direction: sort.direction === "asc" ? "desc" : "asc" })}
@@ -387,100 +310,60 @@ export default function TradesList({
               checked={allSelected}
               onChange={onToggleSelectAll}
               aria-label="Select all trades"
-              className="accent-brass"
+              className="accent-glow"
             />
             <span className="text-[11px] text-ink-secondary">Select all</span>
           </div>
         )}
         {trades.map((t, index) => (
-          <div
+          <MobileCard
             key={t.id}
-            onPointerDown={(e) => startPress(t.id, e.target)}
-            onPointerUp={clearPressTimer}
-            onPointerLeave={clearPressTimer}
-            onPointerCancel={clearPressTimer}
-            onContextMenu={(e) => {
-              if (longPressFired.current) e.preventDefault();
-            }}
-            onClick={(e) => handleRowClick(e, t.id)}
-            className={`border rounded-card p-4 transition-colors select-none ${
-              selectedIds.has(t.id)
-                ? "bg-brass/10 border-brass/40"
-                : "bg-surface-1 border-surface-border"
-            }`}
-            style={{ touchAction: "manipulation" }}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                {selectionMode && (
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(t.id)}
-                    onChange={() => {}}
-                    onClick={(e) => handleCheckboxClick(e, t.id, index)}
-                    aria-label={`Select trade ${t.instrument}`}
-                    className="accent-brass mt-1"
-                  />
-                )}
-                <span className="signal-bar h-8" />
-                <div>
-                  <p className="font-medium">{t.instrument}</p>
-                  <p className="text-xs text-ink-secondary font-mono">
-                    {formatDate(t.entry_date)} · <span className="capitalize">{t.direction ?? "—"}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <ScreenshotThumb url={t.screenshot_url} onOpen={() => setLightboxUrl(t.screenshot_url)} />
-                <PnlText value={t.pnl} className="text-base" />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-ink-secondary">
-              {t.asset_class && <span>{t.asset_class}</span>}
-              {t.strategy && <span>{t.strategy}</span>}
-              {t.session && <span>{t.session}</span>}
-              {t.r_multiple !== null && <span className="font-mono">{t.r_multiple.toFixed(1)}R</span>}
-              <span className="flex items-center gap-1">
-                Rules: <RulesBadge value={t.rules_followed} />
-              </span>
-            </div>
-
-            {t.tags && t.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {t.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-[11px] text-brass bg-brass/10 border border-brass/25 rounded-full px-2 py-0.5"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-surface-border">
-              <button
-                onClick={() => onEdit(t)}
-                className="text-xs text-ink-secondary hover:text-brass"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => onDuplicate(t)}
-                className="text-xs text-ink-secondary hover:text-brass"
-              >
-                Duplicate
-              </button>
-              <DeleteButton onConfirm={() => onDelete(t.id)} />
-            </div>
-          </div>
+            trade={t}
+            index={index}
+            selectionMode={selectionMode}
+            isSelected={selectedIds.has(t.id)}
+            isBest={bestId === t.id}
+            isWorst={worstId === t.id}
+            maxAbsPnl={maxAbsPnl}
+            {...rowCallbacks}
+          />
         ))}
       </div>
+
+      {/* Reveal-count status + scroll sentinel. Shown even once hasMore is
+          false (as "Showing M of M") so the count doesn't just disappear —
+          only the sentinel itself is conditionally rendered, since an
+          IntersectionObserver on a permanently-offscreen div would never
+          need to fire once everything's loaded. */}
+      <div className="flex items-center justify-center py-4">
+        <span className="text-[11px] text-ink-muted">
+          Showing {trades.length} of {totalCount} trade{totalCount === 1 ? "" : "s"}
+        </span>
+      </div>
+      {hasMore && <div ref={sentinelRef} aria-hidden="true" className="h-px" />}
 
       {lightboxUrl && (
         <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Delete this trade?"
+        description={
+          pendingDeleteTrade
+            ? `This permanently deletes the ${formatDate(pendingDeleteTrade.entry_date)} ${pendingDeleteTrade.instrument} trade. This can't be undone.`
+            : "This permanently deletes the trade. This can't be undone."
+        }
+        confirmLabel="Delete trade"
+        cancelLabel="Cancel"
+        onCancel={cancelDelete}
+        onConfirm={confirmDelete}
+      />
     </>
   );
 }
+
+// Defense-in-depth: bails out entirely if TradesList's own props haven't
+// changed (e.g. an unrelated bit of Trades-page state like a modal open/
+// close), on top of the per-row memoization on DesktopRow/MobileCard.
+export default memo(TradesList);

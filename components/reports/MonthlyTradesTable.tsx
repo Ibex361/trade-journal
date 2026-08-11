@@ -1,6 +1,8 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { Trade } from "@/lib/trades";
+import { getTradeRowEmphasis } from "@/lib/metrics";
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -9,14 +11,21 @@ function formatDate(d: string) {
   });
 }
 
-function PnlText({ value }: { value: number }) {
+function PnlCell({ value, maxAbsPnl }: { value: number; maxAbsPnl: number }) {
   const color = value > 0 ? "text-gain" : value < 0 ? "text-loss" : "text-ink-secondary";
   const sign = value > 0 ? "+" : "";
+  const barColor = value > 0 ? "bg-gain" : value < 0 ? "bg-loss" : "bg-ink-muted";
+  const pct = maxAbsPnl > 0 ? Math.max(4, (Math.abs(value) / maxAbsPnl) * 100) : 0;
   return (
-    <span className={`font-mono ${color}`}>
-      {sign}
-      {value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-    </span>
+    <div className="inline-flex flex-col items-end gap-1">
+      <span className={`font-mono ${color}`}>
+        {sign}
+        {value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      </span>
+      <div className="print:hidden w-12 h-1 rounded-full bg-surface-2 overflow-hidden">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
   );
 }
 
@@ -34,10 +43,15 @@ function RulesBadge({ value }: { value: boolean | null }) {
  * Reports page itself and, unchanged, in the printed report — this is why
  * it has no edit/delete actions or screenshot column.
  */
-export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
-  const sorted = [...trades].sort(
-    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
+  const sorted = useMemo(
+    () =>
+      [...trades].sort(
+        (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)
+      ),
+    [trades]
   );
+  const { maxAbsPnl } = useMemo(() => getTradeRowEmphasis(sorted), [sorted]);
 
   if (sorted.length === 0) {
     return (
@@ -84,7 +98,7 @@ export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
                   {t.session ?? "—"}
                 </td>
                 <td className="px-4 py-3 print:px-2 print:py-1 text-right">
-                  <PnlText value={t.pnl} />
+                  <PnlCell value={t.pnl} maxAbsPnl={maxAbsPnl} />
                 </td>
                 <td className="px-4 py-3 print:px-2 print:py-1 text-right font-mono text-ink-secondary">
                   {t.r_multiple !== null ? t.r_multiple.toFixed(1) : "—"}
@@ -112,7 +126,7 @@ export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
                   </p>
                 </div>
               </div>
-              <PnlText value={t.pnl} />
+              <PnlCell value={t.pnl} maxAbsPnl={maxAbsPnl} />
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-ink-secondary">
               {t.strategy && <span>{t.strategy}</span>}
@@ -128,3 +142,7 @@ export default function MonthlyTradesTable({ trades }: { trades: Trade[] }) {
     </>
   );
 }
+
+// Memoized so other Reports state (calendar, spotlight, tag list)
+// re-rendering doesn't force this table to re-render along with it.
+export default memo(MonthlyTradesTable);

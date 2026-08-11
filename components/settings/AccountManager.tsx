@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { createAccount, renameAccount, updateAccountDetails, archiveAccount, restoreAccount, deleteAccountPermanently } from "@/lib/accounts";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
 export default function AccountManager() {
-  const { accounts, archivedAccounts, refreshAccounts, selectAccount } = useAccount();
+  const { accounts, archivedAccounts, refreshAccounts } = useAccount();
   const [showNew, setShowNew] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -146,7 +147,7 @@ export default function AccountManager() {
                     <button
                       onClick={() => handleRename(acc.id)}
                       disabled={busy}
-                      className="text-sm text-brass"
+                      className="text-sm text-glow"
                     >
                       Save
                     </button>
@@ -169,7 +170,7 @@ export default function AccountManager() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{acc.name}</span>
                     {acc.is_demo && (
-                      <span className="text-[11px] uppercase tracking-wide bg-brass/15 text-brass px-2 py-0.5 rounded-full">
+                      <span className="text-[11px] uppercase tracking-wide bg-glow/15 text-glow px-2 py-0.5 rounded-full">
                         Demo
                       </span>
                     )}
@@ -244,17 +245,13 @@ export default function AccountManager() {
                   />
                 </div>
                 <p className="text-xs text-ink-muted">
-                  Changing starting balance recalculates this account's equity curve and returns from that new baseline.
+                  Changing starting balance recalculates this account&apos;s equity curve and returns from that new baseline.
                 </p>
                 {editDetailsError && <p className="text-xs text-loss">{editDetailsError}</p>}
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => handleEditDetails(acc.id)}
-                    disabled={busy}
-                    className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
-                  >
+                  <Button size="sm" onClick={() => handleEditDetails(acc.id)} disabled={busy}>
                     Save changes
-                  </button>
+                  </Button>
                   <button
                     onClick={() => {
                       setEditingDetailsId(null);
@@ -305,13 +302,9 @@ export default function AccountManager() {
           </div>
           {createError && <p className="text-xs text-loss">{createError}</p>}
           <div className="flex gap-3">
-            <button
-              onClick={handleCreate}
-              disabled={busy}
-              className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
-            >
+            <Button size="sm" onClick={handleCreate} disabled={busy}>
               Create account
-            </button>
+            </Button>
             <button
               onClick={() => {
                 setShowNew(false);
@@ -326,7 +319,7 @@ export default function AccountManager() {
       ) : (
         <button
           onClick={() => setShowNew(true)}
-          className="mt-4 text-sm text-brass hover:text-brass-dim"
+          className="mt-4 text-sm text-glow hover:text-glow-dim"
         >
           + Add account
         </button>
@@ -353,7 +346,7 @@ export default function AccountManager() {
                       <button
                         onClick={() => handleRestore(acc.id)}
                         disabled={busy}
-                        className="text-xs text-brass"
+                        className="text-xs text-glow"
                       >
                         Restore
                       </button>
@@ -371,7 +364,7 @@ export default function AccountManager() {
                   {deletingId === acc.id && (
                     <div className="mt-3 pt-3 border-t border-surface-border">
                       <p className="text-xs text-loss mb-2">
-                        This deletes "{acc.name}" and every trade in it, forever.
+                        This deletes &quot;{acc.name}&quot; and every trade in it, forever.
                         Type the account name to confirm.
                       </p>
                       <div className="flex gap-2">

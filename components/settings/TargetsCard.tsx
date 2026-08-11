@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { updateTargets, resetDemoData } from "@/lib/accounts";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
 export default function TargetsCard() {
   const { selectedAccount, refreshAccounts } = useAccount();
@@ -14,11 +15,18 @@ export default function TargetsCard() {
   const [resetting, setResetting] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  // Keyed on the id, not the object — same reasoning as the notes-fetch
+  // effect in app/notes/page.tsx (spurious object-identity churn from
+  // AccountContext shouldn't re-trigger this fetch).
   useEffect(() => {
     if (!selectedAccount) return;
+    // Syncs the form fields from the selected account (an external
+    // source of truth) whenever the account changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRisk(selectedAccount.target_risk_pct?.toString() ?? "");
     setMonthlyPnl(selectedAccount.target_monthly_pnl?.toString() ?? "");
     setWinrate(selectedAccount.target_monthly_winrate?.toString() ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   if (!selectedAccount) return null;
@@ -80,13 +88,9 @@ export default function TargetsCard() {
       </div>
 
       <div className="flex items-center gap-4 mt-5">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
-        >
+        <Button size="sm" onClick={handleSave} disabled={saving}>
           {saving ? "Saving…" : "Save targets"}
-        </button>
+        </Button>
         {savedFlash && <span className="text-xs text-gain">Saved</span>}
       </div>
 

@@ -1,802 +1,116 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useAccount } from "@/lib/AccountContext";
-import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
-import { createTrade, updateTrade, Trade, TradeInput, Direction } from "@/lib/trades";
-import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
-import { localDateString } from "@/lib/date";
-import { uploadScreenshot, deleteScreenshotByUrl, validateScreenshotFile } from "@/lib/screenshots";
+import { useTradeForm } from "@/hooks/useTradeForm";
+import { Trade } from "@/lib/trades";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import { NotesIcon } from "@/components/icons";
+import TradeFormFields from "./trade-form/TradeFormFields";
 
-const emptyForm = {
-  entry_date: localDateString(),
-  instrument: "",
-  asset_class: "",
-  strategy: "",
-  session: "",
-  emotion: "",
-  direction: "long" as Direction,
-  entry_price: "",
-  exit_price: "",
-  stop_loss_price: "",
-  size: "",
-  pnl: "",
-  r_multiple: "",
-  rules_followed: null as boolean | null,
-  notes: "",
-  tags: [] as string[],
-};
-
-// A small absolute tolerance for comparing a stored figure against a
-// freshly-recomputed one. Floating point arithmetic on prices (e.g.
-// 1.105 - 1.1 in JS) essentially never lands on the exact same bit
-// pattern twice, so a strict equality check would treat almost every
-// genuinely auto-calculated trade as "manually overridden."
-const CALC_MATCH_TOLERANCE = 0.005;
-
-function matchesCalc(stored: number | null, calculated: number | null): boolean {
-  if (stored == null || calculated == null) return false;
-  return Math.abs(stored - calculated) < CALC_MATCH_TOLERANCE;
-}
-
-// Whether the P&L / R-multiple fields should start in auto mode: always
-// true for a brand new trade, or for an existing one whose stored value
-// matches what entry/exit/size (or entry/exit/stop) imply. This has to be
-// computed synchronously, as part of the initial state, rather than in a
-// useEffect that runs after mount — otherwise the very first render briefly
-// sees the default "auto" state and the sync effect below overwrites a
-// genuinely manual figure (e.g. a real fee-adjusted P&L) with the raw
-// auto-calculated one before this check has had a chance to correct it.
-function initialPnlAuto(trade: Trade | null): boolean {
-  if (!trade) return true;
-  const autoPnl = calculatePnl(trade.direction, trade.entry_price, trade.exit_price, trade.size);
-  return matchesCalc(trade.pnl, autoPnl);
-}
-
-function initialRAuto(trade: Trade | null): boolean {
-  if (!trade) return true;
-  const autoR = calculateRMultiple(
-    trade.direction,
-    trade.entry_price,
-    trade.exit_price,
-    trade.stop_loss_price
-  );
-  return matchesCalc(trade.r_multiple, autoR);
-}
-
-// Rounds off binary floating-point noise (e.g. 129.99999999999997 from
-// (110-100)*13) without collapsing genuine sub-cent precision to zero.
-// The P&L field previously used toFixed(2) here, which is a *display*
-// rounding rule — applying it before the value is ever saved meant a real
-// P&L of $0.004 was stored as exactly $0.00, indistinguishable from an
-// actual breakeven trade everywhere else in the app (win rate, streaks,
-// color coding). Components that display P&L already round to 2 decimals
-// on their own for presentation; this only removes noise past the 8th
-// decimal, well beyond what any real trade needs.
-function roundForStorage(value: number): number {
-  return Math.round(value * 1e8) / 1e8;
-}
-
-type FormState = typeof emptyForm;
-
-// Human-readable labels for validation messages.
-const FIELD_LABELS: Record<string, string> = {
-  entry_date: "Date",
-  instrument: "Instrument",
-  entry_price: "Entry price",
-  exit_price: "Exit price",
-  size: "Size",
-  pnl: "P&L (or fill in entry price, exit price, and size so it can be calculated)",
-};
-
-function tradeToForm(trade: Trade): FormState {
-  return {
-    entry_date: trade.entry_date,
-    instrument: trade.instrument,
-    asset_class: trade.asset_class ?? "",
-    strategy: trade.strategy ?? "",
-    session: trade.session ?? "",
-    emotion: trade.emotion ?? "",
-    direction: (trade.direction ?? "long") as Direction,
-    entry_price: trade.entry_price?.toString() ?? "",
-    exit_price: trade.exit_price?.toString() ?? "",
-    stop_loss_price: trade.stop_loss_price?.toString() ?? "",
-    size: trade.size?.toString() ?? "",
-    pnl: trade.pnl?.toString() ?? "",
-    r_multiple: trade.r_multiple?.toString() ?? "",
-    rules_followed: trade.rules_followed,
-    notes: trade.notes ?? "",
-    tags: trade.tags ?? [],
-  };
-}
-
+/**
+ * Slide-over panel for creating, editing, or duplicating a trade. All the
+ * state, effects, and save logic live in useTradeForm — this component is
+ * just the shell (backdrop, header, discard-confirm dialog) plus
+ * TradeFormFields for the actual form markup. Previously a single
+ * 1000+ line component; see useTradeForm's docstring and the
+ * trade-journal-webapp memory for why it was split.
+ */
 export default function TradeFormPanel({
   trade,
   duplicateFrom,
   onClose,
   onSaved,
+  onOpenDiary,
+  openingDiary,
 }: {
   trade: Trade | null;
   duplicateFrom?: Trade | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (savedTrade: Trade) => void;
+  // Only meaningful for an existing trade (a brand-new/duplicated trade
+  // has no id yet to link a diary entry to) — see app/trades/page.tsx's
+  // handleOpenDiary for what this actually does (find-or-create the
+  // linked note, then redirect to Notes).
+  onOpenDiary?: (trade: Trade) => void;
+  openingDiary?: boolean;
 }) {
-  const { selectedAccount } = useAccount();
-  const [form, setForm] = useState<FormState>(() => {
-    if (trade) return tradeToForm(trade);
-    if (duplicateFrom) return { ...tradeToForm(duplicateFrom), entry_date: localDateString() };
-    return emptyForm;
-  });
-  const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
-
-  // Whether the P&L / R-multiple fields should keep tracking the
-  // auto-calculation, or have been taken over by manual entry.
-  // Starts in manual mode when editing an existing trade whose stored
-  // value doesn't match what auto-calc would produce (so we never
-  // silently overwrite a deliberate manual figure) — see initialPnlAuto.
-  const [pnlAuto, setPnlAuto] = useState(() => initialPnlAuto(trade ?? duplicateFrom ?? null));
-  const [rAuto, setRAuto] = useState(() => initialRAuto(trade ?? duplicateFrom ?? null));
-
-  // Chart screenshot: file staged for upload, current preview (existing
-  // trade's screenshot_url or a local object URL for a newly-picked file),
-  // and whether the user explicitly cleared an existing screenshot.
-  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
-  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(
-    trade?.screenshot_url ?? null
-  );
-  const [screenshotRemoved, setScreenshotRemoved] = useState(false);
-  const [screenshotError, setScreenshotError] = useState<string | null>(null);
-  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!selectedAccount) return;
-    fetchDropdownItems(selectedAccount.id).then(({ data }) => {
-      if (data) setDropdowns(data as DropdownItem[]);
-    });
-  }, [selectedAccount?.id]);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // Make the browser/hardware back button close this panel instead of
-  // navigating away from the Trades page underneath it. We push a
-  // placeholder history entry when the panel opens; a back-button press
-  // pops it and fires popstate, which we treat as "close the panel".
-  // For every other way of closing (Cancel, X, overlay, Escape, a
-  // successful save), we pop that same placeholder ourselves on unmount —
-  // but only if it's still the current top-of-stack entry, so we don't
-  // accidentally undo a real navigation (e.g. the user clicking a nav
-  // link while the panel happened to be open).
-  useEffect(() => {
-    const stateId = Math.random().toString(36).slice(2);
-    window.history.pushState({ tradeFormPanel: stateId }, "");
-    let closedByPopState = false;
-
-    function handlePopState() {
-      closedByPopState = true;
-      onClose();
-    }
-    window.addEventListener("popstate", handlePopState);
-
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-      if (!closedByPopState && window.history.state?.tradeFormPanel === stateId) {
-        window.history.back();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const optionsFor = (category: string) =>
-    dropdowns
-      .filter((d) => d.category === category)
-      .sort((a, b) => a.sort_order - b.sort_order);
-
-  // If a trade's stored value was later removed from Settings, it won't be
-  // in optionsFor(...) anymore. Rather than have the <select> silently show
-  // blank (which risks the field getting cleared on save if the user
-  // doesn't notice and re-saves), keep it as a selectable option — just
-  // marked so it's clear it's no longer an active list item.
-  function renderOptions(category: string, currentValue: string) {
-    const active = optionsFor(category);
-    const isOrphaned = currentValue !== "" && !active.some((o) => o.value === currentValue);
-    return (
-      <>
-        <option value="">—</option>
-        {active.map((o) => (
-          <option key={o.id} value={o.value}>
-            {o.value}
-          </option>
-        ))}
-        {isOrphaned && (
-          <option value={currentValue} style={{ color: "#8a8f98" }}>
-            {currentValue} (removed from list)
-          </option>
-        )}
-      </>
-    );
-  }
-
-  const tagOptions = optionsFor("tag");
-  const orphanedTags = form.tags.filter((t) => !tagOptions.some((o) => o.value === t));
-
-  const entryNum = form.entry_price ? parseFloat(form.entry_price) : null;
-  const exitNum = form.exit_price ? parseFloat(form.exit_price) : null;
-  const stopNum = form.stop_loss_price ? parseFloat(form.stop_loss_price) : null;
-  const sizeNum = form.size ? parseFloat(form.size) : null;
-
-  const computedPnl = useMemo(
-    () => calculatePnl(form.direction, entryNum, exitNum, sizeNum),
-    [form.direction, entryNum, exitNum, sizeNum]
-  );
-  const computedR = useMemo(
-    () => calculateRMultiple(form.direction, entryNum, exitNum, stopNum),
-    [form.direction, entryNum, exitNum, stopNum]
-  );
-
-  // Non-blocking sanity check: when P&L has been manually overridden and
-  // entry/exit/size are all present, flag it if the manual figure doesn't
-  // match what those inputs imply. This never blocks saving — fees,
-  // slippage, and partial fills are all legitimate reasons the numbers
-  // won't line up exactly. It just makes sure the mismatch isn't silent.
-  const pnlMismatch = useMemo(() => {
-    if (pnlAuto || computedPnl == null) return null;
-    const manual = parseFloat(form.pnl);
-    if (Number.isNaN(manual)) return null;
-    const diff = Math.abs(manual - computedPnl);
-    if (diff < CALC_MATCH_TOLERANCE) return null;
-    return { computed: computedPnl, manual, diff };
-  }, [pnlAuto, computedPnl, form.pnl]);
-
-  // Keep the P&L / R-multiple text fields in sync while in auto mode.
-  useEffect(() => {
-    if (pnlAuto && computedPnl != null) {
-      setForm((f) => ({ ...f, pnl: String(roundForStorage(computedPnl)) }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computedPnl, pnlAuto]);
-
-  useEffect(() => {
-    if (rAuto && computedR != null) {
-      setForm((f) => ({ ...f, r_multiple: String(roundForStorage(computedR)) }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computedR, rAuto]);
-
-  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function toggleTag(value: string) {
-    setForm((f) => ({
-      ...f,
-      tags: f.tags.includes(value) ? f.tags.filter((t) => t !== value) : [...f.tags, value],
-    }));
-  }
-
-  function handlePnlChange(value: string) {
-    setPnlAuto(false);
-    set("pnl", value);
-  }
-
-  function handleRChange(value: string) {
-    setRAuto(false);
-    set("r_multiple", value);
-  }
-
-  function resetPnlToAuto() {
-    setPnlAuto(true);
-    if (computedPnl != null) set("pnl", String(roundForStorage(computedPnl)));
-  }
-
-  function resetRToAuto() {
-    setRAuto(true);
-    if (computedR != null) set("r_multiple", String(roundForStorage(computedR)));
-  }
-
-  function handleScreenshotSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
-
-    const invalid = validateScreenshotFile(file);
-    if (invalid) {
-      setScreenshotError(invalid);
-      return;
-    }
-
-    setScreenshotError(null);
-    setScreenshotRemoved(false);
-    setScreenshotFile(file);
-    setScreenshotPreview(URL.createObjectURL(file));
-  }
-
-  function handleRemoveScreenshot() {
-    setScreenshotFile(null);
-    setScreenshotPreview(null);
-    setScreenshotRemoved(true);
-    setScreenshotError(null);
-  }
-
-  function validate(): string[] {
-    const missing: string[] = [];
-    if (!form.entry_date) missing.push(FIELD_LABELS.entry_date);
-    if (!form.instrument.trim()) missing.push(FIELD_LABELS.instrument);
-
-    if (sizeNum != null && sizeNum <= 0) {
-      missing.push("Size must be greater than 0");
-    }
-
-    // P&L is the one figure every trade needs. It's fine if it comes from
-    // manual entry OR from entry price + exit price + size — but it can't
-    // be missing entirely.
-    const hasManualPnl = form.pnl.trim() !== "" && !Number.isNaN(parseFloat(form.pnl));
-    const hasAutoPnlInputs = entryNum != null && exitNum != null && sizeNum != null;
-    if (!hasManualPnl && !hasAutoPnlInputs) {
-      missing.push(FIELD_LABELS.pnl);
-    }
-
-    return missing;
-  }
-
-  async function handleSubmit() {
-    if (!selectedAccount) return;
-
-    const missing = validate();
-    if (missing.length > 0) {
-      setErrors(missing);
-      return;
-    }
-    setErrors([]);
-    setSaving(true);
-
-    // Resolve the screenshot first so a failed upload doesn't leave the
-    // trade half-saved: keep the existing URL by default, replace it if a
-    // new file was picked, or clear it if the user removed it.
-    let finalScreenshotUrl: string | null = trade?.screenshot_url ?? null;
-    if (screenshotFile) {
-      setUploadingScreenshot(true);
-      const { url, error: uploadError } = await uploadScreenshot(selectedAccount.id, screenshotFile);
-      setUploadingScreenshot(false);
-      if (uploadError || !url) {
-        setSaving(false);
-        setErrors([uploadError || "Screenshot upload failed. Please try again."]);
-        return;
-      }
-      finalScreenshotUrl = url;
-    } else if (screenshotRemoved) {
-      finalScreenshotUrl = null;
-    }
-
-    const finalPnl = form.pnl.trim() !== "" ? parseFloat(form.pnl) : computedPnl ?? 0;
-    const finalR = form.r_multiple.trim() !== "" ? parseFloat(form.r_multiple) : computedR;
-
-    const input: TradeInput = {
-      entry_date: form.entry_date,
-      instrument: form.instrument.trim(),
-      asset_class: form.asset_class || null,
-      strategy: form.strategy || null,
-      session: form.session || null,
-      emotion: form.emotion || null,
-      direction: form.direction || null,
-      entry_price: entryNum,
-      exit_price: exitNum,
-      stop_loss_price: stopNum,
-      size: sizeNum,
-      pnl: finalPnl,
-      r_multiple: finalR,
-      rules_followed: form.rules_followed,
-      notes: form.notes.trim() || null,
-      screenshot_url: finalScreenshotUrl,
-      tags: form.tags,
-    };
-
-    const { error: dbError } = trade
-      ? await updateTrade(trade.id, input)
-      : await createTrade(selectedAccount.id, input);
-
-    setSaving(false);
-    if (dbError) {
-      setErrors(["Something went wrong saving this trade. Please try again."]);
-      return;
-    }
-
-    // Now that the trade row points at the new screenshot (or none), it's
-    // safe to remove whatever it used to point at.
-    const previousUrl = trade?.screenshot_url ?? null;
-    if (previousUrl && previousUrl !== finalScreenshotUrl) {
-      deleteScreenshotByUrl(previousUrl).catch(() => {});
-    }
-
-    onSaved();
-  }
-
-  const selectClass =
-    "mt-1 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-sm";
-  const labelClass = "text-xs text-ink-secondary";
+  const f = useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDiary });
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg h-full bg-surface-1 border-l border-surface-border overflow-y-auto">
-        <div className="sticky top-0 bg-surface-1/95 backdrop-blur border-b border-surface-border px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="signal-bar h-6" />
-            <h2 className="font-display text-lg font-medium">
-              {trade ? "Edit trade" : duplicateFrom ? "Duplicate trade" : "New trade"}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-ink-muted hover:text-ink-primary text-sm px-2 py-1"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className={labelClass}>Date</span>
-              <input
-                type="date"
-                value={form.entry_date}
-                onChange={(e) => set("entry_date", e.target.value)}
-                className={`${selectClass} font-mono`}
-              />
-            </label>
-            <label className="block">
-              <span className={labelClass}>Instrument</span>
-              <input
-                value={form.instrument}
-                onChange={(e) => set("instrument", e.target.value)}
-                placeholder="e.g. EUR/USD"
-                className={selectClass}
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className={labelClass}>Direction</span>
-              <div className="mt-1 flex gap-1 bg-surface-2 rounded-full p-1 border border-surface-border">
-                {(["long", "short"] as Direction[]).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => set("direction", d)}
-                    className={`flex-1 py-1.5 rounded-full text-xs capitalize transition-colors ${
-                      form.direction === d
-                        ? "bg-brass text-surface-0 font-medium"
-                        : "text-ink-secondary hover:text-ink-primary"
-                    }`}
-                  >
-                    {d}
-                  </button>
-                ))}
+    <>
+      <div className="fixed inset-0 z-40 flex justify-end">
+        <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={f.requestClose} />
+        <div className="relative w-full sm:max-w-xl h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
+          <div className="sticky top-0 z-10 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="signal-bar h-7" />
+              <div>
+                <h2 className="font-display text-lg font-medium leading-tight">
+                  {trade ? "Edit trade" : duplicateFrom ? "Duplicate trade" : "New trade"}
+                </h2>
+                <p className="text-[11px] text-ink-muted leading-tight mt-0.5">
+                  {trade
+                    ? "Update the details of this trade"
+                    : duplicateFrom
+                      ? "Starts from the trade you copied"
+                      : "Log a trade to your journal"}
+                </p>
               </div>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Asset class</span>
-              <select
-                value={form.asset_class}
-                onChange={(e) => set("asset_class", e.target.value)}
-                className={selectClass}
-              >
-                {renderOptions("asset_class", form.asset_class)}
-              </select>
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className={labelClass}>Strategy</span>
-              <select
-                value={form.strategy}
-                onChange={(e) => set("strategy", e.target.value)}
-                className={selectClass}
-              >
-                {renderOptions("strategy", form.strategy)}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Session</span>
-              <select
-                value={form.session}
-                onChange={(e) => set("session", e.target.value)}
-                className={selectClass}
-              >
-                {renderOptions("session", form.session)}
-              </select>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className={labelClass}>Emotion</span>
-            <select
-              value={form.emotion}
-              onChange={(e) => set("emotion", e.target.value)}
-              className={selectClass}
-            >
-              {renderOptions("emotion", form.emotion)}
-            </select>
-          </label>
-
-          <div className="grid grid-cols-3 gap-4">
-            <label className="block">
-              <span className={labelClass}>Entry price</span>
-              <input
-                type="number"
-                step="any"
-                value={form.entry_price}
-                onChange={(e) => set("entry_price", e.target.value)}
-                className={`${selectClass} font-mono`}
-              />
-            </label>
-            <label className="block">
-              <span className={labelClass}>Exit price</span>
-              <input
-                type="number"
-                step="any"
-                value={form.exit_price}
-                onChange={(e) => set("exit_price", e.target.value)}
-                className={`${selectClass} font-mono`}
-              />
-            </label>
-            <label className="block">
-              <span className={labelClass}>Size</span>
-              <input
-                type="number"
-                step="any"
-                value={form.size}
-                onChange={(e) => set("size", e.target.value)}
-                className={`${selectClass} font-mono`}
-              />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className={labelClass}>Stop loss price</span>
-            <input
-              type="number"
-              step="any"
-              value={form.stop_loss_price}
-              onChange={(e) => set("stop_loss_price", e.target.value)}
-              placeholder="Optional — enables R-multiple"
-              className={`${selectClass} font-mono`}
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <div className="flex items-center justify-between">
-                <span className={labelClass}>P&amp;L ({selectedAccount?.currency ?? "USD"})</span>
-                {!pnlAuto && computedPnl != null && (
-                  <button
-                    type="button"
-                    onClick={resetPnlToAuto}
-                    className="text-[11px] text-brass hover:underline"
-                  >
-                    Use calculated
-                  </button>
-                )}
-              </div>
-              <input
-                type="number"
-                step="any"
-                value={form.pnl}
-                onChange={(e) => handlePnlChange(e.target.value)}
-                className={`${selectClass} font-mono`}
-              />
-              {pnlAuto && computedPnl != null && (
-                <span className="text-[11px] text-ink-muted">
-                  Auto-calculated from entry, exit &amp; size
-                </span>
-              )}
-              {pnlMismatch && (
-                <div className="mt-1.5 rounded-md border border-brass/30 bg-brass/10 px-2.5 py-1.5">
-                  <p className="text-[11px] text-brass leading-snug">
-                    This P&amp;L doesn&apos;t match what entry/exit/size imply
-                    (calculated: {pnlMismatch.computed.toFixed(2)}, entered:{" "}
-                    {pnlMismatch.manual.toFixed(2)}). Keep it if that&apos;s
-                    intentional — e.g. fees or slippage — or{" "}
-                    <button
-                      type="button"
-                      onClick={resetPnlToAuto}
-                      className="underline hover:no-underline"
-                    >
-                      use the calculated value
-                    </button>
-                    .
-                  </p>
-                </div>
-              )}
-            </label>
-            <label className="block">
-              <div className="flex items-center justify-between">
-                <span className={labelClass}>R-multiple</span>
-                {!rAuto && computedR != null && (
-                  <button
-                    type="button"
-                    onClick={resetRToAuto}
-                    className="text-[11px] text-brass hover:underline"
-                  >
-                    Use calculated
-                  </button>
-                )}
-              </div>
-              <input
-                type="number"
-                step="any"
-                value={form.r_multiple}
-                onChange={(e) => handleRChange(e.target.value)}
-                className={`${selectClass} font-mono`}
-              />
-              {rAuto && computedR != null && (
-                <span className="text-[11px] text-ink-muted">
-                  Auto-calculated from entry, exit &amp; stop loss
-                </span>
-              )}
-            </label>
-          </div>
-
-          <label className="block">
-            <span className={labelClass}>Followed rules?</span>
-            <div className="mt-1 flex gap-1 bg-surface-2 rounded-full p-1 border border-surface-border w-fit">
-              {[
-                { label: "Yes", value: true },
-                { label: "No", value: false },
-                { label: "Unset", value: null },
-              ].map((opt) => (
+            </div>
+            <div className="flex items-center gap-2">
+              {trade && onOpenDiary && (
                 <button
-                  key={opt.label}
-                  type="button"
-                  onClick={() => set("rules_followed", opt.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-                    form.rules_followed === opt.value
-                      ? "bg-brass text-surface-0 font-medium"
-                      : "text-ink-secondary hover:text-ink-primary"
-                  }`}
+                  onClick={() => f.requestOpenDiary(trade)}
+                  disabled={openingDiary}
+                  title="Open this trade's diary entry — creates one if it doesn't exist yet"
+                  className="flex items-center gap-1.5 text-xs font-medium text-glow bg-glow/15 border border-glow/40 hover:bg-glow/25 rounded-full px-3 py-1.5 disabled:opacity-60 transition-colors"
                 >
-                  {opt.label}
+                  <NotesIcon className="w-3.5 h-3.5" />
+                  {openingDiary ? "Opening…" : "Diary"}
                 </button>
-              ))}
-            </div>
-          </label>
-
-          <div className="block">
-            <span className={`${labelClass} block mb-1`}>Chart screenshot</span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={handleScreenshotSelect}
-              className="hidden"
-            />
-            {screenshotPreview ? (
-              <div className="relative w-full max-w-[220px] rounded-md overflow-hidden border border-surface-border">
-                <img
-                  src={screenshotPreview}
-                  alt="Trade chart screenshot preview"
-                  className="w-full h-auto block"
-                />
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-3 bg-surface-0/80 backdrop-blur px-3 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-[11px] text-brass hover:underline"
-                  >
-                    Replace
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRemoveScreenshot}
-                    className="text-[11px] text-loss hover:underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ) : (
+              )}
               <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full rounded-md border border-dashed border-surface-border bg-surface-2 px-3 py-4 text-center text-xs text-ink-secondary hover:text-ink-primary hover:border-brass/50 transition-colors"
+                onClick={f.requestClose}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-ink-muted hover:text-ink-primary hover:bg-surface-2 transition-colors"
+                aria-label="Close"
               >
-                + Add screenshot
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-4 h-4"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
               </button>
-            )}
-            {uploadingScreenshot && (
-              <p className="mt-1 text-[11px] text-ink-muted">Uploading screenshot…</p>
-            )}
-            {screenshotError && <p className="mt-1 text-[11px] text-loss">{screenshotError}</p>}
-            {!screenshotError && !uploadingScreenshot && (
-              <p className="mt-1 text-[11px] text-ink-muted">PNG, JPG, or WEBP, up to 5MB.</p>
-            )}
-          </div>
-
-          {(tagOptions.length > 0 || orphanedTags.length > 0) && (
-            <label className="block">
-              <span className={labelClass}>Tags</span>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {tagOptions.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => toggleTag(o.value)}
-                    className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-                      form.tags.includes(o.value)
-                        ? "bg-brass/15 border-brass text-brass"
-                        : "border-surface-border text-ink-secondary hover:text-ink-primary"
-                    }`}
-                  >
-                    {o.value}
-                  </button>
-                ))}
-                {orphanedTags.map((t) => (
-                  <button
-                    key={`orphan-${t}`}
-                    type="button"
-                    onClick={() => toggleTag(t)}
-                    title="Removed from Settings — click to remove it from this trade"
-                    className="px-3 py-1 rounded-full text-xs border border-dashed border-surface-border text-ink-muted hover:text-ink-primary"
-                  >
-                    {t} (removed from list)
-                  </button>
-                ))}
-              </div>
-            </label>
-          )}
-
-          <label className="block">
-            <span className={labelClass}>Notes</span>
-            <textarea
-              value={form.notes}
-              onChange={(e) => set("notes", e.target.value)}
-              rows={3}
-              className={selectClass}
-            />
-          </label>
-
-          {errors.length > 0 && (
-            <div className="rounded-md border border-loss/30 bg-loss/10 px-4 py-3">
-              <p className="text-xs font-medium text-loss mb-1">
-                This trade couldn&apos;t be logged. Please fill in:
-              </p>
-              <ul className="text-xs text-loss list-disc list-inside space-y-0.5">
-                {errors.map((e) => (
-                  <li key={e}>{e}</li>
-                ))}
-              </ul>
             </div>
-          )}
-
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              onClick={handleSubmit}
-              disabled={saving}
-              className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-60"
-            >
-              {saving ? "Saving…" : trade ? "Save changes" : "Add trade"}
-            </button>
-            <button
-              onClick={onClose}
-              className="text-sm text-ink-secondary hover:text-ink-primary px-4 py-1.5"
-            >
-              Cancel
-            </button>
           </div>
+
+          <TradeFormFields f={f} isEditing={!!trade} />
         </div>
       </div>
-    </div>
+      <ConfirmDialog
+        open={f.showDiscardConfirm}
+        title={f.pendingAction === "diary" ? "Open diary entry?" : "Discard changes?"}
+        description={
+          f.pendingAction === "diary"
+            ? "You have unsaved changes to this trade. Opening the diary entry now will discard them."
+            : "You have unsaved changes to this trade. If you leave now, they'll be lost."
+        }
+        confirmLabel={f.pendingAction === "diary" ? "Discard & open diary" : "Discard changes"}
+        cancelLabel="Keep editing"
+        onCancel={() => f.setShowDiscardConfirm(false)}
+        onConfirm={() => {
+          f.setShowDiscardConfirm(false);
+          if (f.pendingAction === "diary" && onOpenDiary && f.pendingDiaryTradeRef.current) {
+            onOpenDiary(f.pendingDiaryTradeRef.current);
+          } else {
+            onClose();
+          }
+        }}
+      />
+    </>
   );
 }

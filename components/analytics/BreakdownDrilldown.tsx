@@ -1,6 +1,8 @@
 "use client";
 
+import { memo } from "react";
 import { Trade } from "@/lib/trades";
+import Card from "@/components/shared/Card";
 
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -21,10 +23,9 @@ function PnlText({ value }: { value: number }) {
   );
 }
 
-export default function BreakdownDrilldown({
+function BreakdownDrilldown({
   groupLabel,
   trades,
-  currency,
   onClose,
 }: {
   groupLabel: string;
@@ -33,7 +34,7 @@ export default function BreakdownDrilldown({
   onClose: () => void;
 }) {
   return (
-    <div className="bg-surface-1 border border-surface-border rounded-card p-5">
+    <Card>
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-display text-sm font-medium">
           {groupLabel} <span className="text-ink-muted font-body font-normal">· {trades.length} trade{trades.length === 1 ? "" : "s"}</span>
@@ -105,6 +106,11 @@ export default function BreakdownDrilldown({
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
+
+// Memoized so unrelated Analytics state changes (a different chart's
+// selection, a range/dimension toggle) don't re-render this drilldown panel
+// when its own props haven't changed.
+export default memo(BreakdownDrilldown);

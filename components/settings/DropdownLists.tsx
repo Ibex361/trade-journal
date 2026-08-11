@@ -12,13 +12,20 @@ import {
   DropdownCategory,
 } from "@/lib/dropdownSettings";
 import SettingsCard from "./SettingsCard";
+import Button from "@/components/shared/Button";
 
+// "tag" intentionally excluded — tag management now lives in the
+// dedicated TagSettingCard ("Tag setting"), backed by tag_settings
+// instead of this generic dropdown_settings category. Tag setting
+// migration part 2 finished switching all consumers over and dropped
+// the old 'tag' rows/category from dropdown_settings entirely (see
+// phase12b_remove_tag_dropdown_category.sql) — it's no longer a
+// DropdownCategory member at all.
 const CATEGORIES: { key: DropdownCategory; label: string }[] = [
   { key: "asset_class", label: "Asset class" },
   { key: "strategy", label: "Strategy" },
   { key: "session", label: "Session" },
   { key: "emotion", label: "Emotion" },
-  { key: "tag", label: "Tags" },
 ];
 
 function RemoveButton({
@@ -108,6 +115,7 @@ export default function DropdownLists() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load's setLoading(true) runs before its first await, same as loadDropdowns in app/trades/page.tsx.
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
@@ -146,7 +154,7 @@ export default function DropdownLists() {
             onClick={() => setActiveTab(cat.key)}
             className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
               activeTab === cat.key
-                ? "bg-brass text-surface-0 font-medium"
+                ? "bg-glow text-surface-0 font-medium"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >
@@ -200,12 +208,9 @@ export default function DropdownLists() {
           placeholder="Add new item…"
           className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm flex-1"
         />
-        <button
-          onClick={handleAdd}
-          className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full"
-        >
+        <Button size="sm" onClick={handleAdd}>
           Add
-        </button>
+        </Button>
       </div>
     </SettingsCard>
   );

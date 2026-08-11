@@ -1,8 +1,12 @@
 import AccountManager from "@/components/settings/AccountManager";
 import DropdownLists from "@/components/settings/DropdownLists";
+import TagSettingCard from "@/components/settings/TagSettingCard";
+import ExnessContractSizeCard from "@/components/settings/ExnessContractSizeCard";
 import TargetsCard from "@/components/settings/TargetsCard";
 import WinRateModeCard from "@/components/settings/WinRateModeCard";
 import DataExportCard from "@/components/settings/DataExportCard";
+import DataImportCard from "@/components/settings/DataImportCard";
+import LegacyScreenshotMigrationCard from "@/components/settings/LegacyScreenshotMigrationCard";
 
 export default function SettingsPage() {
   return (
@@ -18,9 +22,15 @@ export default function SettingsPage() {
 
       <AccountManager />
       <TargetsCard />
-      <WinRateModeCard />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <WinRateModeCard />
+        <DataExportCard />
+      </div>
+      <DataImportCard />
+      <ExnessContractSizeCard />
+      <LegacyScreenshotMigrationCard />
+      <TagSettingCard />
       <DropdownLists />
-      <DataExportCard />
     </div>
   );
 }

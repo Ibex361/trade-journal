@@ -1,0 +1,496 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import Link from "@tiptap/extension-link";
+import Highlight from "@tiptap/extension-highlight";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableHeader from "@tiptap/extension-table-header";
+import TableCell from "@tiptap/extension-table-cell";
+import type { JSONContent } from "@tiptap/react";
+import SlashCommand from "./slashCommand";
+import NoteImage from "./NoteImage";
+import ImageLightbox from "./ImageLightbox";
+import { Toolbar as ToolbarRoot, ToolbarGroup, ToolbarSeparator, ToolbarButton } from "./Toolbar";
+import ColorHighlightPopover from "./ColorHighlightPopover";
+import LinkPopover from "./LinkPopover";
+import { uploadNoteImage } from "@/lib/noteImages";
+import { validateScreenshotFile } from "@/lib/screenshots";
+
+/**
+ * Notes/diary — Phase 1a, extended through Phase 2 and Phase 4 Part 1.
+ *
+ * The editor itself, isolated from any page, list, or persistence layer —
+ * those are Phase 1b/1c. This is the riskiest, least-familiar piece of the
+ * whole notes feature (nothing else in the app touches Tiptap or
+ * contenteditable), so it gets built and proven out on its own first.
+ *
+ * Phase 1a shipped StarterKit's default set only. Phase 2 part 1 added
+ * Link and Highlight. Phase 2 part 2 added checklists (TaskList/TaskItem)
+ * and tables. Phase 2 part 3 added a floating bubble toolbar for text
+ * selections (later removed — its link/highlight buttons never got
+ * updated to match the fixed toolbar's popover-based versions, and with
+ * the fixed toolbar always present there was no real gap to fill) and a
+ * "/" slash-command menu for inserting block types.
+ * Phase 4 Part 1 (this) adds image support: paste-from-clipboard,
+ * drag-and-drop, and a manual toolbar button, all uploading to ImageKit
+ * via lib/noteImages.ts and inserting a NoteImage node. Embedding an
+ * *existing* trade screenshot (browsing rather than uploading) is Phase 4
+ * Part 2; deleting orphaned images is Phase 4 Part 3 — this part only
+ * covers getting new images into the doc.
+ */
+
+type NoteEditorProps = {
+  content?: JSONContent | null;
+  onChange?: (content: JSONContent) => void;
+  editable?: boolean;
+  placeholder?: string;
+  // Needed to namespace uploaded images in ImageKit (see lib/noteImages.ts).
+  // Image upload is disabled (paste/drop ignored, toolbar button hidden)
+  // when this is null, e.g. before an account has loaded.
+  accountId?: string | null;
+};
+
+// ToolbarButton now lives in ./Toolbar (exported alongside ToolbarGroup/
+// ToolbarSeparator) so the Color highlight popover can reuse it as a real
+// ref-forwarding PopoverTrigger target. Divider/grouping is likewise
+// handled by the Toolbar primitives imported above.
+
+function Toolbar({
+  editor,
+  onInsertImageClick,
+  imagesEnabled,
+}: {
+  editor: Editor;
+  onInsertImageClick?: () => void;
+  imagesEnabled?: boolean;
+}) {
+  return (
+    <ToolbarRoot>
+      <ToolbarGroup>
+      <ToolbarButton
+        label="Undo"
+        disabled={!editor.can().undo()}
+        onClick={() => editor.chain().focus().undo().run()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-2" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Redo"
+        disabled={!editor.can().redo()}
+        onClick={() => editor.chain().focus().redo().run()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h2" />
+        </svg>
+      </ToolbarButton>
+      </ToolbarGroup>
+
+      <ToolbarSeparator />
+
+      <ToolbarGroup>
+      <ToolbarButton
+        label="Heading 1"
+        active={editor.isActive("heading", { level: 1 })}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+      >
+        H1
+      </ToolbarButton>
+      <ToolbarButton
+        label="Heading 2"
+        active={editor.isActive("heading", { level: 2 })}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+      >
+        H2
+      </ToolbarButton>
+      <ToolbarButton
+        label="Heading 3"
+        active={editor.isActive("heading", { level: 3 })}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+      >
+        H3
+      </ToolbarButton>
+      </ToolbarGroup>
+
+      <ToolbarSeparator />
+
+      <ToolbarGroup>
+      <ToolbarButton
+        label="Bullet list"
+        active={editor.isActive("bulletList")}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4">
+          <path d="M8 6h13M8 12h13M8 18h13" />
+          <circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none" />
+          <circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none" />
+          <circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Numbered list"
+        active={editor.isActive("orderedList")}
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M9 6h12M9 12h12M9 18h12" />
+          <path d="M4 6h1v3M4 6l-1 .5M4.5 14.5c.5-1 2-1 2 0s-2 1.5-2.5 2.5h2.5M4 17.5h2" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Checklist"
+        active={editor.isActive("taskList")}
+        onClick={() => editor.chain().focus().toggleTaskList().run()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <rect x="3.5" y="4" width="6" height="6" rx="1.5" />
+          <path d="M5 7l1 1 2-2" />
+          <path d="M12 7h9" />
+          <rect x="3.5" y="14" width="6" height="6" rx="1.5" />
+          <path d="M12 17h9" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Blockquote"
+        active={editor.isActive("blockquote")}
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M7 8c-2 1-3 2.5-3 5s1.5 3.5 3 3.5 2.5-1 2.5-2.5-1-2.5-2.3-2.5c.2-1.6 1.1-2.7 2.3-3.5z" />
+          <path d="M16 8c-2 1-3 2.5-3 5s1.5 3.5 3 3.5 2.5-1 2.5-2.5-1-2.5-2.3-2.5c.2-1.6 1.1-2.7 2.3-3.5z" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Code block"
+        active={editor.isActive("codeBlock")}
+        onClick={() => {
+          // Clicking this while already inside a code block used to call
+          // toggleCodeBlock() again, which un-formats the block you're
+          // in — there was no way to just "leave" it and keep typing
+          // plain text below. exitCode inserts a paragraph after the
+          // code block and moves the cursor there, matching what
+          // Mod-Enter already does inside a code block, and leaves the
+          // code content untouched.
+          if (editor.isActive("codeBlock")) {
+            editor.chain().focus().exitCode().run();
+          } else {
+            editor.chain().focus().toggleCodeBlock().run();
+          }
+        }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+          <path d="M9 18l-6-6 6-6M15 6l6 6-6 6" />
+        </svg>
+      </ToolbarButton>
+      </ToolbarGroup>
+
+      <ToolbarSeparator />
+
+      <ToolbarGroup>
+      <ToolbarButton
+        label="Bold"
+        active={editor.isActive("bold")}
+        onClick={() => editor.chain().focus().toggleBold().run()}
+      >
+        B
+      </ToolbarButton>
+      <ToolbarButton
+        label="Italic"
+        active={editor.isActive("italic")}
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+      >
+        <span className="italic">I</span>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Strikethrough"
+        active={editor.isActive("strike")}
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+      >
+        <span className="line-through">S</span>
+      </ToolbarButton>
+      <ColorHighlightPopover editor={editor} />
+      <LinkPopover editor={editor} />
+      {imagesEnabled && (
+        <ToolbarButton label="Insert image" onClick={() => onInsertImageClick?.()}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <rect x="3" y="4" width="18" height="16" rx="1.5" />
+            <circle cx="8.5" cy="9.5" r="1.5" />
+            <path d="M3 16l5-5 4 4 3-3 6 6" />
+          </svg>
+        </ToolbarButton>
+      )}
+      </ToolbarGroup>
+
+      <ToolbarSeparator />
+
+      <ToolbarGroup>
+      {editor.isActive("table") ? (
+        <>
+          <ToolbarButton label="Add column" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M12 4v16" />
+              <path d="M17 9v6M14 12h6" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton label="Add row" onClick={() => editor.chain().focus().addRowAfter().run()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M3 12h18" />
+              <path d="M9 17v6M6 20h6" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Delete column"
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M9 4v16M15 4v16" />
+              <path d="M10 9l4 4M14 9l-4 4" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Delete row"
+            onClick={() => editor.chain().focus().deleteRow().run()}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M3 9h18M3 15h18" />
+              <path d="M9 10l4 4M14 10l-4 4" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Delete table"
+            onClick={() => editor.chain().focus().deleteTable().run()}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <rect x="3" y="4" width="18" height="16" rx="1.5" />
+              <path d="M8 9l8 8M16 9l-8 8" />
+            </svg>
+          </ToolbarButton>
+        </>
+      ) : (
+        <ToolbarButton
+          label="Insert table"
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <rect x="3" y="4" width="18" height="16" rx="1.5" />
+            <path d="M3 10h18M9 4v16" />
+          </svg>
+        </ToolbarButton>
+      )}
+      </ToolbarGroup>
+    </ToolbarRoot>
+  );
+}
+
+const DEFAULT_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
+
+export default function NoteEditor({ content, onChange, editable = true, placeholder, accountId }: NoteEditorProps) {
+  // Number of images currently uploading (supports pasting/dropping more
+  // than one at once) and the most recent upload error, if any. Kept
+  // outside the editor doc itself — an in-progress upload has no node in
+  // the doc yet, it's inserted only once the URL comes back.
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+  // Phase 4 Part 3: click-to-expand. Holds the clicked image's src/alt, or
+  // null when no lightbox is open.
+  const [lightbox, setLightbox] = useState<{ src: string; alt?: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Ref mirror of accountId/editor so the paste/drop handlers (registered
+  // once via editorProps, not re-created per render) always see the
+  // current values instead of closing over stale ones.
+  const accountIdRef = useRef(accountId);
+  useEffect(() => {
+    accountIdRef.current = accountId;
+  }, [accountId]);
+  // editorProps below is only read at editor-creation time by Tiptap, so
+  // handlePaste/handleDrop go through this ref rather than calling
+  // insertImageFile directly — it's defined further down (it needs the
+  // editor instance itself), and the ref sidesteps any ordering issue.
+  const insertImageFileRef = useRef<(file: File) => void>(() => {});
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder: placeholder ?? "Start writing…",
+      }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+      }),
+      Highlight.configure({ multicolor: true }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      NoteImage.configure({ inline: false, HTMLAttributes: { class: "note-image" } }),
+      SlashCommand,
+    ],
+    content: content ?? DEFAULT_DOC,
+    editable,
+    // Next.js renders this component server-side first; Tiptap's DOM-diffing
+    // during that render doesn't match client hydration, so this has to be
+    // off or React throws a hydration-mismatch error the first time this
+    // component mounts.
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class:
+          "prose-notes min-h-[60vh] py-6 focus:outline-none text-ink-primary text-[15px] leading-[1.75]",
+      },
+      // Clipboard image paste (e.g. a copied chart or screenshot).
+      handlePaste: (view, event) => {
+        const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+        if (files.length === 0) return false;
+        event.preventDefault();
+        files.forEach((file) => insertImageFileRef.current(file));
+        return true;
+      },
+      // Drag-and-drop from the OS file browser or another app/tab.
+      handleDrop: (view, event) => {
+        const files = Array.from(event.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
+        if (files.length === 0) return false;
+        event.preventDefault();
+        files.forEach((file) => insertImageFileRef.current(file));
+        return true;
+      },
+      // Phase 4 Part 3: click-to-expand — opens the clicked image full-size
+      // in a lightbox. Returns false so ProseMirror still runs its normal
+      // node-selection behavior on the same click (e.g. so Backspace still
+      // deletes a selected image); the setState setter's identity is
+      // stable across renders, so closing over it here is safe even though
+      // editorProps is only read once at editor creation.
+      handleClickOn: (_view, _pos, node) => {
+        if (node.type.name === "image") {
+          setLightbox({ src: node.attrs.src, alt: node.attrs.alt });
+        }
+        return false;
+      },
+    },
+    onUpdate: ({ editor }) => {
+      onChange?.(editor.getJSON());
+    },
+  });
+
+  const insertImageFile = useCallback(
+    async (file: File) => {
+      const currentAccountId = accountIdRef.current;
+      if (!currentAccountId) {
+        setImageError("Can't upload an image right now — no account selected.");
+        return;
+      }
+      const invalid = validateScreenshotFile(file);
+      if (invalid) {
+        setImageError(invalid);
+        return;
+      }
+      setImageError(null);
+      setUploadingCount((n) => n + 1);
+      try {
+        const { url, fileId, error } = await uploadNoteImage(currentAccountId, file);
+        if (error || !url) {
+          setImageError(error || "Image upload failed. Please try again.");
+          return;
+        }
+        // Node type name is still "image" — NoteImage extends Image's
+        // schema (adding the fileId attribute) without renaming it.
+        // insertContent can throw (e.g. if the current selection can't
+        // hold a block-level node) — caught here so a failed insert shows
+        // a friendly message instead of an uncaught exception taking down
+        // the whole app.
+        // Deferred to the next animation frame: this insert changes the
+        // document structure and collapses/moves the selection, which can
+        // land in the same React commit as an unrelated DOM update already
+        // in flight (e.g. a popover closing) and corrupt React's view of
+        // the DOM (NotFoundError on insertBefore). Waiting a frame lets
+        // any in-flight DOM/React updates finish first.
+        requestAnimationFrame(() => {
+          // The editor can be gone by the time this fires — e.g. if the
+          // component holding it was unmounted while the upload was in
+          // flight (see app/notes/page.tsx's note-fetch effect for one way
+          // that used to happen). Surface it instead of silently no-op'ing,
+          // since the file has already been uploaded to ImageKit at this
+          // point and would otherwise just vanish with no explanation.
+          if (!editor || editor.isDestroyed) {
+            setImageError("Uploaded, but the editor closed before it could be inserted. Please try again.");
+            return;
+          }
+          try {
+            editor.chain().focus().insertContent({ type: "image", attrs: { src: url, fileId, alt: file.name } }).run();
+          } catch {
+            setImageError("Uploaded, but couldn't insert the image here. Try placing your cursor on its own line and pasting again.");
+          }
+        });
+      } catch {
+        setImageError("Image upload failed. Please try again.");
+      } finally {
+        setUploadingCount((n) => n - 1);
+      }
+    },
+    [editor]
+  );
+
+  useEffect(() => {
+    insertImageFileRef.current = insertImageFile;
+  }, [insertImageFile]);
+
+  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    files.forEach((file) => insertImageFile(file));
+    event.target.value = ""; // allow re-selecting the same file later
+  }
+
+  if (!editor) {
+    return <div className="min-h-[280px] animate-pulse bg-surface-2/30 rounded-lg" />;
+  }
+
+  return (
+    <div>
+      {editable && (
+        // Sticky so the toolbar stays reachable while scrolling a long
+        // note — sits directly under NoteEditPanel's own sticky header
+        // (top offset matches that header's height), borderless except for
+        // the hairline underneath: reads as page chrome, not a boxed
+        // widget bolted onto the text.
+        <div className="sticky top-[49px] z-[5] -mx-4 sm:-mx-10 px-4 sm:px-10 py-2 bg-surface-0/95 backdrop-blur-md border-b border-surface-border">
+          <Toolbar
+            editor={editor}
+            imagesEnabled={!!accountId}
+            onInsertImageClick={() => fileInputRef.current?.click()}
+          />
+        </div>
+      )}
+      {editable && accountId && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          className="hidden"
+          onChange={handleFileInputChange}
+        />
+      )}
+      {editable && (uploadingCount > 0 || imageError) && (
+        <p className={`pt-2 text-[11px] ${imageError ? "text-loss" : "text-ink-muted"}`}>
+          {imageError ?? (uploadingCount === 1 ? "Uploading image…" : `Uploading ${uploadingCount} images…`)}
+        </p>
+      )}
+      <EditorContent editor={editor} />
+      {lightbox && <ImageLightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
+    </div>
+  );
+}

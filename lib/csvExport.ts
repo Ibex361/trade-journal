@@ -2,9 +2,14 @@ import { Trade } from "./trades";
 
 // Column order/labels for the exported CSV. Kept explicit (rather than
 // Object.keys(trade)) so column order is stable and internal fields like
-// id/account_id/screenshot_url/created_at are left out.
-const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
-  { key: "entry_date", label: "Date" },
+// id/account_id/screenshot_file_id/created_at are left out. screenshot_url
+// IS included — it's just a link to the hosted image, so round-tripping it
+// through export/import keeps a trade's screenshot attached.
+export const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
+  { key: "entry_date", label: "Entry date" },
+  { key: "entry_time", label: "Entry time" },
+  { key: "exit_date", label: "Exit date" },
+  { key: "exit_time", label: "Exit time" },
   { key: "instrument", label: "Instrument" },
   { key: "asset_class", label: "Asset class" },
   { key: "strategy", label: "Strategy" },
@@ -13,13 +18,19 @@ const CSV_COLUMNS: { key: keyof Trade; label: string }[] = [
   { key: "entry_price", label: "Entry price" },
   { key: "exit_price", label: "Exit price" },
   { key: "stop_loss_price", label: "Stop loss price" },
+  { key: "take_profit_price", label: "Take profit price" },
   { key: "size", label: "Size" },
   { key: "pnl", label: "P&L" },
   { key: "r_multiple", label: "R multiple" },
   { key: "rules_followed", label: "Rules followed" },
+  { key: "exit_reason", label: "Exit reason" },
+  { key: "sl_movement", label: "SL mov't" },
+  { key: "tp_movement", label: "TP mov't" },
   { key: "emotion", label: "Emotion" },
   { key: "tags", label: "Tags" },
   { key: "notes", label: "Notes" },
+  { key: "screenshot_url", label: "Screenshot" },
+  { key: "broker_ticket", label: "Broker Ticket" },
 ];
 
 function csvCell(value: unknown): string {

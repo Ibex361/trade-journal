@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, Trade } from "@/lib/trades";
+import { useAnalyticsPageState } from "@/lib/AnalyticsPageStateContext";
+import { useTradesData } from "@/lib/TradesDataContext";
+import { ExitReason, StopMovement } from "@/lib/trades";
 import {
-  DateRange,
-  PeriodGranularity,
-  BreakdownDimension,
   filterTradesByRange,
   buildEquityCurveForRange,
   getDrawdown,
@@ -18,71 +17,143 @@ import {
   getTradesInBreakdownGroup,
   getRMultipleDistribution,
   getTradesInRMultipleBucket,
+  countMissingRMultiple,
+  getPerformanceByHour,
+  getTradesInHourBucket,
+  countMissingTimeOfDay,
+  getPerformanceByHoldingTime,
+  getTradesInHoldingTimeBucket,
+  countMissingHoldingTime,
+  getExitReasonByStrategy,
+  getTradesInStrategyExitGroup,
+  EXIT_REASON_META,
+  getSlHitRateByStrategy,
+  getTradesInSlMovementGroup,
+  getPlannedVsRealizedR,
+  summarizePlannedVsRealizedR,
+  countMissingPlannedR,
 } from "@/lib/metrics";
 import DateRangeSelector from "@/components/analytics/DateRangeSelector";
-import AnalyticsStats from "@/components/analytics/AnalyticsStats";
+import AnalyticsHero from "@/components/analytics/AnalyticsHero";
 import PnlByPeriodChart from "@/components/analytics/PnlByPeriodChart";
+import TimeOfDayChart from "@/components/analytics/TimeOfDayChart";
+import HoldingTimeChart from "@/components/analytics/HoldingTimeChart";
 import PerformanceBreakdown from "@/components/analytics/PerformanceBreakdown";
 import BreakdownDrilldown from "@/components/analytics/BreakdownDrilldown";
 import RMultipleHistogram from "@/components/analytics/RMultipleHistogram";
 import RulesFollowedComparison from "@/components/analytics/RulesFollowedComparison";
-import EquityCurveChart from "@/components/dashboard/EquityCurveChart";
-
-const EMOTION_DIMENSIONS: { value: BreakdownDimension; label: string }[] = [{ value: "emotion", label: "Emotion" }];
+import ExitReasonByStrategyChart, {
+  exitStrategySelectionKey,
+} from "@/components/analytics/ExitReasonByStrategyChart";
+import SlTrailImpactChart, { slMovementSelectionKey } from "@/components/analytics/SlTrailImpactChart";
+import PlannedVsRealizedRChart from "@/components/analytics/PlannedVsRealizedRChart";
+import AnalyticsSkeleton from "@/components/analytics/AnalyticsSkeleton";
+import Card from "@/components/shared/Card";
 
 export default function AnalyticsPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState<DateRange>("30d");
-  const [granularity, setGranularity] = useState<PeriodGranularity>("day");
-  const [breakdownDimension, setBreakdownDimension] = useState<BreakdownDimension>("instrument");
-  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
-  const [selectedRBucketKey, setSelectedRBucketKey] = useState<string | null>(null);
-  const [selectedRulesKey, setSelectedRulesKey] = useState<string | null>(null);
-  const [selectedEmotionKey, setSelectedEmotionKey] = useState<string | null>(null);
+  const { trades, loading } = useTradesData();
+  const {
+    range,
+    setRange,
+    granularity,
+    setGranularity,
+    timeOfDaySource,
+    setTimeOfDaySource,
+    selectedHourKey,
+    setSelectedHourKey,
+    selectedHoldingKey,
+    setSelectedHoldingKey,
+    breakdownDimension,
+    setBreakdownDimension,
+    selectedGroupKey,
+    setSelectedGroupKey,
+    selectedRBucketKey,
+    setSelectedRBucketKey,
+    selectedRulesKey,
+    setSelectedRulesKey,
+    selectedExitStrategy,
+    setSelectedExitStrategy,
+    selectedSlMovement,
+    setSelectedSlMovement,
+    selectedPlannedRId,
+    setSelectedPlannedRId,
+  } = useAnalyticsPageState();
 
-  useEffect(() => {
-    async function load() {
-      if (!selectedAccount) return;
-      setLoading(true);
-      const { data } = await fetchTrades(selectedAccount.id);
-      if (data) setTrades(data as Trade[]);
-      setLoading(false);
-    }
-    load();
-  }, [selectedAccount?.id]);
+  // The controls themselves (DateRangeSelector, granularity toggle,
+  // breakdown-dimension tabs) read the raw state below so they respond to a
+  // tap instantly. Everything downstream — the equity curve, every chart,
+  // every derived stat — reads the deferred copies instead, so React can
+  // interrupt/deprioritize that (much heavier) recompute rather than
+  // blocking the click that triggered it. This is the same pattern already
+  // used for the Trades page's filters/sort.
+  const deferredRange = useDeferredValue(range);
+  const deferredGranularity = useDeferredValue(granularity);
+  const deferredTimeOfDaySource = useDeferredValue(timeOfDaySource);
+  const deferredBreakdownDimension = useDeferredValue(breakdownDimension);
 
-  const rangeTrades = useMemo(() => filterTradesByRange(trades, range), [trades, range]);
+  const rangeTrades = useMemo(() => filterTradesByRange(trades, deferredRange), [trades, deferredRange]);
 
+  // Keyed on starting_balance, not the account object — same reasoning as
+  // the selectedAccount?.id-keyed effects elsewhere (avoids recomputing on
+  // AccountContext's spurious object-identity churn from Supabase's
+  // background token refresh).
   const equityCurve = useMemo(
     () =>
-      selectedAccount ? buildEquityCurveForRange(trades, selectedAccount.starting_balance, range) : [],
-    [trades, selectedAccount?.starting_balance, range]
+      selectedAccount
+        ? buildEquityCurveForRange(trades, selectedAccount.starting_balance, deferredRange)
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trades, selectedAccount?.starting_balance, deferredRange]
   );
 
   const drawdown = useMemo(() => getDrawdown(equityCurve), [equityCurve]);
   const profitFactor = useMemo(() => getProfitFactor(rangeTrades), [rangeTrades]);
   const expectancy = useMemo(() => getExpectancy(rangeTrades), [rangeTrades]);
+  // Same starting_balance-keying reasoning as equityCurve above.
   const totalReturnPct = useMemo(
     () => getTotalReturnPct(rangeTrades, equityCurve[0]?.balance ?? selectedAccount?.starting_balance ?? 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rangeTrades, equityCurve]
   );
   const pnlBuckets = useMemo(
-    () => getPnlByPeriod(rangeTrades, granularity),
-    [rangeTrades, granularity]
+    () => getPnlByPeriod(rangeTrades, deferredGranularity),
+    [rangeTrades, deferredGranularity]
+  );
+
+  const hourBuckets = useMemo(
+    () => getPerformanceByHour(rangeTrades, deferredTimeOfDaySource),
+    [rangeTrades, deferredTimeOfDaySource]
+  );
+  const missingTimeOfDayCount = useMemo(
+    () => countMissingTimeOfDay(rangeTrades, deferredTimeOfDaySource),
+    [rangeTrades, deferredTimeOfDaySource]
+  );
+  const hourDrilldownTrades = useMemo(
+    () =>
+      selectedHourKey ? getTradesInHourBucket(rangeTrades, deferredTimeOfDaySource, selectedHourKey) : [],
+    [rangeTrades, deferredTimeOfDaySource, selectedHourKey]
+  );
+  const selectedHourBucket = useMemo(
+    () => hourBuckets.find((b) => b.key === selectedHourKey) ?? null,
+    [hourBuckets, selectedHourKey]
+  );
+
+  const holdingBuckets = useMemo(() => getPerformanceByHoldingTime(rangeTrades), [rangeTrades]);
+  const missingHoldingTimeCount = useMemo(() => countMissingHoldingTime(rangeTrades), [rangeTrades]);
+  const holdingDrilldownTrades = useMemo(
+    () => (selectedHoldingKey ? getTradesInHoldingTimeBucket(rangeTrades, selectedHoldingKey) : []),
+    [rangeTrades, selectedHoldingKey]
+  );
+  const selectedHoldingBucket = useMemo(
+    () => holdingBuckets.find((b) => b.key === selectedHoldingKey) ?? null,
+    [holdingBuckets, selectedHoldingKey]
   );
 
   const breakdownGroups = useMemo(
-    () => getBreakdownByDimension(rangeTrades, breakdownDimension),
-    [rangeTrades, breakdownDimension]
+    () => getBreakdownByDimension(rangeTrades, deferredBreakdownDimension),
+    [rangeTrades, deferredBreakdownDimension]
   );
-
-  // Clear the drill-down selection whenever the underlying trade set changes
-  // shape (range or dimension), so a stale key never lingers on screen.
-  useEffect(() => {
-    setSelectedGroupKey(null);
-  }, [range, breakdownDimension]);
 
   const selectedGroup = useMemo(
     () => breakdownGroups.find((g) => g.key === selectedGroupKey) ?? null,
@@ -91,11 +162,14 @@ export default function AnalyticsPage() {
 
   const drilldownTrades = useMemo(
     () =>
-      selectedGroupKey ? getTradesInBreakdownGroup(rangeTrades, breakdownDimension, selectedGroupKey) : [],
-    [rangeTrades, breakdownDimension, selectedGroupKey]
+      selectedGroupKey
+        ? getTradesInBreakdownGroup(rangeTrades, deferredBreakdownDimension, selectedGroupKey)
+        : [],
+    [rangeTrades, deferredBreakdownDimension, selectedGroupKey]
   );
 
   const rBuckets = useMemo(() => getRMultipleDistribution(rangeTrades), [rangeTrades]);
+  const missingRMultipleCount = useMemo(() => countMissingRMultiple(rangeTrades), [rangeTrades]);
   const rDrilldownTrades = useMemo(
     () => (selectedRBucketKey ? getTradesInRMultipleBucket(rangeTrades, selectedRBucketKey) : []),
     [rangeTrades, selectedRBucketKey]
@@ -115,23 +189,76 @@ export default function AnalyticsPage() {
     [rulesGroups, selectedRulesKey]
   );
 
-  const emotionGroups = useMemo(() => getBreakdownByDimension(rangeTrades, "emotion"), [rangeTrades]);
-  const emotionDrilldownTrades = useMemo(
-    () => (selectedEmotionKey ? getTradesInBreakdownGroup(rangeTrades, "emotion", selectedEmotionKey) : []),
-    [rangeTrades, selectedEmotionKey]
+  const exitStrategyRows = useMemo(() => getExitReasonByStrategy(rangeTrades), [rangeTrades]);
+  const exitStrategyDrilldownTrades = useMemo(
+    () =>
+      selectedExitStrategy
+        ? getTradesInStrategyExitGroup(rangeTrades, selectedExitStrategy.strategyKey, selectedExitStrategy.reason)
+        : [],
+    [rangeTrades, selectedExitStrategy]
   );
-  const selectedEmotionGroup = useMemo(
-    () => emotionGroups.find((g) => g.key === selectedEmotionKey) ?? null,
-    [emotionGroups, selectedEmotionKey]
+  const selectedExitStrategyRow = useMemo(
+    () => (selectedExitStrategy ? exitStrategyRows.find((r) => r.key === selectedExitStrategy.strategyKey) : null),
+    [exitStrategyRows, selectedExitStrategy]
   );
+  const selectedExitStrategyLabel = useMemo(() => {
+    if (!selectedExitStrategy || !selectedExitStrategyRow) return "";
+    const reasonLabel = EXIT_REASON_META.find((r) => r.value === selectedExitStrategy.reason)?.label ?? "";
+    return `${selectedExitStrategyRow.label} · ${reasonLabel}`;
+  }, [selectedExitStrategy, selectedExitStrategyRow]);
+  const onSelectExitStrategySegment = useCallback((strategyKey: string, reason: ExitReason) => {
+    setSelectedExitStrategy((prev) =>
+      prev && prev.strategyKey === strategyKey && prev.reason === reason ? null : { strategyKey, reason }
+    );
+  }, [setSelectedExitStrategy]);
 
-  // Clear every drill-down selection whenever the date range changes, so a
-  // stale key never lingers on screen.
-  useEffect(() => {
-    setSelectedRBucketKey(null);
-    setSelectedRulesKey(null);
-    setSelectedEmotionKey(null);
-  }, [range]);
+  const slHitRateRows = useMemo(() => getSlHitRateByStrategy(rangeTrades), [rangeTrades]);
+  const selectedSlMovementRow = useMemo(
+    () => (selectedSlMovement ? slHitRateRows.find((r) => r.key === selectedSlMovement.strategyKey) ?? null : null),
+    [slHitRateRows, selectedSlMovement]
+  );
+  const selectedSlMovementTrades = useMemo(
+    () =>
+      selectedSlMovement
+        ? getTradesInSlMovementGroup(rangeTrades, selectedSlMovement.strategyKey, selectedSlMovement.movement)
+        : [],
+    [rangeTrades, selectedSlMovement]
+  );
+  const selectedSlMovementLabel = useMemo(() => {
+    if (!selectedSlMovement || !selectedSlMovementRow) return "";
+    const movementLabel =
+      selectedSlMovement.movement.charAt(0).toUpperCase() + selectedSlMovement.movement.slice(1);
+    return `${selectedSlMovementRow.label} · ${movementLabel} SL`;
+  }, [selectedSlMovement, selectedSlMovementRow]);
+  const onSelectSlMovementSegment = useCallback((strategyKey: string, movement: StopMovement) => {
+    setSelectedSlMovement((prev) =>
+      prev && prev.strategyKey === strategyKey && prev.movement === movement ? null : { strategyKey, movement }
+    );
+  }, [setSelectedSlMovement]);
+  const closeSlTrailDrilldown = useCallback(() => setSelectedSlMovement(null), [setSelectedSlMovement]);
+
+  const plannedVsRealizedPoints = useMemo(() => getPlannedVsRealizedR(rangeTrades), [rangeTrades]);
+  const plannedVsRealizedSummary = useMemo(
+    () => summarizePlannedVsRealizedR(plannedVsRealizedPoints),
+    [plannedVsRealizedPoints]
+  );
+  const missingPlannedRCount = useMemo(() => countMissingPlannedR(rangeTrades), [rangeTrades]);
+  const selectedPlannedRPoint = useMemo(
+    () => (selectedPlannedRId ? plannedVsRealizedPoints.find((p) => p.id === selectedPlannedRId) ?? null : null),
+    [plannedVsRealizedPoints, selectedPlannedRId]
+  );
+  const selectedPlannedRTrade = useMemo(
+    () => (selectedPlannedRId ? rangeTrades.find((t) => t.id === selectedPlannedRId) ?? null : null),
+    [rangeTrades, selectedPlannedRId]
+  );
+  const closePlannedRDrilldown = useCallback(() => setSelectedPlannedRId(null), [setSelectedPlannedRId]);
+
+  const closeGroupDrilldown = useCallback(() => setSelectedGroupKey(null), [setSelectedGroupKey]);
+  const closeHourDrilldown = useCallback(() => setSelectedHourKey(null), [setSelectedHourKey]);
+  const closeHoldingDrilldown = useCallback(() => setSelectedHoldingKey(null), [setSelectedHoldingKey]);
+  const closeRBucketDrilldown = useCallback(() => setSelectedRBucketKey(null), [setSelectedRBucketKey]);
+  const closeRulesDrilldown = useCallback(() => setSelectedRulesKey(null), [setSelectedRulesKey]);
+  const closeExitStrategyDrilldown = useCallback(() => setSelectedExitStrategy(null), [setSelectedExitStrategy]);
 
   return (
     <div className="space-y-6">
@@ -146,29 +273,31 @@ export default function AnalyticsPage() {
       </div>
 
       {accountLoading || loading ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
-          <p className="text-ink-muted text-sm">Loading analytics…</p>
-        </div>
+        <AnalyticsSkeleton />
       ) : !selectedAccount ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
+        <Card padding="none" className="p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>
-        </div>
+        </Card>
       ) : (
         <>
-          <AnalyticsStats
+          <AnalyticsHero
             totalReturnPct={totalReturnPct}
             profitFactor={profitFactor}
             expectancy={expectancy}
             maxDrawdownPct={drawdown.maxPct}
             currency={selectedAccount.currency}
+            points={equityCurve}
           />
-          <EquityCurveChart points={equityCurve} currency={selectedAccount.currency} />
           <PnlByPeriodChart
             buckets={pnlBuckets}
             currency={selectedAccount.currency}
             granularity={granularity}
             onGranularityChange={setGranularity}
           />
+
+          {/* "Where are you making — and losing — money?" leads the
+              breakdown section, per the money -> leaks -> discipline ->
+              timing -> behavior narrative arc. */}
           <PerformanceBreakdown
             groups={breakdownGroups}
             currency={selectedAccount.currency}
@@ -182,25 +311,60 @@ export default function AnalyticsPage() {
               groupLabel={selectedGroup.label}
               trades={drilldownTrades}
               currency={selectedAccount.currency}
-              onClose={() => setSelectedGroupKey(null)}
+              onClose={closeGroupDrilldown}
             />
           )}
 
-          <RMultipleHistogram
-            buckets={rBuckets}
-            currency={selectedAccount.currency}
-            selectedKey={selectedRBucketKey}
-            onSelectBucket={setSelectedRBucketKey}
-          />
-          {selectedRBucket && (
-            <BreakdownDrilldown
-              groupLabel={selectedRBucket.label}
-              trades={rDrilldownTrades}
-              currency={selectedAccount.currency}
-              onClose={() => setSelectedRBucketKey(null)}
-            />
-          )}
+          {/* "Leaks": where the money that was on the table didn't make it
+              home. Planned-vs-realized R and the R-multiple distribution
+              are both compact, trade-level panels (a scatter and a
+              histogram) rather than dense time series, so they share a row
+              on wide screens instead of each claiming full width. Each
+              chart's drilldown lives inside its own column, directly
+              beneath the chart it belongs to — rather than after the row —
+              so clicking a point/bar always shows its trades right under
+              the chart you clicked, not under whichever chart happens to
+              render second. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <PlannedVsRealizedRChart
+                points={plannedVsRealizedPoints}
+                summary={plannedVsRealizedSummary}
+                missingCount={missingPlannedRCount}
+                selectedId={selectedPlannedRId}
+                onSelectPoint={setSelectedPlannedRId}
+              />
+              {selectedPlannedRPoint && selectedPlannedRTrade && (
+                <BreakdownDrilldown
+                  groupLabel={`${selectedPlannedRPoint.label} · planned ${selectedPlannedRPoint.plannedR.toFixed(
+                    2
+                  )}R vs. realized ${selectedPlannedRPoint.realizedR.toFixed(2)}R`}
+                  trades={[selectedPlannedRTrade]}
+                  currency={selectedAccount.currency}
+                  onClose={closePlannedRDrilldown}
+                />
+              )}
+            </div>
+            <div className="space-y-4">
+              <RMultipleHistogram
+                buckets={rBuckets}
+                currency={selectedAccount.currency}
+                missingCount={missingRMultipleCount}
+                selectedKey={selectedRBucketKey}
+                onSelectBucket={setSelectedRBucketKey}
+              />
+              {selectedRBucket && (
+                <BreakdownDrilldown
+                  groupLabel={selectedRBucket.label}
+                  trades={rDrilldownTrades}
+                  currency={selectedAccount.currency}
+                  onClose={closeRBucketDrilldown}
+                />
+              )}
+            </div>
+          </div>
 
+          {/* "Discipline": does following your own rules actually pay off. */}
           <RulesFollowedComparison
             groups={rulesGroups}
             currency={selectedAccount.currency}
@@ -212,27 +376,85 @@ export default function AnalyticsPage() {
               groupLabel={selectedRulesGroup.label}
               trades={rulesDrilldownTrades}
               currency={selectedAccount.currency}
-              onClose={() => setSelectedRulesKey(null)}
+              onClose={closeRulesDrilldown}
             />
           )}
 
-          <PerformanceBreakdown
-            groups={emotionGroups}
-            currency={selectedAccount.currency}
-            dimension="emotion"
-            dimensions={EMOTION_DIMENSIONS}
-            onDimensionChange={() => {}}
-            selectedKey={selectedEmotionKey}
-            onSelectGroup={setSelectedEmotionKey}
-            title="Performance by emotion"
-            subtitle="Win rate, avg R, and P&L by emotion tag — click a bar to drill in"
+          {/* "Timing": when you trade and how long you hold. Both are
+              dense bar-chart time series of similar shape, so they share a
+              row on wide screens for the same reason the leaks row above
+              does — same drilldown-directly-beneath-its-chart rule applies. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <TimeOfDayChart
+                buckets={hourBuckets}
+                currency={selectedAccount.currency}
+                source={timeOfDaySource}
+                onSourceChange={setTimeOfDaySource}
+                missingCount={missingTimeOfDayCount}
+                selectedKey={selectedHourKey}
+                onSelectBucket={setSelectedHourKey}
+              />
+              {selectedHourBucket && (
+                <BreakdownDrilldown
+                  groupLabel={selectedHourBucket.label}
+                  trades={hourDrilldownTrades}
+                  currency={selectedAccount.currency}
+                  onClose={closeHourDrilldown}
+                />
+              )}
+            </div>
+            <div className="space-y-4">
+              <HoldingTimeChart
+                buckets={holdingBuckets}
+                currency={selectedAccount.currency}
+                missingCount={missingHoldingTimeCount}
+                selectedKey={selectedHoldingKey}
+                onSelectBucket={setSelectedHoldingKey}
+              />
+              {selectedHoldingBucket && (
+                <BreakdownDrilldown
+                  groupLabel={`Held ${selectedHoldingBucket.label}`}
+                  trades={holdingDrilldownTrades}
+                  currency={selectedAccount.currency}
+                  onClose={closeHoldingDrilldown}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* "Behavior": how strategies actually execute in practice. */}
+          <ExitReasonByStrategyChart
+            rows={exitStrategyRows}
+            selectedKey={
+              selectedExitStrategy
+                ? exitStrategySelectionKey(selectedExitStrategy.strategyKey, selectedExitStrategy.reason)
+                : null
+            }
+            onSelectSegment={onSelectExitStrategySegment}
           />
-          {selectedEmotionGroup && (
+          {selectedExitStrategy && (
             <BreakdownDrilldown
-              groupLabel={selectedEmotionGroup.label}
-              trades={emotionDrilldownTrades}
+              groupLabel={selectedExitStrategyLabel}
+              trades={exitStrategyDrilldownTrades}
               currency={selectedAccount.currency}
-              onClose={() => setSelectedEmotionKey(null)}
+              onClose={closeExitStrategyDrilldown}
+            />
+          )}
+
+          <SlTrailImpactChart
+            rows={slHitRateRows}
+            selectedKey={
+              selectedSlMovement ? slMovementSelectionKey(selectedSlMovement.strategyKey, selectedSlMovement.movement) : null
+            }
+            onSelectStrategy={onSelectSlMovementSegment}
+          />
+          {selectedSlMovement && selectedSlMovementRow && (
+            <BreakdownDrilldown
+              groupLabel={selectedSlMovementLabel}
+              trades={selectedSlMovementTrades}
+              currency={selectedAccount.currency}
+              onClose={closeSlTrailDrilldown}
             />
           )}
         </>

@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type DropdownCategory = "asset_class" | "strategy" | "session" | "emotion" | "tag";
+export type DropdownCategory = "asset_class" | "strategy" | "session" | "emotion";
 
 export type DropdownItem = {
   id: string;
@@ -10,9 +10,9 @@ export type DropdownItem = {
   sort_order: number;
 };
 
-// Starter values for every new account. "tag" is deliberately excluded —
-// tags are freeform per-account labels, not a fixed reference list, so a
-// new account should start with an empty tag list.
+// Starter values for every new account. Tags are managed separately via
+// tag_settings (see lib/tagSettings.ts) — freeform per-account labels
+// shared by both trades and notes — so they aren't seeded here.
 export const DEFAULT_DROPDOWN_ITEMS: { category: DropdownCategory; value: string }[] = [
   { category: "asset_class", value: "Forex" },
   { category: "asset_class", value: "Indices" },
@@ -74,28 +74,27 @@ export async function deleteDropdownItem(id: string) {
 }
 
 /**
- * How many trades on this account currently have this value set, for the
- * given category — used to warn before deleting a dropdown option that's
- * still in use. "tag" is stored as an array column on trades, so it needs
- * a containment check instead of a plain equality match.
+ * How many trades currently have this value set, for the given category —
+ * used to warn before deleting a dropdown option that's still in use.
+ * Tag usage counting lives separately in lib/tagSettings.ts
+ * (getTagUsageCount), since tags are no longer a dropdown_settings
+ * category — see phase12b_remove_tag_dropdown_category.sql.
  */
 export async function getDropdownItemUsageCount(
   accountId: string,
   category: DropdownCategory,
   value: string
 ): Promise<number> {
-  let query = supabase
+  const { count, error } = await supabase
     .from("trades")
     .select("id", { count: "exact", head: true })
-    .eq("account_id", accountId);
+    .eq("account_id", accountId)
+    .eq(category, value);
 
-  query = category === "tag" ? query.contains("tags", [value]) : query.eq(category, value);
-
-  const { count, error } = await query;
   if (error) {
     console.error("getDropdownItemUsageCount failed:", error);
-    return 0;
   }
+
   return count ?? 0;
 }
 

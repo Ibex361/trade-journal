@@ -1,13 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Inter, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import AppHeader from "@/components/AppHeader";
+import MobileTabBar from "@/components/MobileTabBar";
 import { AccountProvider } from "@/lib/AccountContext";
+import { TradesDataProvider } from "@/lib/TradesDataContext";
 import { WinRateModeProvider } from "@/lib/WinRateModeContext";
+import { TradesPageStateProvider } from "@/lib/TradesPageStateContext";
+import { AnalyticsPageStateProvider } from "@/lib/AnalyticsPageStateContext";
+import { StrategiesPageStateProvider } from "@/lib/StrategiesPageStateContext";
+import { NotesPageStateProvider } from "@/lib/NotesPageStateContext";
+import ScrollRestoration from "@/components/ScrollRestoration";
 
-const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono" });
+// Concept C's type pairing: Space Grotesk (display) + Inter (body) + JetBrains
+// Mono (numbers). Inter/JetBrains Mono are unchanged from before.
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" });
+const inter = Inter({ subsets: ["latin"], variable: "--font-body" });
+const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Trade journal",
@@ -29,7 +38,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0d10",
+  themeColor: "#090a11",
+  // Lets env(safe-area-inset-*) resolve on notched/home-indicator devices —
+  // needed for MobileTabBar's bottom padding.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -38,15 +50,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable} ${jbmono.variable}`}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jbmono.variable}`}>
       <body className="font-body min-h-screen">
         <AccountProvider>
+          <TradesDataProvider>
           <WinRateModeProvider>
+          <TradesPageStateProvider>
+          <AnalyticsPageStateProvider>
+          <StrategiesPageStateProvider>
+          <NotesPageStateProvider>
+          <ScrollRestoration />
           <AppHeader />
-          <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 print:max-w-none print:px-0 print:py-0">
+          <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-24 md:pb-8 print:max-w-none print:px-0 print:py-0">
             {children}
           </main>
+          <MobileTabBar />
+          </NotesPageStateProvider>
+          </StrategiesPageStateProvider>
+          </AnalyticsPageStateProvider>
+          </TradesPageStateProvider>
           </WinRateModeProvider>
+          </TradesDataProvider>
         </AccountProvider>
       </body>
     </html>

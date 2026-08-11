@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, deleteTrade, deleteTrades, updateTradeTags, updateTradeRules, Trade } from "@/lib/trades";
+import { useTradesPageState } from "@/lib/TradesPageStateContext";
+import { useNotesPageState } from "@/lib/NotesPageStateContext";
+import { deleteTrade, deleteTrades, bulkAddTradeTag, bulkRemoveTradeTag, bulkUpdateTradeRules, Trade } from "@/lib/trades";
+import { useTradesData } from "@/lib/TradesDataContext";
 import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
-import { deleteScreenshotByUrl } from "@/lib/screenshots";
+import { fetchDistinctTags, TagSettingItem } from "@/lib/tagSettings";
+import { deleteScreenshot } from "@/lib/screenshots";
 import { summarizeTrades } from "@/lib/metrics";
 import { tradesToCsv, downloadCsv, slugify } from "@/lib/csvExport";
+import { createNote, findNoteLinkedToTrade, autoTitleFromTrade } from "@/lib/notes";
 import TradesList, { SortState } from "@/components/trades/TradesList";
 import TradeFormPanel from "@/components/trades/TradeFormPanel";
-import TradesFilterBar, { TradeFilters, EMPTY_FILTERS } from "@/components/trades/TradesFilterBar";
-import TradesSummaryStrip from "@/components/trades/TradesSummaryStrip";
+import TradesFilterBar, { TradeFilters } from "@/components/trades/TradesFilterBar";
+import TradesPerformanceRibbon from "@/components/trades/TradesPerformanceRibbon";
+import TradesSkeleton from "@/components/trades/TradesSkeleton";
 import BulkActionsBar from "@/components/trades/BulkActionsBar";
+import Button from "@/components/shared/Button";
 
 function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
   const search = filters.search.trim().toLowerCase();
@@ -34,6 +42,12 @@ function applyFilters(trades: Trade[], filters: TradeFilters): Trade[] {
     return true;
   });
 }
+
+// Infinite-scroll batch size for the Trades list. Chosen to comfortably
+// cover a typical active month of day-trading activity on first load while
+// staying cheap to render; grows by the same amount each time the scroll
+// sentinel in TradesList fires.
+const TRADES_PAGE_SIZE = 50;
 
 function applySort(trades: Trade[], sort: SortState): Trade[] {
   const sorted = [...trades].sort((a, b) => {
@@ -59,47 +73,114 @@ function applySort(trades: Trade[], sort: SortState): Trade[] {
 
 export default function TradesPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const {
+    trades,
+    loading: tradesLoading,
+    upsertTradeLocal,
+    removeTradesLocal,
+    patchTradesLocal,
+  } = useTradesData();
+  const router = useRouter();
+  const { setActiveNoteId } = useNotesPageState();
+  const [openingDiaryId, setOpeningDiaryId] = useState<string | null>(null);
   const [dropdowns, setDropdowns] = useState<DropdownItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dropdownsLoading, setDropdownsLoading] = useState(true);
+  const [tagSettings, setTagSettings] = useState<TagSettingItem[]>([]);
+  const loading = tradesLoading || dropdownsLoading;
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<Trade | null>(null);
-  const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
-  const [sort, setSort] = useState<SortState>({ column: "entry_date", direction: "desc" });
+  const {
+    filters,
+    setFilters,
+    sort,
+    setSort,
+    pendingTradeId,
+    setPendingTradeId,
+    pendingNewTrade,
+    setPendingNewTrade,
+  } = useTradesPageState();
+  // Typing in the filter bar or changing sort updates `filters`/`sort` (and
+  // their controls) immediately; this combined, deferred copy is what
+  // actually drives the filter+sort+row-render pipeline below, so neither
+  // one can block on re-processing the full trades list. Bundling both into
+  // one object — rather than deferring each state variable separately — means
+  // any future filter/sort field added here is automatically covered too;
+  // deferring `filters` alone but not `sort` is exactly what caused the
+  // 736ms INP warning on the mobile sort dropdown.
+  const deferredView = useDeferredValue({ filters, sort });
+  // How many of the filtered+sorted trades are currently revealed on the
+  // page — the client-side "infinite scroll" cursor. Grows by
+  // TRADES_PAGE_SIZE each time the sentinel in TradesList fires, and resets
+  // back to TRADES_PAGE_SIZE below whenever filters or sort change, so the
+  // revealed count is always relative to the *current* filter/sort rather
+  // than however deep the user had previously scrolled into a different
+  // view of the list.
+  const [revealCount, setRevealCount] = useState(TRADES_PAGE_SIZE);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the reveal cursor is a direct response to the filters/sort identity changing, same pattern as the exitSelectionMode effect below.
+    setRevealCount(TRADES_PAGE_SIZE);
+  }, [filters, sort]);
+  const handleLoadMore = useCallback(() => {
+    setRevealCount((prev) => prev + TRADES_PAGE_SIZE);
+  }, []);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  function exitSelectionMode() {
+  const exitSelectionMode = useCallback(() => {
     setSelectionMode(false);
     setSelectedIds(new Set());
-  }
+  }, []);
 
-  function enterSelectionMode(id: string) {
+  const enterSelectionMode = useCallback((id: string) => {
     setSelectionMode(true);
     setSelectedIds(new Set([id]));
-  }
+  }, []);
 
-  async function load() {
+  const loadDropdowns = useCallback(async () => {
     if (!selectedAccount) return;
-    setLoading(true);
-    const [{ data: tradesData }, { data: dropdownData }] = await Promise.all([
-      fetchTrades(selectedAccount.id),
-      fetchDropdownItems(selectedAccount.id),
-    ]);
-    if (tradesData) setTrades(tradesData as Trade[]);
-    if (dropdownData) setDropdowns(dropdownData as DropdownItem[]);
-    setLoading(false);
-  }
+    setDropdownsLoading(true);
+    const { data } = await fetchDropdownItems(selectedAccount.id);
+    if (data) setDropdowns(data as DropdownItem[]);
+    setDropdownsLoading(false);
+  }, [selectedAccount]);
 
   useEffect(() => {
-    load();
-    setFilters(EMPTY_FILTERS);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadDropdowns' setDropdownsLoading(true) runs before its first await.
+    loadDropdowns();
+  }, [loadDropdowns]);
+
+  // Tag setting migration part 2: tags now come from the dedicated
+  // Tag setting migration part 2 (updated): the "+ Tag" bulk-add chip list
+  // now sources from every tag actually in use (fetchDistinctTags) rather
+  // than the old curated tag_settings list — that list is no longer
+  // maintained via the UI as of the Tag setting reshape, so it would
+  // otherwise silently go stale. Synthesized into TagSettingItem shape
+  // (BulkActionsBar only reads .id/.value) so the bar itself needed no
+  // changes.
+  // Keyed on the id, not the object — same reasoning as the notes-fetch
+  // effect in app/notes/page.tsx (spurious object-identity churn from
+  // AccountContext shouldn't re-trigger this fetch).
+  useEffect(() => {
+    if (!selectedAccount) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- no account selected; clear rather than leave a stale list from a previously selected account.
+      setTagSettings([]);
+      return;
+    }
+    fetchDistinctTags(selectedAccount.id).then((tags) => {
+      setTagSettings(
+        tags.map((value) => ({ id: value, value }))
+      );
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.id]);
 
   useEffect(() => {
+    // Clears any selection referencing trades that may no longer be visible
+    // once filters change, so bulk actions can't silently apply to a
+    // now-hidden trade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     exitSelectionMode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
@@ -117,21 +198,32 @@ export default function TradesPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // The full filtered+sorted set. Summary stats, "select all", and CSV
+  // export all need to reason about every trade matching the current
+  // filter — not just the slice currently revealed on screen — so this
+  // stays the full list; only `revealedTrades` below is capped.
   const visibleTrades = useMemo(
-    () => applySort(applyFilters(trades, filters), sort),
-    [trades, filters, sort]
+    () => applySort(applyFilters(trades, deferredView.filters), deferredView.sort),
+    [trades, deferredView]
+  );
+
+  // What's actually rendered in TradesList: the same filtered+sorted set,
+  // capped at revealCount. This is the "infinite scroll" slice.
+  const revealedTrades = useMemo(
+    () => visibleTrades.slice(0, revealCount),
+    [visibleTrades, revealCount]
   );
 
   const summary = useMemo(() => summarizeTrades(visibleTrades), [visibleTrades]);
 
-  // Tags actually used on trades but no longer present in Settings would
-  // otherwise be impossible to filter by (and easy to lose track of) —
-  // union them with the active list so every tag in use stays findable.
+  // tagSettings is now itself "tags in use" (see the effect above), so this
+  // union with trades' own tags is redundant but harmless — kept as a
+  // belt-and-suspenders fallback in case tagSettings hasn't loaded yet.
   const availableTags = useMemo(() => {
-    const active = dropdowns.filter((d) => d.category === "tag").map((d) => d.value);
+    const active = tagSettings.map((t) => t.value);
     const used = trades.flatMap((t) => t.tags ?? []);
     return Array.from(new Set([...active, ...used])).sort();
-  }, [dropdowns, trades]);
+  }, [tagSettings, trades]);
 
   function openNew() {
     setEditingTrade(null);
@@ -139,17 +231,45 @@ export default function TradesPage() {
     setPanelOpen(true);
   }
 
-  function openEdit(trade: Trade) {
+  const openEdit = useCallback((trade: Trade) => {
     setEditingTrade(trade);
     setDuplicateSource(null);
     setPanelOpen(true);
-  }
+  }, []);
 
-  function openDuplicate(trade: Trade) {
+  // Picks up a "jump to this trade" request set by the Notes page (a
+  // linked-trade chip click, via TradesPageStateContext.pendingTradeId —
+  // see lib/TradesPageStateContext.tsx). Waits for trades to finish
+  // loading so the lookup isn't run against an empty list on a fresh
+  // navigation, then opens it in TradeFormPanel exactly like clicking the
+  // row would. Clears pendingTradeId either way (found or not — e.g. the
+  // trade was since deleted) so it doesn't fire again on a later, unrelated
+  // visit to this page.
+  useEffect(() => {
+    if (!pendingTradeId || tradesLoading) return;
+    const target = trades.find((t) => t.id === pendingTradeId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opens the trade panel in response to a one-shot external flag (TradesPageStateContext.pendingTradeId), not deriving render state.
+    if (target) openEdit(target);
+    setPendingTradeId(null);
+  }, [pendingTradeId, tradesLoading, trades, openEdit, setPendingTradeId]);
+
+  // Picks up a "new trade" request set by MobileTabBar's FAB (the plus
+  // button's "New trade" choice) via TradesPageStateContext.pendingNewTrade
+  // before navigating here. Waits for trades to finish loading first, same
+  // as the pendingTradeId effect above, purely so both effects settle in a
+  // consistent order — openNew() itself doesn't actually need the list.
+  useEffect(() => {
+    if (!pendingNewTrade || tradesLoading) return;
+    setPendingNewTrade(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opens the new-trade panel in response to a one-shot external flag (TradesPageStateContext.pendingNewTrade), same as pendingTradeId above.
+    openNew();
+  }, [pendingNewTrade, tradesLoading, setPendingNewTrade]);
+
+  const openDuplicate = useCallback((trade: Trade) => {
     setEditingTrade(null);
     setDuplicateSource(trade);
     setPanelOpen(true);
-  }
+  }, []);
 
   function closePanel() {
     setPanelOpen(false);
@@ -157,12 +277,41 @@ export default function TradesPage() {
     setDuplicateSource(null);
   }
 
-  async function handleSaved() {
+  function handleSaved(savedTrade: Trade) {
     closePanel();
-    await load();
+    upsertTradeLocal(savedTrade);
   }
 
-  async function handleDelete(id: string) {
+  /**
+   * "Diary" button in TradeFormPanel (only shown for an existing, saved
+   * trade). Finds the one note already linked to this trade and jumps to
+   * it, or — if none exists yet — creates a blank note pre-linked to this
+   * trade first. Either way, ends by handing off to the Notes page: sets
+   * NotesPageStateContext.activeNoteId (mounted at the root layout, so
+   * it's already the right value by the time Notes mounts and does its own
+   * fetch) and navigates there. No local trades-page state needs updating
+   * for this — nothing about the trade itself changed.
+   */
+  async function handleOpenDiary(trade: Trade) {
+    if (!selectedAccount || openingDiaryId) return;
+    setOpeningDiaryId(trade.id);
+    const { data: existing } = await findNoteLinkedToTrade(selectedAccount.id, trade.id);
+    let noteId = existing?.id ?? null;
+    if (!noteId) {
+      const autoTitle = autoTitleFromTrade(trade.instrument, trade.pnl, trade.entry_date);
+      const { data: created, error } = await createNote(selectedAccount.id, [trade.id], autoTitle);
+      if (error || !created) {
+        setOpeningDiaryId(null);
+        return;
+      }
+      noteId = created.id;
+    }
+    setActiveNoteId(noteId);
+    setOpeningDiaryId(null);
+    router.push("/notes");
+  }
+
+  const handleDelete = useCallback(async (id: string) => {
     const trade = trades.find((t) => t.id === id);
     setDeleteError(null);
     const { error } = await deleteTrade(id);
@@ -171,31 +320,32 @@ export default function TradesPage() {
       return;
     }
     if (trade?.screenshot_url) {
-      deleteScreenshotByUrl(trade.screenshot_url).catch(() => {});
+      deleteScreenshot({ url: trade.screenshot_url, fileId: trade.screenshot_file_id ?? null }).catch(() => {});
     }
-    await load();
-  }
+    removeTradesLocal([id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trades]);
 
-  function toggleSelect(id: string) {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
 
-  function toggleSelectAll() {
+  const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
       const allCurrentlySelected =
         visibleTrades.length > 0 && visibleTrades.every((t) => prev.has(t.id));
       return allCurrentlySelected ? new Set() : new Set(visibleTrades.map((t) => t.id));
     });
-  }
+  }, [visibleTrades]);
 
-  function selectRange(ids: string[]) {
+  const selectRange = useCallback((ids: string[]) => {
     setSelectedIds((prev) => new Set([...prev, ...ids]));
-  }
+  }, []);
 
   async function handleBulkDelete() {
     const ids = Array.from(selectedIds);
@@ -207,30 +357,45 @@ export default function TradesPage() {
       return;
     }
     targets.forEach((t) => {
-      if (t.screenshot_url) deleteScreenshotByUrl(t.screenshot_url).catch(() => {});
+      if (t.screenshot_url) {
+        deleteScreenshot({ url: t.screenshot_url, fileId: t.screenshot_file_id ?? null }).catch(() => {});
+      }
     });
     exitSelectionMode();
-    await load();
+    removeTradesLocal(ids);
   }
 
+  // Tag add/remove is fully deterministic client-side — array_append/
+  // array_remove of a known tag on a known set of rows, mirroring exactly
+  // what migrations/021_bulk_tag_functions.sql does server-side — so the
+  // result doesn't need to come back from Supabase to be applied locally.
+  // The RPC functions return void (a plain SETOF-less SQL function), so
+  // there's nothing to .select() back here even if we wanted to.
   async function handleBulkAddTag(tag: string) {
     const ids = Array.from(selectedIds);
-    const targets = trades.filter((t) => ids.includes(t.id) && !(t.tags ?? []).includes(tag));
-    await Promise.all(targets.map((t) => updateTradeTags(t.id, [...t.tags, tag])));
-    await load();
+    const { error } = await bulkAddTradeTag(ids, tag);
+    if (error) return;
+    patchTradesLocal(ids, (t) => ({
+      ...t,
+      tags: [...(t.tags ?? []).filter((existing) => existing !== tag), tag],
+    }));
   }
 
   async function handleBulkRemoveTag(tag: string) {
     const ids = Array.from(selectedIds);
-    const targets = trades.filter((t) => ids.includes(t.id) && (t.tags ?? []).includes(tag));
-    await Promise.all(targets.map((t) => updateTradeTags(t.id, t.tags.filter((existing) => existing !== tag))));
-    await load();
+    const { error } = await bulkRemoveTradeTag(ids, tag);
+    if (error) return;
+    patchTradesLocal(ids, (t) => ({
+      ...t,
+      tags: (t.tags ?? []).filter((existing) => existing !== tag),
+    }));
   }
 
   async function handleBulkSetRules(value: boolean) {
     const ids = Array.from(selectedIds);
-    await Promise.all(ids.map((id) => updateTradeRules(id, value)));
-    await load();
+    const { error } = await bulkUpdateTradeRules(ids, value);
+    if (error) return;
+    patchTradesLocal(ids, (t) => ({ ...t, rules_followed: value }));
   }
 
   function handleBulkExport() {
@@ -264,28 +429,22 @@ export default function TradesPage() {
           </p>
         </div>
         {selectionMode ? (
-          <button
-            onClick={exitSelectionMode}
-            className="shrink-0 text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border"
-          >
+          <Button variant="secondary" size="sm" onClick={exitSelectionMode} className="shrink-0">
             Cancel
-          </button>
+          </Button>
         ) : (
           <div className="flex items-center gap-2 shrink-0">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setSelectionMode(true)}
               disabled={!selectedAccount || visibleTrades.length === 0}
-              className="text-sm text-ink-secondary hover:text-ink-primary font-medium px-4 py-1.5 rounded-full border border-surface-border disabled:opacity-50"
             >
               Select
-            </button>
-            <button
-              onClick={openNew}
-              disabled={!selectedAccount}
-              className="text-sm bg-brass text-surface-0 font-medium px-4 py-1.5 rounded-full disabled:opacity-50"
-            >
+            </Button>
+            <Button size="sm" onClick={openNew} disabled={!selectedAccount}>
               New trade
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -293,7 +452,7 @@ export default function TradesPage() {
       {selectedIds.size > 0 && (
         <BulkActionsBar
           count={selectedIds.size}
-          tagOptions={dropdowns.filter((d) => d.category === "tag").sort((a, b) => a.sort_order - b.sort_order)}
+          tagOptions={tagSettings}
           removableTags={removableTags}
           onAddTag={handleBulkAddTag}
           onRemoveTag={handleBulkRemoveTag}
@@ -305,16 +464,14 @@ export default function TradesPage() {
       )}
 
       {accountLoading || loading ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
-          <p className="text-ink-muted text-sm">Loading trades…</p>
-        </div>
+        <TradesSkeleton />
       ) : !selectedAccount ? (
         <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>
         </div>
       ) : (
         <>
-          <TradesSummaryStrip summary={summary} currency={selectedAccount.currency} />
+          <TradesPerformanceRibbon summary={summary} currency={selectedAccount.currency} trades={visibleTrades} />
           <TradesFilterBar
             filters={filters}
             onChange={setFilters}
@@ -333,7 +490,9 @@ export default function TradesPage() {
             </div>
           )}
           <TradesList
-            trades={visibleTrades}
+            trades={revealedTrades}
+            totalCount={visibleTrades.length}
+            onLoadMore={handleLoadMore}
             onEdit={openEdit}
             onDuplicate={openDuplicate}
             onDelete={handleDelete}
@@ -355,6 +514,8 @@ export default function TradesPage() {
           duplicateFrom={duplicateSource}
           onClose={closePanel}
           onSaved={handleSaved}
+          onOpenDiary={handleOpenDiary}
+          openingDiary={editingTrade != null && openingDiaryId === editingTrade.id}
         />
       )}
     </div>

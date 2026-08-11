@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
-import { fetchTrades, Trade } from "@/lib/trades";
+import { useTradesData } from "@/lib/TradesDataContext";
 import { getTradesInMonth, getDailyPnlForMonth, getBestWorstDay, getBestWorstTrade, getTagFrequency, summarizeTrades } from "@/lib/metrics";
 import MonthSelector from "@/components/reports/MonthSelector";
 import CalendarHeatmap from "@/components/reports/CalendarHeatmap";
-import ReportsSummaryStats from "@/components/reports/ReportsSummaryStats";
+import ReportsHero from "@/components/reports/ReportsHero";
 import MonthlyTradesTable from "@/components/reports/MonthlyTradesTable";
 import ReportsToolbar from "@/components/reports/ReportsToolbar";
 import TradeSpotlight from "@/components/reports/TradeSpotlight";
 import TagFrequency from "@/components/reports/TagFrequency";
+import ReportsSkeleton from "@/components/reports/ReportsSkeleton";
 
 const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
@@ -19,26 +20,33 @@ const MONTH_LABELS = [
 
 export default function ReportsPage() {
   const { selectedAccount, loading: accountLoading } = useAccount();
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { trades, loading } = useTradesData();
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
+  // Same pattern as Trades/Analytics: MonthSelector reads the raw state so
+  // it switches instantly, everything else reads the deferred copy.
+  const deferredYear = useDeferredValue(year);
+  const deferredMonth = useDeferredValue(month);
+  const handleMonthChange = useCallback((y: number, m: number) => {
+    setYear(y);
+    setMonth(m);
+  }, [setYear, setMonth]);
 
-  useEffect(() => {
-    async function load() {
-      if (!selectedAccount) return;
-      setLoading(true);
-      const { data } = await fetchTrades(selectedAccount.id);
-      if (data) setTrades(data as Trade[]);
-      setLoading(false);
-    }
-    load();
-  }, [selectedAccount?.id]);
-
-  const monthTrades = useMemo(() => getTradesInMonth(trades, year, month), [trades, year, month]);
-  const dailyPnls = useMemo(() => getDailyPnlForMonth(trades, year, month), [trades, year, month]);
+  const monthTrades = useMemo(
+    () => getTradesInMonth(trades, deferredYear, deferredMonth),
+    [trades, deferredYear, deferredMonth]
+  );
+  // Derived from monthTrades (already filtered) rather than re-scanning the
+  // full account history a second time — see getDailyPnlForMonth's
+  // docstring. Together with getTradesInMonth switching to a string-prefix
+  // match instead of per-trade Date parsing, a month switch now does one
+  // full-history pass instead of two, with no Date allocation in either.
+  const dailyPnls = useMemo(
+    () => getDailyPnlForMonth(monthTrades, deferredYear, deferredMonth),
+    [monthTrades, deferredYear, deferredMonth]
+  );
   const summary = useMemo(() => summarizeTrades(monthTrades), [monthTrades]);
   const { best, worst } = useMemo(() => getBestWorstDay(dailyPnls), [dailyPnls]);
   const { best: bestTrade, worst: worstTrade } = useMemo(() => getBestWorstTrade(monthTrades), [monthTrades]);
@@ -54,8 +62,8 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <MonthSelector year={year} month={month} onChange={(y, m) => { setYear(y); setMonth(m); }} />
-          {selectedAccount && <ReportsToolbar trades={monthTrades} accountName={selectedAccount.name} year={year} month={month} />}
+          <MonthSelector year={year} month={month} onChange={handleMonthChange} />
+          {selectedAccount && <ReportsToolbar trades={monthTrades} accountName={selectedAccount.name} year={deferredYear} month={deferredMonth} />}
         </div>
       </div>
 
@@ -71,22 +79,22 @@ export default function ReportsPage() {
       )}
 
       {accountLoading || loading ? (
-        <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
-          <p className="text-ink-muted text-sm">Loading report…</p>
-        </div>
+        <ReportsSkeleton />
       ) : !selectedAccount ? (
         <div className="bg-surface-1 border border-surface-border rounded-card p-10 text-center">
           <p className="text-ink-muted text-sm">No account selected yet.</p>
         </div>
       ) : (
         <>
-          <ReportsSummaryStats
-            summary={summary}
-            bestDay={best}
-            worstDay={worst}
+          <ReportsHero summary={summary} dailyPnls={dailyPnls} currency={selectedAccount.currency} />
+          <CalendarHeatmap
+            year={deferredYear}
+            month={deferredMonth}
+            days={dailyPnls}
             currency={selectedAccount.currency}
+            bestDate={best?.date}
+            worstDate={worst?.date}
           />
-          <CalendarHeatmap year={year} month={month} days={dailyPnls} currency={selectedAccount.currency} />
           <TradeSpotlight best={bestTrade} worst={worstTrade} />
           <TagFrequency tags={tagFrequency} />
           <div>

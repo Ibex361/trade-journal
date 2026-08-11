@@ -1,11 +1,16 @@
 import { supabase } from "./supabaseClient";
 
 export type Direction = "long" | "short";
+export type ExitReason = "stop_loss" | "take_profit" | "manual" | "other";
+export type StopMovement = "held" | "tightened" | "widened";
 
 export type Trade = {
   id: string;
   account_id: string;
   entry_date: string;
+  entry_time: string | null;
+  exit_date: string | null;
+  exit_time: string | null;
   instrument: string;
   asset_class: string | null;
   strategy: string | null;
@@ -15,18 +20,27 @@ export type Trade = {
   entry_price: number | null;
   exit_price: number | null;
   stop_loss_price: number | null;
+  take_profit_price: number | null;
   size: number | null;
   pnl: number;
   r_multiple: number | null;
   rules_followed: boolean | null;
+  exit_reason: ExitReason | null;
+  sl_movement: StopMovement | null;
+  tp_movement: StopMovement | null;
   notes: string | null;
   screenshot_url: string | null;
+  screenshot_file_id: string | null;
   tags: string[];
+  broker_ticket: string | null;
   created_at: string;
 };
 
 export type TradeInput = {
   entry_date: string;
+  entry_time: string | null;
+  exit_date: string | null;
+  exit_time: string | null;
   instrument: string;
   asset_class: string | null;
   strategy: string | null;
@@ -36,13 +50,22 @@ export type TradeInput = {
   entry_price: number | null;
   exit_price: number | null;
   stop_loss_price: number | null;
+  take_profit_price: number | null;
   size: number | null;
   pnl: number;
   r_multiple: number | null;
   rules_followed: boolean | null;
+  exit_reason: ExitReason | null;
+  sl_movement: StopMovement | null;
+  tp_movement: StopMovement | null;
   notes: string | null;
   screenshot_url: string | null;
+  screenshot_file_id: string | null;
   tags: string[];
+  // The broker's own trade ID, when this trade came from a broker CSV
+  // import (e.g. Exness' "ticket"). Null for manually-entered trades.
+  // Used to skip a trade that's already been imported on re-import.
+  broker_ticket: string | null;
 };
 
 export async function fetchTrades(accountId: string) {
@@ -54,17 +77,69 @@ export async function fetchTrades(accountId: string) {
     .order("created_at", { ascending: false });
 }
 
+/**
+ * Returns the set of broker_ticket values already stored for this account,
+ * so a broker CSV import (e.g. Exness) can skip trades it's already
+ * imported instead of creating duplicates when the export ranges overlap.
+ */
+export async function getExistingBrokerTickets(accountId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("trades")
+    .select("broker_ticket")
+    .eq("account_id", accountId)
+    .not("broker_ticket", "is", null);
+  if (error) {
+    console.error("getExistingBrokerTickets failed:", error);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r) => r.broker_ticket as string).filter(Boolean));
+}
+
+/**
+ * Selects the inserted row back (rather than a bare insert with no
+ * response body) so the caller can patch its local trade cache with the
+ * server's authoritative copy — including any column Postgres itself
+ * filled in (id, created_at) — instead of re-fetching the whole account's
+ * trade history just to learn about this one new row. See
+ * TradesDataContext's docstring.
+ */
 export async function createTrade(accountId: string, input: TradeInput) {
-  const result = await supabase.from("trades").insert({
-    account_id: accountId,
-    ...input,
-  });
+  const result = await supabase
+    .from("trades")
+    .insert({
+      account_id: accountId,
+      ...input,
+    })
+    .select()
+    .single();
   if (result.error) console.error("createTrade failed:", result.error);
   return result;
 }
 
+/**
+ * Bulk insert used by CSV import. Sent in chunks rather than one request —
+ * a large journal (thousands of rows) can exceed a single request's payload
+ * limits, and chunking also means a failure partway through reports how
+ * many rows actually made it in rather than an all-or-nothing error.
+ */
+export async function createTrades(accountId: string, inputs: TradeInput[]) {
+  const CHUNK_SIZE = 200;
+  let inserted = 0;
+  for (let i = 0; i < inputs.length; i += CHUNK_SIZE) {
+    const chunk = inputs.slice(i, i + CHUNK_SIZE).map((input) => ({ account_id: accountId, ...input }));
+    const result = await supabase.from("trades").insert(chunk);
+    if (result.error) {
+      console.error("createTrades failed:", result.error);
+      return { inserted, error: result.error };
+    }
+    inserted += chunk.length;
+  }
+  return { inserted, error: null };
+}
+
+/** Selects the updated row back — same reasoning as createTrade above. */
 export async function updateTrade(id: string, input: TradeInput) {
-  const result = await supabase.from("trades").update(input).eq("id", id);
+  const result = await supabase.from("trades").update(input).eq("id", id).select().single();
   if (result.error) console.error("updateTrade failed:", result.error);
   return result;
 }
@@ -82,16 +157,33 @@ export async function deleteTrades(ids: string[]) {
   return result;
 }
 
-/** Narrow update used by the bulk "add/remove tag" actions — only touches the tags column. */
-export async function updateTradeTags(id: string, tags: string[]) {
-  const result = await supabase.from("trades").update({ tags }).eq("id", id);
-  if (result.error) console.error("updateTradeTags failed:", result.error);
+/**
+ * Bulk "+ tag"/"- tag" actions — one Postgres round-trip for the whole
+ * selection instead of one per-row `.update()` call (each row needs its
+ * own tags array recomputed, so this can't be expressed as a single plain
+ * `.update()` the way `deleteTrades`/`bulkUpdateTradeRules` can; see
+ * migrations/021_bulk_tag_functions.sql for the server-side
+ * array_append/array_remove logic these call into).
+ */
+export async function bulkAddTradeTag(ids: string[], tag: string) {
+  const result = await supabase.rpc("bulk_add_trade_tag", { trade_ids: ids, tag_to_add: tag });
+  if (result.error) console.error("bulkAddTradeTag failed:", result.error);
   return result;
 }
 
-/** Narrow update used by the bulk "mark rules followed" action — only touches rules_followed. */
-export async function updateTradeRules(id: string, rules_followed: boolean | null) {
-  const result = await supabase.from("trades").update({ rules_followed }).eq("id", id);
-  if (result.error) console.error("updateTradeRules failed:", result.error);
+export async function bulkRemoveTradeTag(ids: string[], tag: string) {
+  const result = await supabase.rpc("bulk_remove_trade_tag", { trade_ids: ids, tag_to_remove: tag });
+  if (result.error) console.error("bulkRemoveTradeTag failed:", result.error);
+  return result;
+}
+
+/**
+ * Bulk "mark rules followed" action — every selected row gets the same
+ * value, so (unlike the per-row tag functions above) this needs no RPC:
+ * a single `.update(...).in("id", ids)` already expresses it in one request.
+ */
+export async function bulkUpdateTradeRules(ids: string[], rules_followed: boolean | null) {
+  const result = await supabase.from("trades").update({ rules_followed }).in("id", ids);
+  if (result.error) console.error("bulkUpdateTradeRules failed:", result.error);
   return result;
 }

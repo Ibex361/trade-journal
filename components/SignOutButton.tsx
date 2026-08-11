@@ -20,7 +20,7 @@ export default function SignOutButton() {
       onClick={handleSignOut}
       disabled={signingOut}
       title="Sign out"
-      className="flex items-center justify-center h-9 w-9 rounded-full bg-surface-2 border border-surface-border text-ink-secondary hover:text-loss hover:border-loss/40 transition-colors shrink-0"
+      className="flex items-center justify-center h-9 w-9 rounded-full bg-surface-2 backdrop-blur-md border border-surface-border text-ink-secondary hover:text-loss hover:border-loss/40 transition-colors shrink-0 disabled:opacity-50"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

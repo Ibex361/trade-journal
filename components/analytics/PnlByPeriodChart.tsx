@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, memo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { PeriodBucket, PeriodGranularity } from "@/lib/metrics";
+import Card from "@/components/shared/Card";
 
 const GRANULARITIES: { value: PeriodGranularity; label: string }[] = [
   { value: "day", label: "Day" },
@@ -10,9 +11,11 @@ const GRANULARITIES: { value: PeriodGranularity; label: string }[] = [
   { value: "month", label: "Month" },
 ];
 
-type TooltipPayloadItem = { payload: PeriodBucket };
+type TooltipPayloadItem = { payload?: PeriodBucket };
 
-function CustomTooltip({
+// Memoized so Recharts' per-mousemove tooltip re-invocation doesn't force a
+// fresh render when the active bucket hasn't actually changed.
+const CustomTooltip = memo(function CustomTooltip({
   active,
   payload,
   currency,
@@ -23,10 +26,11 @@ function CustomTooltip({
 }) {
   if (!active || !payload || !payload.length) return null;
   const bucket = payload[0].payload;
+  if (!bucket) return null;
   const color = bucket.pnl >= 0 ? "text-gain" : "text-loss";
   const sign = bucket.pnl > 0 ? "+" : "";
   return (
-    <div className="bg-surface-2 border border-surface-border rounded-md px-3 py-2 shadow-lg">
+    <div className="bg-surface-popover backdrop-blur-lg border border-surface-border rounded-md px-3 py-2 shadow-glass">
       <p className="text-xs text-ink-secondary">{bucket.label}</p>
       <p className={`font-mono text-sm mt-0.5 ${color}`}>
         {sign}
@@ -37,9 +41,9 @@ function CustomTooltip({
       </p>
     </div>
   );
-}
+});
 
-export default function PnlByPeriodChart({
+function PnlByPeriodChart({
   buckets,
   currency,
   granularity,
@@ -50,18 +54,25 @@ export default function PnlByPeriodChart({
   granularity: PeriodGranularity;
   onGranularityChange: (g: PeriodGranularity) => void;
 }) {
+  const renderTooltip = useCallback(
+    (props: { active?: boolean; payload?: TooltipPayloadItem[] }) => (
+      <CustomTooltip {...props} currency={currency} />
+    ),
+    [currency]
+  );
+
   return (
-    <div className="bg-surface-1 border border-surface-border rounded-card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-base font-medium">P&amp;L by period</h2>
-        <div className="inline-flex items-center bg-surface-2 border border-surface-border rounded-full p-1">
+    <Card
+      title="P&L by period"
+      action={
+        <div className="inline-flex items-center bg-surface-2 backdrop-blur-md border border-surface-border rounded-full p-1">
           {GRANULARITIES.map((g) => (
             <button
               key={g.value}
               onClick={() => onGranularityChange(g.value)}
-              className={`px-3 py-1 text-xs font-mono rounded-full transition-colors ${
+              className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
                 granularity === g.value
-                  ? "bg-brass text-surface-0 font-medium"
+                  ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-glow"
                   : "text-ink-secondary hover:text-ink-primary"
               }`}
             >
@@ -69,8 +80,8 @@ export default function PnlByPeriodChart({
             </button>
           ))}
         </div>
-      </div>
-
+      }
+    >
       {buckets.length === 0 ? (
         <div className="h-56 flex items-center justify-center">
           <p className="text-ink-muted text-sm">No trades in this range.</p>
@@ -79,34 +90,49 @@ export default function PnlByPeriodChart({
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={buckets} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="#272C34" vertical={false} />
+              <defs>
+                <linearGradient id="barUp" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#5CE6C8" />
+                  <stop offset="100%" stopColor="#5CE6C8" stopOpacity={0.15} />
+                </linearGradient>
+                <linearGradient id="barDown" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FB7185" />
+                  <stop offset="100%" stopColor="#FB7185" stopOpacity={0.15} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="rgba(255,255,255,0.09)" vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fill: "#5C636F", fontSize: 11 }}
-                axisLine={{ stroke: "#272C34" }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
                 minTickGap={20}
               />
               <YAxis
-                tick={{ fill: "#5C636F", fontSize: 11 }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={50}
                 tickFormatter={(v: number) => v.toLocaleString(undefined, { notation: "compact" })}
               />
               <Tooltip
-                cursor={{ fill: "#1B1F26" }}
-                content={(props: any) => <CustomTooltip {...props} currency={currency} />}
+                cursor={{ fill: "rgba(255,255,255,0.06)" }}
+                content={renderTooltip}
               />
-              <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
+              <Bar dataKey="pnl" radius={[3, 3, 0, 0]} isAnimationActive={false}>
                 {buckets.map((b, i) => (
-                  <Cell key={i} fill={b.pnl >= 0 ? "#2BB673" : "#E5484D"} />
+                  <Cell key={i} fill={b.pnl >= 0 ? "url(#barUp)" : "url(#barDown)"} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
+
+// Memoized for the same reason as the tooltip above: a drilldown selection
+// or a different chart's dimension toggle elsewhere on the page shouldn't
+// force this whole bar chart to re-render.
+export default memo(PnlByPeriodChart);

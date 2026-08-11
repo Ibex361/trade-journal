@@ -3,6 +3,8 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import Input from "@/components/shared/Input";
+import Button from "@/components/shared/Button";
 
 function LoginForm() {
   const router = useRouter();
@@ -40,7 +42,7 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-3 justify-center mb-8">
-          <span className="signal-bar h-7" />
+          <span className="brand-orb w-6 h-6 rounded-full shrink-0" />
           <span className="font-display font-medium text-xl tracking-tight">
             Trade journal
           </span>
@@ -48,7 +50,7 @@ function LoginForm() {
 
         <form
           onSubmit={handleSubmit}
-          className="bg-surface-1 border border-surface-border rounded-card p-6"
+          className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass p-6"
         >
           <h1 className="font-display text-lg font-medium mb-1">Sign in</h1>
           <p className="text-ink-secondary text-sm mb-6">
@@ -57,25 +59,25 @@ function LoginForm() {
 
           <label className="block mb-4">
             <span className="text-xs text-ink-secondary">Email</span>
-            <input
+            <Input
               type="email"
               autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-sm"
+              className="mt-1 w-full"
             />
           </label>
 
           <label className="block mb-2">
             <span className="text-xs text-ink-secondary">Password</span>
-            <input
+            <Input
               type="password"
               autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full bg-surface-2 border border-surface-border rounded-md px-3 py-2 text-sm"
+              className="mt-1 w-full"
             />
           </label>
 
@@ -85,13 +87,9 @@ function LoginForm() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-6 w-full text-sm bg-brass text-surface-0 font-medium px-4 py-2.5 rounded-full disabled:opacity-60"
-          >
+          <Button type="submit" disabled={submitting} className="mt-6 w-full">
             {submitting ? "Signing in…" : "Sign in"}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

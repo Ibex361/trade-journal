@@ -38,7 +38,7 @@ export default function MonthSelector({
       </button>
       <button
         onClick={goToday}
-        className="px-3 py-1 text-xs font-mono text-ink-primary min-w-[110px] text-center hover:text-brass transition-colors"
+        className="px-3 py-1 text-xs font-mono text-ink-primary min-w-[110px] text-center hover:text-glow transition-colors"
       >
         {MONTH_LABELS[month - 1]} {year}
       </button>
