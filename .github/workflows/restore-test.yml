@@ -1,0 +1,58 @@
+name: Restore test (one-off, delete after use)
+
+# One-time manual workflow to verify a Supabase backup actually restores
+# cleanly. Restores the latest backups/*.sql.gz into whatever database
+# RESTORE_TARGET_DB_URL points at — NEVER point this at the real
+# production database. Meant to be pointed at a disposable throwaway
+# Supabase project, run once, then this file and the throwaway project
+# both get deleted.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  restore-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get install -y curl ca-certificates gnupg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
+          echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Verify RESTORE_TARGET_DB_URL secret is set
+        env:
+          RESTORE_TARGET_DB_URL: ${{ secrets.RESTORE_TARGET_DB_URL }}
+        run: |
+          if [ -z "$RESTORE_TARGET_DB_URL" ]; then
+            echo "::error::RESTORE_TARGET_DB_URL secret is not set. Add it under Settings -> Secrets and variables -> Actions, pointed at the THROWAWAY test project only."
+            exit 1
+          fi
+
+      - name: Restore latest backup into target
+        env:
+          RESTORE_TARGET_DB_URL: ${{ secrets.RESTORE_TARGET_DB_URL }}
+        run: |
+          set -o pipefail
+          PG_BIN_DIR=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -n1)
+          latest=$(ls -1t backups/backup-*.sql.gz | head -n1)
+          echo "Restoring $latest"
+          gunzip -c "$latest" | "$PG_BIN_DIR/psql" "$RESTORE_TARGET_DB_URL"
+
+      - name: Verify row counts landed
+        env:
+          RESTORE_TARGET_DB_URL: ${{ secrets.RESTORE_TARGET_DB_URL }}
+        run: |
+          PG_BIN_DIR=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -n1)
+          "$PG_BIN_DIR/psql" "$RESTORE_TARGET_DB_URL" -c "
+            SELECT 'accounts' AS table_name, COUNT(*) FROM public.accounts
+            UNION ALL SELECT 'trades', COUNT(*) FROM public.trades
+            UNION ALL SELECT 'notes', COUNT(*) FROM public.notes
+            UNION ALL SELECT 'dropdown_settings', COUNT(*) FROM public.dropdown_settings
+            UNION ALL SELECT 'exness_contract_overrides', COUNT(*) FROM public.exness_contract_overrides;
+          "
