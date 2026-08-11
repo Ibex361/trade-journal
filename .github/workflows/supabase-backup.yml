@@ -78,9 +78,21 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
+          set -o pipefail
+          # Ubuntu 24.04 ships its own pg_dump (v16) at /usr/bin/pg_dump,
+          # which the PGDG install above does NOT overwrite or take
+          # priority over on PATH — it only adds versioned binaries
+          # under /usr/lib/postgresql/<version>/bin/. Resolve the
+          # actual newest installed version explicitly so the right
+          # one gets used instead of silently falling back to the
+          # older system one. Also: without `set -o pipefail`, pg_dump
+          # failing here would be masked by `gzip` succeeding on an
+          # empty stream, so the step would show green even on failure
+          # — pipefail makes the pipeline's exit code reflect pg_dump's.
+          PG_BIN_DIR=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -n1)
           mkdir -p backups
           stamp=$(date -u +%Y-%m-%d)
-          pg_dump "$SUPABASE_DB_URL" \
+          "$PG_BIN_DIR/pg_dump" "$SUPABASE_DB_URL" \
             --schema=public \
             --no-owner \
             --no-privileges \
