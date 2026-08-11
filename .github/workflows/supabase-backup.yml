@@ -9,6 +9,20 @@ name: Supabase backup
 # tab ("Run workflow") if you want a backup right before making some
 # risky change.
 #
+# SETUP (one-time, required for this to work):
+#   1. In the Supabase dashboard: Project Settings -> Database ->
+#      Connection string -> URI. IMPORTANT: use the "Session pooler" or
+#      "Direct connection" string (port 5432), NOT the default
+#      "Transaction pooler" (port 6543) — pg_dump does not work
+#      reliably against the transaction pooler.
+#   2. In this GitHub repo: Settings -> Secrets and variables -> Actions
+#      -> New repository secret -> name it SUPABASE_DB_URL, paste the
+#      connection string (with your actual password substituted in for
+#      the [YOUR-PASSWORD] placeholder Supabase shows you).
+#   3. Done — the schedule below picks it up automatically. Use "Run
+#      workflow" in the Actions tab to test it immediately rather than
+#      waiting for Sunday.
+#
 # Only the last 12 backups (about 3 months on a weekly schedule) are
 # kept — older ones are pruned automatically each run so this doesn't
 # grow the repo forever.
@@ -16,6 +30,10 @@ name: Supabase backup
 # Auth/session internals aren't included (only your own app's "public"
 # schema is dumped), so this is safe to keep in a private repo without
 # leaking Supabase-managed credentials.
+#
+# If the dump step fails (e.g. secret missing/wrong, or wrong port),
+# the job fails loudly and GitHub emails you — check the Actions tab
+# for the error rather than assuming a green run happened.
 
 on:
   schedule:
@@ -28,10 +46,23 @@ permissions:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    container: postgres:16-bookworm # ships a pg_dump version that matches Supabase's Postgres
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+
+      - name: Verify SUPABASE_DB_URL secret is set
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set. Add it under Settings -> Secrets and variables -> Actions. See the comments at the top of this workflow file for how to get the connection string from Supabase."
+            exit 1
+          fi
 
       - name: Dump the public schema
         env:
@@ -45,6 +76,15 @@ jobs:
             --no-privileges \
             --format=plain \
           | gzip > "backups/backup-${stamp}.sql.gz"
+
+      - name: Verify the dump isn't empty
+        run: |
+          stamp=$(date -u +%Y-%m-%d)
+          size=$(stat -c%s "backups/backup-${stamp}.sql.gz")
+          if [ "$size" -lt 200 ]; then
+            echo "::error::Backup file is suspiciously small (${size} bytes) — the dump likely failed silently. Check that SUPABASE_DB_URL points at the direct connection or session pooler (port 5432), not the transaction pooler (port 6543)."
+            exit 1
+          fi
 
       - name: Prune old backups (keep the last 12)
         run: |
