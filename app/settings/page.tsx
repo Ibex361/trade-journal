@@ -6,6 +6,8 @@ import TargetsCard from "@/components/settings/TargetsCard";
 import WinRateModeCard from "@/components/settings/WinRateModeCard";
 import DataExportCard from "@/components/settings/DataExportCard";
 import DataImportCard from "@/components/settings/DataImportCard";
+import NotesExportCard from "@/components/settings/NotesExportCard";
+import NotesImportCard from "@/components/settings/NotesImportCard";
 import LegacyScreenshotMigrationCard from "@/components/settings/LegacyScreenshotMigrationCard";
 
 export default function SettingsPage() {
@@ -27,6 +29,8 @@ export default function SettingsPage() {
         <DataExportCard />
       </div>
       <DataImportCard />
+      <NotesExportCard />
+      <NotesImportCard />
       <ExnessContractSizeCard />
       <LegacyScreenshotMigrationCard />
       <TagSettingCard />

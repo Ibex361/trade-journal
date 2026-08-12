@@ -1,5 +1,10 @@
 import { supabase } from "./supabaseClient";
 import type { JSONContent } from "@tiptap/react";
+// hashNote only needs title+content strings — no runtime dependency back
+// on this file's exports (notesImport.ts's own import of NoteInput from
+// here is type-only and erased), so this is a plain one-way import, not a
+// circular one.
+import { hashNote } from "./notesImport";
 
 export type Note = {
   id: string;
@@ -12,6 +17,22 @@ export type Note = {
   // linked_strategy stores the same raw string a trade's own `strategy`
   // field would hold, since there's no separate strategies table anywhere
   // in this app.
+  linked_trade_ids: string[];
+  linked_strategy: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Shape for a note coming from an import file (see lib/notesImport.ts) —
+ * everything createNotes needs to insert a row, including created_at/
+ * updated_at, which a freshly-composed note in the editor never supplies
+ * itself (those are always server/now-assigned for hand-authored notes).
+ */
+export type NoteInput = {
+  title: string;
+  content: JSONContent;
+  tags: string[];
   linked_trade_ids: string[];
   linked_strategy: string | null;
   created_at: string;
@@ -92,6 +113,73 @@ export async function createNote(
     .single();
   if (result.error) console.error("createNote failed:", result.error);
   return result;
+}
+
+/**
+ * Bulk insert for the notes import flow (Settings → Import notes) —
+ * mirrors createTrades' chunking (200 rows/request, Supabase's practical
+ * payload-size comfort zone for a single insert). Unlike createNote/
+ * createTrade, this restores created_at/updated_at from the input rather
+ * than letting Postgres default them to now(): imported notes are a
+ * backup/restore or account-to-account copy, and re-stamping "now" would
+ * both scramble the notes list's updated_at-desc ordering and lose the
+ * diary's actual timeline. linked_trade_ids is expected to already be
+ * filtered to ids that exist in this account by the caller (see
+ * getExistingTradeIds) — this function inserts whatever it's given as-is.
+ */
+export async function createNotes(accountId: string, inputs: NoteInput[]) {
+  const CHUNK_SIZE = 200;
+  let inserted = 0;
+  for (let i = 0; i < inputs.length; i += CHUNK_SIZE) {
+    const chunk = inputs.slice(i, i + CHUNK_SIZE).map((input) => ({
+      account_id: accountId,
+      title: input.title,
+      content: input.content,
+      tags: input.tags,
+      linked_trade_ids: input.linked_trade_ids,
+      linked_strategy: input.linked_strategy,
+      created_at: input.created_at,
+      updated_at: input.updated_at,
+    }));
+    const result = await supabase.from("notes").insert(chunk);
+    if (result.error) {
+      console.error("createNotes failed:", result.error);
+      return { inserted, error: result.error };
+    }
+    inserted += chunk.length;
+  }
+  return { inserted, error: null };
+}
+
+/**
+ * Fingerprints (see hashNote in lib/notesImport.ts) of every existing note
+ * in the account, for the import flow's duplicate check — only title+content
+ * are fetched, not the full row, since that's all a fingerprint needs and
+ * note bodies can run to several KB each.
+ */
+export async function getExistingNoteHashes(accountId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.from("notes").select("title, content").eq("account_id", accountId);
+  if (error) {
+    console.error("getExistingNoteHashes failed:", error);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r) => hashNote(r.title, r.content as JSONContent)));
+}
+
+/**
+ * Trade ids that exist in this account, for the notes import flow — a
+ * note's linked_trade_ids from an export are only meaningful within the
+ * account they were created in (see notesImport.ts); importing into a
+ * different account needs this to drop links that don't resolve rather
+ * than importing a dangling reference.
+ */
+export async function getExistingTradeIds(accountId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.from("trades").select("id").eq("account_id", accountId);
+  if (error) {
+    console.error("getExistingTradeIds failed:", error);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r) => r.id as string));
 }
 
 /**
