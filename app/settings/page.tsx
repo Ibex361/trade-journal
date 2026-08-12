@@ -2,6 +2,7 @@ import AccountManager from "@/components/settings/AccountManager";
 import DropdownLists from "@/components/settings/DropdownLists";
 import TagSettingCard from "@/components/settings/TagSettingCard";
 import ExnessContractSizeCard from "@/components/settings/ExnessContractSizeCard";
+import ChartSymbolCard from "@/components/settings/ChartSymbolCard";
 import TargetsCard from "@/components/settings/TargetsCard";
 import WinRateModeCard from "@/components/settings/WinRateModeCard";
 import DataExportCard from "@/components/settings/DataExportCard";
@@ -32,6 +33,7 @@ export default function SettingsPage() {
       <NotesExportCard />
       <NotesImportCard />
       <ExnessContractSizeCard />
+      <ChartSymbolCard />
       <LegacyScreenshotMigrationCard />
       <TagSettingCard />
       <DropdownLists />

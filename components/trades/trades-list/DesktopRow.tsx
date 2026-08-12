@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import {
+  ChartButton,
   DeleteButton,
   PnlText,
   RowProps,
@@ -23,6 +24,7 @@ const DesktopRow = memo(function DesktopRow({
   onDuplicate,
   onRequestDelete,
   onOpenScreenshot,
+  onOpenChart,
   onRowClick,
   onCheckboxClick,
   onPointerDown,
@@ -107,6 +109,9 @@ const DesktopRow = memo(function DesktopRow({
           url={t.screenshot_url}
           onOpen={() => t.screenshot_url && onOpenScreenshot(t.screenshot_url)}
         />
+      </td>
+      <td className="px-4 py-3">
+        <ChartButton onOpen={() => onOpenChart(t)} />
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center justify-end gap-3">

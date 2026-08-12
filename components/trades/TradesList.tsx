@@ -5,6 +5,7 @@ import { Trade } from "@/lib/trades";
 import { getTradeRowEmphasis } from "@/lib/metrics";
 import { Select } from "@/components/shared/Select";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import TradeChartModal from "./trade-chart/TradeChartModal";
 import DesktopRow from "./trades-list/DesktopRow";
 import MobileCard from "./trades-list/MobileCard";
 import {
@@ -71,6 +72,11 @@ function TradesList({
   onEnterSelectionMode: (id: string) => void;
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Trade currently shown in TradeChartModal, or null when closed — holds
+  // the whole Trade (not just an id) since the row that opened it may
+  // have scrolled out of `trades` by the time the modal closes (e.g. a
+  // filter change), and the modal needs entry/exit/instrument regardless.
+  const [chartTrade, setChartTrade] = useState<Trade | null>(null);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   // One shared confirm dialog for the whole list, rather than the old
   // per-row inline "Delete" -> "Confirm" swap (see DeleteButton in
@@ -169,6 +175,7 @@ function TradesList({
   );
 
   const openScreenshot = useCallback((url: string) => setLightboxUrl(url), []);
+  const openChart = useCallback((trade: Trade) => setChartTrade(trade), []);
 
   // Infinite-scroll trigger: an IntersectionObserver on a sentinel div below
   // the last rendered row, rather than an onScroll pixel-threshold listener.
@@ -199,6 +206,7 @@ function TradesList({
     onDuplicate,
     onRequestDelete: requestDelete,
     onOpenScreenshot: openScreenshot,
+    onOpenChart: openChart,
     onRowClick: handleRowClick,
     onCheckboxClick: handleCheckboxClick,
     onPointerDown: startPress,
@@ -251,6 +259,7 @@ function TradesList({
                 <SortHeader label="R" column="r_multiple" sort={sort} onSortChange={onSortChange} align="right" />
               </th>
               <th className="px-4 py-3 font-medium">Rules</th>
+              <th className="px-4 py-3 font-medium">Screenshot</th>
               <th className="px-4 py-3 font-medium">Chart</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
@@ -345,6 +354,8 @@ function TradesList({
       {lightboxUrl && (
         <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
+
+      {chartTrade && <TradeChartModal trade={chartTrade} onClose={() => setChartTrade(null)} />}
 
       <ConfirmDialog
         open={pendingDeleteId !== null}

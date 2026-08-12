@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import {
+  ChartButton,
   DeleteButton,
   PnlText,
   RowProps,
@@ -23,6 +24,7 @@ const MobileCard = memo(function MobileCard({
   onDuplicate,
   onRequestDelete,
   onOpenScreenshot,
+  onOpenChart,
   onRowClick,
   onCheckboxClick,
   onPointerDown,
@@ -132,6 +134,7 @@ const MobileCard = memo(function MobileCard({
       )}
 
       <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-surface-border">
+        <ChartButton onOpen={() => onOpenChart(t)} />
         <button onClick={() => onEdit(t)} className="text-xs text-ink-secondary hover:text-glow">
           Edit
         </button>

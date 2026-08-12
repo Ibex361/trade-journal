@@ -20,6 +20,11 @@ export type RowCallbacks = {
   // fires once the user confirms there (see TradesList's requestDelete).
   onRequestDelete: (id: string) => void;
   onOpenScreenshot: (url: string) => void;
+  // Opens TradeChartModal (candlestick market chart, via Twelve Data) for
+  // this row's trade — separate from onOpenScreenshot, which opens the
+  // user's own uploaded screenshot image. Takes the whole Trade (not just
+  // an id/url) since the chart needs instrument/entry/exit/direction.
+  onOpenChart: (trade: Trade) => void;
   onRowClick: (e: React.MouseEvent, id: string) => void;
   onCheckboxClick: (e: React.MouseEvent<HTMLInputElement>, id: string, index: number) => void;
   onPointerDown: (id: string, target: EventTarget) => void;
@@ -115,6 +120,28 @@ export function ScreenshotThumb({ url, onOpen }: { url: string | null; onOpen: (
       aria-label="View chart screenshot"
     >
       <Image loader={imagekitLoader} src={url} alt="" fill className="object-cover" sizes="36px" />
+    </button>
+  );
+}
+
+// Opens TradeChartModal — a live candlestick market chart for this trade's
+// instrument, via lightweight-charts + Twelve Data. Deliberately a plain
+// text/icon button rather than a thumbnail like ScreenshotThumb: there's
+// no static image to preview here (the chart is fetched fresh each time),
+// so a thumbnail would either be blank or require a wasted fetch just to
+// render a preview nobody asked for.
+export function ChartButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="inline-flex items-center gap-1 text-xs text-ink-secondary hover:text-glow transition-colors"
+      aria-label="View chart"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+        <path d="M3 17l5-5 4 4 8-9" />
+        <path d="M14 7h7v7" />
+      </svg>
+      Chart
     </button>
   );
 }
