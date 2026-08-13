@@ -30,6 +30,21 @@ describe("computeStartMonth", () => {
   it("respects a smaller maxBackfillMonths", () => {
     expect(computeStartMonth("2020-01-01", 3, now)).toBe("2026-05");
   });
+
+  it("accepts a native Date object (what node-postgres actually returns for a `date` column), not just a string", () => {
+    // Regression test: pg returns Postgres `date` columns as JS Date
+    // objects at runtime regardless of the query result's TS type
+    // annotation — a bare .slice() call on that value throws "X.slice
+    // is not a function" the first time this runs against a real
+    // database, which a string-only fixture can't catch.
+    const asDate = new Date(Date.UTC(2026, 5, 15)); // 2026-06-15
+    expect(computeStartMonth(asDate, 24, now)).toBe("2026-06");
+  });
+
+  it("a Date object still gets capped the same way a string does", () => {
+    const asDate = new Date(Date.UTC(2020, 0, 1)); // 2020-01-01
+    expect(computeStartMonth(asDate, 24, now)).toBe("2024-08");
+  });
 });
 
 describe("candleKey", () => {

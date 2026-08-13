@@ -43,8 +43,17 @@ export function monthsBetween(startYYYYMM: string, endYYYYMM: string): string[] 
  * comment for why — no point fetching years of tick data nobody will
  * ever chart).
  */
-export function computeStartMonth(earliestEntryDate: string, maxBackfillMonths: number, now: Date = new Date()): string {
-  const earliestMonth = earliestEntryDate.slice(0, 7); // "YYYY-MM"
+export function computeStartMonth(earliestEntryDate: string | Date, maxBackfillMonths: number, now: Date = new Date()): string {
+  // node-postgres returns a Postgres `date` column as a native JS Date
+  // object, not a string, regardless of what the query result's TS type
+  // claims — coerce defensively here so a bare .slice() call can't throw
+  // TypeError: earliestEntryDate.slice is not a function against real
+  // data, which a string-only fixture in tests wouldn't have caught.
+  const asString =
+    earliestEntryDate instanceof Date
+      ? `${earliestEntryDate.getUTCFullYear()}-${String(earliestEntryDate.getUTCMonth() + 1).padStart(2, "0")}-${String(earliestEntryDate.getUTCDate()).padStart(2, "0")}`
+      : earliestEntryDate;
+  const earliestMonth = asString.slice(0, 7); // "YYYY-MM"
   const [y, m] = earliestMonth.split("-").map(Number);
   const earliestAsDate = new Date(Date.UTC(y, m - 1, 1));
   const cap = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - maxBackfillMonths, 1));

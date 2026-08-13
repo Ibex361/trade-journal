@@ -89,8 +89,13 @@ function makeS3Client() {
  * back that instrument needs backfilling (no point fetching 2023 tick
  * data for an instrument first traded in 2026).
  */
-async function fetchInstrumentsToSync(pg: PgClient): Promise<Map<string, string>> {
-  const { rows } = await pg.query<{ instrument: string; earliest: string }>(
+async function fetchInstrumentsToSync(pg: PgClient): Promise<Map<string, string | Date>> {
+  // node-postgres's own generic here does NOT change what's returned at
+  // runtime — a Postgres `date` column always comes back as a native JS
+  // Date object, string annotation notwithstanding. Typed honestly as
+  // `string | Date` so computeStartMonth's own signature (which accepts
+  // both, see candleAggregation.ts) isn't fighting a lying type here.
+  const { rows } = await pg.query<{ instrument: string; earliest: string | Date }>(
     `select instrument, min(entry_date) as earliest
      from trades
      where instrument is not null and instrument <> ''
@@ -224,7 +229,7 @@ async function main() {
   const pg = new PgClient({ connectionString: requireEnv("SUPABASE_DB_URL") });
   await pg.connect();
 
-  let instruments: Map<string, string>;
+  let instruments: Map<string, string | Date>;
   try {
     instruments = await fetchInstrumentsToSync(pg);
   } finally {
