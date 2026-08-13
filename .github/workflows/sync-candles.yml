@@ -1,0 +1,104 @@
+name: Sync candles
+
+# Replaces the old live Twelve Data chart fetch with a pre-computed
+# pipeline: every day this downloads Exness's public tick archive for
+# every instrument actually logged in `trades` (across all accounts —
+# chart data is market data, not account-scoped), aggregates ticks into
+# OHLC candles at six timeframes (1m/5m/15m/1H/4H/1D) using the BID
+# price, and uploads the result to Cloudflare R2. The Next.js app then
+# reads directly from R2 at chart-open time instead of calling a live
+# market-data API — see app/api/chart-data/route.ts.
+#
+# Runs late in the trading day (9 PM East Africa Time = 18:00 UTC) on
+# weekdays, so the current day's ticks are already published by Exness
+# before this runs, plus manual dispatch any time from the Actions tab.
+#
+# SETUP (one-time, required for this to work):
+#   1. Cloudflare R2:
+#      a. Dashboard -> R2 -> Create bucket. Name it anything (e.g.
+#         "nocturne-candles") — this becomes R2_BUCKET_NAME below.
+#      b. R2 -> Overview -> Account Details -> copy your Account ID —
+#         this becomes R2_ACCOUNT_ID below.
+#      c. R2 -> Manage R2 API Tokens -> Create API Token. Give it Object
+#         Read & Write permission scoped to the bucket you just made.
+#         Copy the Access Key ID and Secret Access Key it shows you —
+#         you will NOT be able to see the secret again after leaving
+#         this page.
+#      d. Nothing needs to be made public — the app reads via the same
+#         signed S3 API the sync script writes with, not a public URL,
+#         so your trade history's instrument list/timing never becomes
+#         a public bucket.
+#   2. In this GitHub repo: Settings -> Secrets and variables -> Actions
+#      -> New repository secret, add each of:
+#        - SUPABASE_DB_URL       (same value already used by
+#                                  supabase-backup.yml — see that
+#                                  workflow's comments for how to get it)
+#        - R2_ACCOUNT_ID
+#        - R2_ACCESS_KEY_ID
+#        - R2_SECRET_ACCESS_KEY
+#        - R2_BUCKET_NAME
+#   3. In Vercel (or wherever the app is deployed), add the SAME four R2_*
+#      env vars (the app needs them too, to read candles at request
+#      time — see app/api/chart-data/route.ts).
+#   4. Done — the schedule below picks it up automatically. Use "Run
+#      workflow" in the Actions tab to backfill immediately rather than
+#      waiting for the next scheduled run.
+#
+# First run will be slower than subsequent ones — it backfills up to 24
+# months per instrument (capped at each instrument's own earliest logged
+# trade, whichever is later — see computeStartMonth in the script).
+# Every run after that only fetches what's actually missing, so it's
+# fast and cheap: a metals/forex instrument with months already synced
+# does nothing but re-check R2's file listing and refresh the current
+# month.
+#
+# If a step fails (e.g. a secret missing/wrong), the job fails loudly
+# and GitHub emails you — check the Actions tab for the error.
+
+on:
+  schedule:
+    - cron: "0 18 * * 1-5" # 18:00 UTC = 21:00 (9 PM) East Africa Time, weekdays only
+  workflow_dispatch: {} # lets you click "Run workflow" in the Actions tab any time
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify required secrets are set
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          missing=""
+          for name in SUPABASE_DB_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME; do
+            value="${!name}"
+            if [ -z "$value" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secret(s):$missing. Add them under Settings -> Secrets and variables -> Actions. See the comments at the top of this workflow file for where to get each value."
+            exit 1
+          fi
+
+      - name: Sync candles from Exness archive to R2
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: npx tsx scripts/sync-candles.ts

@@ -3,10 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IChartApi, ISeriesApi, ISeriesMarkersPluginApi, Time, UTCTimestamp } from "lightweight-charts";
 import { Trade, Direction } from "@/lib/trades";
-import { resolveChartSymbol } from "@/lib/chartSymbolMap";
 import { computeTradeChartWindow } from "@/lib/chartTradeWindow";
-import { useAccount } from "@/lib/AccountContext";
-import { fetchChartSymbolOverrides } from "@/lib/chartSymbolOverrides";
 
 type Timeframe = "1min" | "5min" | "15min" | "1h" | "4h" | "1day";
 
@@ -41,11 +38,19 @@ function toDateParam(utcSeconds: number): string {
  * Trades list's "View chart" action (rowParts.tsx / DesktopRow /
  * MobileCard). Separate feature from the existing screenshot
  * thumbnail/lightbox (ScreenshotThumb/ScreenshotLightbox) — that shows
- * the user's own uploaded screenshot; this fetches and renders live
- * market data via Twelve Data (see app/api/chart-data/route.ts) using
- * lightweight-charts for the actual candle rendering, TradingView's own
- * open-source charting library, so pan/zoom/crosshair interactions match
- * what a TradingView user already expects.
+ * the user's own uploaded screenshot; this fetches pre-computed
+ * candles synced nightly from Exness's public tick archive into
+ * Cloudflare R2 (see scripts/sync-candles.ts + app/api/chart-data/route.ts)
+ * and renders them via lightweight-charts, TradingView's own open-source
+ * charting library, so pan/zoom/crosshair interactions match what a
+ * TradingView user already expects.
+ *
+ * No symbol-mapping step here (unlike the earlier Twelve-Data-backed
+ * version this replaced) — R2 is keyed by this app's own instrument
+ * string directly (see candleKey in sync-candles.ts), since the sync
+ * pipeline already resolved the Exness archive's own naming quirks
+ * (account-type suffixes) at write time. The chart-data route is asked
+ * for `trade.instrument` as-is.
  *
  * Hand-rolled overlay (fixed inset-0 + backdrop + Escape-to-close),
  * matching ScreenshotLightbox's own convention rather than the smaller,
@@ -53,9 +58,7 @@ function toDateParam(utcSeconds: number): string {
  * than that component offers.
  */
 export default function TradeChartModal({ trade, onClose }: { trade: Trade; onClose: () => void }) {
-  const { selectedAccount } = useAccount();
   const [timeframe, setTimeframe] = useState<Timeframe>(DEFAULT_TIMEFRAME);
-  const [overrides, setOverrides] = useState<Map<string, string> | null>(null);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,39 +83,12 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     };
   }, [onClose]);
 
-  // Account-level symbol overrides (Settings → Chart symbols) — fetched
-  // once per account, not once per trade, since it rarely changes and
-  // switching timeframe on the same trade shouldn't re-fetch it.
-  useEffect(() => {
-    let cancelled = false;
-    if (!selectedAccount) return;
-    fetchChartSymbolOverrides(selectedAccount.id).then((map) => {
-      if (!cancelled) setOverrides(map);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedAccount]);
-
-  const mapping = useMemo(() => {
-    if (overrides === null) return undefined; // still loading overrides
-    return resolveChartSymbol(trade.instrument, overrides);
-  }, [trade.instrument, overrides]);
-
   const window_ = useMemo(() => computeTradeChartWindow(trade, timeframe), [trade, timeframe]);
 
-  // Fetch candle data whenever the resolved symbol or timeframe changes.
+  // Fetch candle data whenever the trade's instrument or timeframe changes.
   useEffect(() => {
-    if (mapping === undefined) return; // overrides not loaded yet
-    if (!mapping) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous "can't proceed" branch, not a data sync; same pattern as ExnessContractSizeCard's setPanelRect(null) early-return.
-      setState({
-        status: "error",
-        message: `No chart data source is mapped for "${trade.instrument}" yet. Add one in Settings → Chart symbols.`,
-      });
-      return;
-    }
     if (!window_) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous "can't proceed" branch, not a data sync; same pattern as ExnessContractSizeCard's setPanelRect(null) early-return.
       setState({ status: "error", message: "This trade doesn't have an entry date to chart against." });
       return;
     }
@@ -121,7 +97,7 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     setState({ status: "loading" });
 
     const url = new URL("/api/chart-data", window.location.origin);
-    url.searchParams.set("symbol", mapping.twelveDataSymbol);
+    url.searchParams.set("symbol", trade.instrument);
     url.searchParams.set("timeframe", timeframe);
     url.searchParams.set("start", toDateParam(window_.rangeStartUtcSeconds));
     url.searchParams.set("end", toDateParam(window_.rangeEndUtcSeconds));
@@ -137,14 +113,14 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
         setState({ status: "ready", candles: data.candles ?? [] });
       })
       .catch(() => {
-        if (!cancelled) setState({ status: "error", message: "Couldn't reach the chart data provider." });
+        if (!cancelled) setState({ status: "error", message: "Couldn't reach chart storage." });
       });
 
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- window_ is derived from trade+timeframe, already covered by those two deps.
-  }, [mapping, timeframe, trade.instrument]);
+  }, [timeframe, trade.instrument]);
 
   // Create the chart instance once the container is mounted, and tear it
   // down on unmount. Recreated only if the container element itself
@@ -253,7 +229,6 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
             <p className="text-xs text-ink-secondary font-mono mt-0.5">
               {trade.entry_date}
               {trade.entry_time && ` ${trade.entry_time}`} · <span className="capitalize">{trade.direction ?? "—"}</span>
-              {mapping && <span className="text-ink-muted"> · via {mapping.twelveDataSymbol}</span>}
             </p>
           </div>
           <button
