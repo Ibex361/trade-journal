@@ -42,7 +42,7 @@
 import { S3Client, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
-import { TIMEFRAMES_MINUTES, Candle, monthsBetween, computeStartMonth, candleKey, aggregateTicksToAllTimeframes } from "./candleAggregation";
+import { TIMEFRAMES_MINUTES, Candle, monthsBetween, computeStartMonth, candleKey, normalizeCsv, normalizedCsvBody, aggregateTicksToAllTimeframes } from "./candleAggregation";
 
 // ---------------------------------------------------------------------
 // Config
@@ -166,7 +166,7 @@ async function fetchMonthTickCsv(
       console.warn(`  ! ${archiveSymbol} ${month}: zip had no CSV inside, skipping`);
       return null;
     }
-    return { csv: new TextDecoder().decode(files[csvName]), archiveSymbol };
+    return { csv: normalizeCsv(new TextDecoder().decode(files[csvName])), archiveSymbol };
   }
   console.log(`  - ${instrument} ${month}: no archive file under any known symbol form yet, skipping`);
   return null;
@@ -175,10 +175,17 @@ async function fetchMonthTickCsv(
 /**
  * Downloads today's still-accumulating daily tick file (the archive
  * publishes the current month day-by-day until the month closes) and
- * appends it to a month's CSV text, so the current month's candles
- * include today's ticks without waiting for Exness to publish the whole
- * month. Silently a no-op (returns the month CSV unchanged) if today's
- * daily file isn't published yet — normal early in the trading day.
+ * appends it to a month's normalized CSV text, so the current month's
+ * candles include today's ticks without waiting for Exness to publish
+ * the whole month. Silently a no-op (returns the month CSV unchanged)
+ * if today's daily file isn't published yet — normal early in the
+ * trading day.
+ *
+ * Both the monthly and daily CSVs are normalized to "Timestamp,Bid"
+ * before concatenation (see normalizeCsv in candleAggregation.ts) so
+ * the two source files' different column orders don't corrupt the
+ * merged row stream — the monthly CSV is already normalized by
+ * fetchMonthTickCsv; the daily CSV is normalized here before appending.
  */
 async function appendTodayIfCurrentMonth(monthCsv: string, archiveSymbol: string, month: string): Promise<string> {
   const now = new Date();
@@ -196,11 +203,10 @@ async function appendTodayIfCurrentMonth(monthCsv: string, archiveSymbol: string
   const files = unzipSync(buf);
   const csvName = Object.keys(files).find((n) => n.toLowerCase().endsWith(".csv"));
   if (!csvName) return monthCsv;
-  const todayCsv = new TextDecoder().decode(files[csvName]);
-  // Drop today's header row before concatenating (both files share the
-  // same "Timestamp,Symbol,Bid,Ask" header).
-  const todayBody = todayCsv.slice(todayCsv.indexOf("\n") + 1);
-  return `${monthCsv}\n${todayBody}`;
+  const todayNormalized = normalizeCsv(new TextDecoder().decode(files[csvName]));
+  // normalizedCsvBody() strips the "Timestamp,Bid" header so the merged
+  // string has exactly one header row at the start (from monthCsv).
+  return `${monthCsv}\n${normalizedCsvBody(todayNormalized)}`;
 }
 
 // ---------------------------------------------------------------------

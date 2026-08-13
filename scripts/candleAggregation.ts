@@ -66,33 +66,134 @@ export function candleKey(instrument: string, timeframe: string, month: string):
   return `candles/${instrument}/${timeframe}/${month}.json`;
 }
 
+// ---------------------------------------------------------------------
+// CSV parsing — header-driven, quote-aware
+// ---------------------------------------------------------------------
+
 /**
- * Parses "Timestamp,Symbol,Bid,Ask" tick rows and buckets the BID price
- * (never the ask — an explicit requirement of this migration) into
- * every timeframe in TIMEFRAMES_MINUTES simultaneously, one pass over
- * the ticks rather than one pass per timeframe, since ticks are the
- * expensive part to have fetched/parsed at all. Malformed rows (missing
- * fields, non-numeric bid, unparseable timestamp) are skipped rather
- * than aborting the whole aggregation — real archive files occasionally
- * have a stray blank line or truncated final row.
+ * Splits one CSV row into its field values, correctly handling RFC-4180
+ * double-quoted fields (strips the outer quotes; a field may or may not
+ * be quoted — the Exness tick archives are inconsistent about this even
+ * within the same source).
+ */
+function splitCsvRow(row: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  while (i < row.length) {
+    if (row[i] === '"') {
+      // Quoted field: scan to the closing quote. The archives don't use
+      // escaped quotes inside fields, so the first lone '"' ends it.
+      const end = row.indexOf('"', i + 1);
+      fields.push(end === -1 ? row.slice(i + 1) : row.slice(i + 1, end));
+      i = end === -1 ? row.length : end + 2; // skip the closing '"' and the following ','
+    } else {
+      const end = row.indexOf(",", i);
+      fields.push(end === -1 ? row.slice(i) : row.slice(i, end));
+      i = end === -1 ? row.length : end + 1;
+    }
+  }
+  return fields;
+}
+
+/**
+ * Normalises raw tick CSV text to a canonical two-column form
+ * "Timestamp,Bid\n..." regardless of the source file's column order
+ * or quoting style. The Exness tick archives ship in (at least) two
+ * different layouts:
+ *
+ *   Daily  (e.g. XAUUSDm):  "Exness","Symbol","Timestamp","Bid","Ask"
+ *   Monthly (e.g. EURUSD):  Timestamp,Exness,Symbol,Bid,Ask
+ *
+ * Because column order and quoting both vary across files, parsing by
+ * position (column 0 = Timestamp, column 2 = Bid) was silently
+ * producing 0 candles from every row — the real column indices were
+ * wrong in both cases. Reading the actual header and finding each
+ * column by name is the only approach that's robust across both layouts
+ * and any future variants Exness might introduce.
+ *
+ * Stripping down to just Timestamp + Bid also makes appendTodayBody()
+ * safe to call regardless of column order in the source files: a
+ * monthly CSV and its same-day top-up are guaranteed to share the same
+ * two-column shape after normalization, so naive line-level
+ * concatenation can't accidentally interleave two incompatible column
+ * orderings under a single wrong header.
+ */
+export function normalizeCsv(raw: string): string {
+  const lines = raw.split("\n");
+  if (lines.length === 0) return "Timestamp,Bid\n";
+
+  const headerFields = splitCsvRow(lines[0].trim()).map((f) => f.toLowerCase().trim());
+  const tsIdx = headerFields.indexOf("timestamp");
+  const bidIdx = headerFields.indexOf("bid");
+
+  if (tsIdx === -1 || bidIdx === -1) {
+    // Unrecognised header — return an empty canonical file; the caller
+    // will see 0 candles and log/skip rather than crashing the whole run.
+    return "Timestamp,Bid\n";
+  }
+
+  const out: string[] = ["Timestamp,Bid"];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const fields = splitCsvRow(line);
+    if (fields.length <= Math.max(tsIdx, bidIdx)) continue;
+    // Preserve the original timestamp string verbatim — Date.parse in
+    // the aggregator handles both "2026-08-13 00:00:00.058Z" (daily,
+    // 3-digit ms) and "2026-08-02 21:05:04.170000+00:00" (monthly,
+    // 6-digit µs) after replacing the space separator with T.
+    out.push(`${fields[tsIdx]},${fields[bidIdx]}`);
+  }
+  return out.join("\n");
+}
+
+/**
+ * Strips the header line from an already-normalized CSV body so it can
+ * be appended to another normalized CSV without duplicating the header.
+ * Used by sync-candles.ts when splicing today's daily tick file onto
+ * the end of a month's tick data.
+ */
+export function normalizedCsvBody(normalizedCsv: string): string {
+  const nl = normalizedCsv.indexOf("\n");
+  return nl === -1 ? "" : normalizedCsv.slice(nl + 1);
+}
+
+/**
+ * Parses a normalized "Timestamp,Bid" tick CSV and buckets the BID
+ * price into every timeframe in TIMEFRAMES_MINUTES simultaneously, one
+ * pass over the ticks rather than one pass per timeframe, since ticks
+ * are the expensive part to have fetched/parsed at all. Malformed rows
+ * (missing fields, non-numeric bid, unparseable timestamp) are skipped
+ * rather than aborting the whole aggregation — real archive files
+ * occasionally have a stray blank line or truncated final row.
+ *
+ * Call normalizeCsv() first to handle the varying column orders and
+ * quoting styles the Exness archive ships in (see that function's
+ * comment for details).
  */
 export function aggregateTicksToAllTimeframes(csv: string): Record<string, Candle[]> {
   const buckets: Record<string, Map<number, Candle>> = {};
   for (const tf of Object.keys(TIMEFRAMES_MINUTES)) buckets[tf] = new Map();
 
   const lines = csv.split("\n");
-  // Header is "Timestamp,Symbol,Bid,Ask" (case may vary) — skip line 0
-  // unconditionally rather than sniffing for it, since every archive
-  // file observed has exactly one header line.
+  // Header is "Timestamp,Bid" after normalization — skip line 0.
   for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-    const parts = line.split(",");
-    if (parts.length < 3) continue;
-    const [tsRaw, , bidRaw] = parts;
+    const line = lines[i].trim();
+    if (!line) continue;
+    const comma = line.indexOf(",");
+    if (comma === -1) continue;
+    const tsRaw = line.slice(0, comma);
+    const bidRaw = line.slice(comma + 1);
     const bid = Number(bidRaw);
     if (!Number.isFinite(bid)) continue;
-    const ms = Date.parse(tsRaw.includes("Z") || tsRaw.includes("T") ? tsRaw : tsRaw.replace(" ", "T") + "Z");
+    // Both real timestamp formats become valid ISO 8601 after replacing
+    // the space separator with T:
+    //   "2026-08-13 00:00:00.058Z"       → "2026-08-13T00:00:00.058Z"
+    //   "2026-08-02 21:05:04.170000+00:00" → "2026-08-02T21:05:04.170000+00:00"
+    // JS Date.parse handles both correctly (6-digit microsecond fraction
+    // is truncated silently; the +00:00 offset is respected).
+    const isoTs = tsRaw.includes("T") ? tsRaw : tsRaw.replace(" ", "T");
+    const ms = Date.parse(isoTs);
     if (Number.isNaN(ms)) continue;
 
     for (const [tf, minutes] of Object.entries(TIMEFRAMES_MINUTES)) {
