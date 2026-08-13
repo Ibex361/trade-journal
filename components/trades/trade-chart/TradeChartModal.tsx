@@ -185,22 +185,51 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     const markers: Parameters<typeof markersApi.setMarkers>[0] = [];
     if (window_?.entryUtcSeconds !== null && window_?.entryUtcSeconds !== undefined) {
       const isLong: Direction = trade.direction ?? "long";
-      markers.push({
-        time: window_.entryUtcSeconds as UTCTimestamp,
-        position: isLong === "long" ? "belowBar" : "aboveBar",
-        color: "#2dd4bf",
-        shape: isLong === "long" ? "arrowUp" : "arrowDown",
-        text: `Entry${trade.entry_price !== null ? ` ${trade.entry_price}` : ""}`,
-      });
+      // Use atPriceMiddle when entry_price is known — pins the marker dot
+      // to the exact Y-axis price rather than floating it above/below the
+      // candle's high/low (which can be hundreds of points off when price
+      // volatility is high or the candle the marker snapped to is far from
+      // the actual entry level). Fall back to bar-relative positioning only
+      // when no price is recorded (manually entered trade without a price).
+      if (trade.entry_price !== null) {
+        markers.push({
+          time: window_.entryUtcSeconds as UTCTimestamp,
+          position: "atPriceMiddle",
+          price: trade.entry_price,
+          color: "#2dd4bf",
+          shape: isLong === "long" ? "arrowUp" : "arrowDown",
+          text: `Entry ${trade.entry_price}`,
+        });
+      } else {
+        markers.push({
+          time: window_.entryUtcSeconds as UTCTimestamp,
+          position: isLong === "long" ? "belowBar" : "aboveBar",
+          color: "#2dd4bf",
+          shape: isLong === "long" ? "arrowUp" : "arrowDown",
+          text: "Entry",
+        });
+      }
     }
     if (window_?.exitUtcSeconds !== null && window_?.exitUtcSeconds !== undefined) {
-      markers.push({
-        time: window_.exitUtcSeconds as UTCTimestamp,
-        position: "aboveBar",
-        color: trade.pnl >= 0 ? "#2dd4bf" : "#fb7185",
-        shape: "circle",
-        text: `Exit${trade.exit_price !== null ? ` ${trade.exit_price}` : ""}`,
-      });
+      const exitColor = trade.pnl >= 0 ? "#2dd4bf" : "#fb7185";
+      if (trade.exit_price !== null) {
+        markers.push({
+          time: window_.exitUtcSeconds as UTCTimestamp,
+          position: "atPriceMiddle",
+          price: trade.exit_price,
+          color: exitColor,
+          shape: "circle",
+          text: `Exit ${trade.exit_price}`,
+        });
+      } else {
+        markers.push({
+          time: window_.exitUtcSeconds as UTCTimestamp,
+          position: "aboveBar",
+          color: exitColor,
+          shape: "circle",
+          text: "Exit",
+        });
+      }
     }
     markersApi.setMarkers(markers);
 
