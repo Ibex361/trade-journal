@@ -1,14 +1,13 @@
 import { Trade } from "./trades";
+import { TIMEFRAMES_MINUTES } from "../scripts/candleAggregation";
 
 // entry_date/entry_time (and exit_date/exit_time) are stored as East
 // Africa Time (UTC+3) calendar values — see exnessImport.ts's
 // EXNESS_TO_LOCAL_OFFSET_HOURS comment, which documents that both
 // imported and manually-entered trades use this same local convention
-// consistently. Twelve Data's time_series endpoint wants a timezone-aware
-// range, so this offset is what lets a trade's stored local time convert
-// back to the correct UTC instant for that request — it is NOT a
-// generic "current browser timezone" guess, it is this app's one fixed
-// data convention.
+// consistently. The offset is what lets a trade's stored local time
+// convert back to the correct UTC instant — it is NOT a generic "current
+// browser timezone" guess, it is this app's one fixed data convention.
 const APP_LOCAL_OFFSET_HOURS = 3;
 
 /**
@@ -20,6 +19,13 @@ const APP_LOCAL_OFFSET_HOURS = 3;
  * also nullable (a trade logged with just a date) — defaults to midnight
  * local when absent, since a chart window needs *some* anchor point and
  * "start of that local day" is a reasonable one.
+ *
+ * NOTE: when time is null, the returned seconds point to local midnight
+ * (21:00 UTC the previous day for UTC+3). Callers that use this for
+ * marker placement MUST snap the result to the candle bucket via
+ * snapToCandle() — otherwise a null exit_time places the exit marker on
+ * a candle from the previous evening rather than somewhere near the
+ * trade's actual exit. snapToCandle is in this module.
  */
 export function tradeLocalToUtcSeconds(date: string | null, time: string | null): number | null {
   if (!date) return null;
@@ -30,10 +36,38 @@ export function tradeLocalToUtcSeconds(date: string | null, time: string | null)
   return Math.floor(utcMs / 1000);
 }
 
+/**
+ * Snaps a UTC epoch-seconds timestamp to the start of the candle bucket
+ * that contains it for the given timeframe. This is required for marker
+ * placement because lightweight-charts' createSeriesMarkers matches
+ * markers to series bars by exact time value — if marker.time doesn't
+ * equal any candle's time, the library snaps to the nearest bar, which
+ * can be the WRONG bar (wrong price level, wrong visual position).
+ *
+ * Two failure modes this prevents:
+ *
+ * 1. Exact-second mismatch: marker at 01:27:06 UTC, nearest 15m candle
+ *    is 01:15:00 — snapping gives the correct 01:15:00 candle every time.
+ *
+ * 2. Null exit_time: tradeLocalToUtcSeconds defaults to local midnight
+ *    (00:00:00 EAT = 21:00:00 UTC the PREVIOUS day). Without snapping,
+ *    the exit marker lands on a candle from the evening before the trade,
+ *    at a completely different price level — which is what the bug report
+ *    showed (exit marker at ~4111 visually appearing near 4030).
+ *    Snapping moves it to the 21:00 candle bucket, which is at least
+ *    within the fetched range and is the least-wrong position for a trade
+ *    whose exit time was never recorded.
+ */
+export function snapToCandle(utcSeconds: number, timeframe: string): number {
+  const minutes = TIMEFRAMES_MINUTES[timeframe] ?? 15;
+  const bucketSeconds = minutes * 60;
+  return Math.floor(utcSeconds / bucketSeconds) * bucketSeconds;
+}
+
 export type TradeChartWindow = {
-  /** UTC epoch seconds for the trade's entry — always present if entry_date exists. */
+  /** UTC epoch seconds for the trade's entry, snapped to the current timeframe's candle bucket. */
   entryUtcSeconds: number | null;
-  /** UTC epoch seconds for the trade's exit, if the trade has one. */
+  /** UTC epoch seconds for the trade's exit, snapped to the current timeframe's candle bucket. */
   exitUtcSeconds: number | null;
   /** Suggested fetch range start (UTC epoch seconds) — padded before entry. */
   rangeStartUtcSeconds: number;
@@ -59,17 +93,23 @@ const PAD_HOURS_BY_TIMEFRAME: Record<string, number> = {
 /**
  * Computes the UTC fetch window a chart should request for a given trade
  * and timeframe, centered on the trade's entry (and extended to cover its
- * exit, if any) with timeframe-appropriate padding on both sides. The
- * caller (TradeChartModal) uses entryUtcSeconds/exitUtcSeconds to place
- * markers and to scroll the loaded chart to this range once data arrives.
+ * exit, if any) with timeframe-appropriate padding on both sides.
+ *
+ * entryUtcSeconds and exitUtcSeconds are snapped to the containing candle
+ * bucket for the given timeframe (see snapToCandle above) so that marker
+ * placement in TradeChartModal always hits an actual candle rather than
+ * a phantom timestamp between bars.
  */
 export function computeTradeChartWindow(trade: Trade, timeframe: string): TradeChartWindow | null {
-  const entryUtcSeconds = tradeLocalToUtcSeconds(trade.entry_date, trade.entry_time);
-  if (entryUtcSeconds === null) return null;
-  const exitUtcSeconds = tradeLocalToUtcSeconds(trade.exit_date, trade.exit_time);
+  const entryRaw = tradeLocalToUtcSeconds(trade.entry_date, trade.entry_time);
+  if (entryRaw === null) return null;
+  const exitRaw = tradeLocalToUtcSeconds(trade.exit_date, trade.exit_time);
+
+  // Snap both to candle bucket so marker.time == an actual candle.time
+  const entryUtcSeconds = snapToCandle(entryRaw, timeframe);
+  const exitUtcSeconds = exitRaw !== null ? snapToCandle(exitRaw, timeframe) : null;
 
   const padSeconds = (PAD_HOURS_BY_TIMEFRAME[timeframe] ?? 24) * 60 * 60;
-  const spanStart = entryUtcSeconds;
   const spanEnd = exitUtcSeconds !== null ? Math.max(exitUtcSeconds, entryUtcSeconds) : entryUtcSeconds;
 
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -77,7 +117,7 @@ export function computeTradeChartWindow(trade: Trade, timeframe: string): TradeC
   return {
     entryUtcSeconds,
     exitUtcSeconds,
-    rangeStartUtcSeconds: spanStart - padSeconds,
+    rangeStartUtcSeconds: entryUtcSeconds - padSeconds,
     rangeEndUtcSeconds: Math.min(spanEnd + padSeconds, nowSeconds),
   };
 }
