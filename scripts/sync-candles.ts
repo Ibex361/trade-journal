@@ -34,32 +34,39 @@
 //      via tradeUtcDays, keep only the ones that have fully closed.
 //   3. Read that instrument's synced-days manifest from R2
 //      (candles/{instrument}/synced-days.json) and skip any day
-//      already marked synced.
-//   4. For each remaining day, fetch that day's tick archive and
-//      aggregate its ticks into all 6 timeframes, then MERGE the result
-//      into that day's month's existing R2 candle file (read →
-//      mergeCandles → re-upload) rather than overwriting, since a
-//      month's file is now built up incrementally across many runs as
-//      new trade-days appear in it. Exness only publishes a DAILY
-//      per-day archive for the month that's still in progress
-//      (.../YYYY/MM/DD/Exness_{SYMBOL}_{YYYY}_{MM}_{DD}.zip); every
-//      other, already-closed month only has a MONTHLY archive
-//      (.../YYYY/MM/Exness_{SYMBOL}_{YYYY}_{MM}.zip, no /DD/ segment) —
-//      see isCurrentUtcMonth in tradeDays.ts. Needed days are grouped
-//      by month first so a past month with several needed trade-days
-//      downloads its one monthly archive exactly once rather than once
-//      per day. Both URL shapes try the plain symbol then an
-//      "m"-suffixed variant (same account-type ambiguity as before).
-//   5. Mark the day synced in the manifest only after every timeframe's
-//      merge+upload for that day has succeeded — so a run that fails
-//      partway through leaves that day unmarked and it's naturally
-//      retried on the next run, never silently skipped.
-//   6. Any archive file that doesn't exist yet (symbol/suffix
-//      combination Exness never published for that day) is logged and
-//      skipped — never throws and kills the whole run over one missing
-//      file, per the "handle gracefully" requirement. A skipped day is
-//      NOT marked synced, so it's retried on future runs rather than
-//      permanently given up on.
+//      already marked synced. Also read its synced-months manifest
+//      (candles/{instrument}/synced-months.json) — see step 4b.
+//   4. For each remaining day:
+//      a. Current UTC month: fetch that day's tick archive directly
+//         and aggregate into all 6 timeframes.
+//      b. Past (closed) month: Exness has no per-day files for a
+//         closed month, only one MONTHLY archive
+//         (.../YYYY/MM/Exness_{SYMBOL}_{YYYY}_{MM}.zip, no /DD/
+//         segment — see isCurrentUtcMonth in tradeDays.ts) — so needed
+//         days are grouped by month first. If that month is already in
+//         the synced-months manifest, its whole archive was fetched on
+//         a prior run and every day's candles are already in R2 — the
+//         new day(s) are marked synced in the day manifest with NO
+//         re-fetch. Otherwise the month's one archive is downloaded
+//         once (covering every needed day in it, not once per day) and
+//         aggregated; both symbol forms ("m"-suffix fallback) are tried
+//         the same way the daily path does.
+//   5. MERGE aggregated candles into the relevant month's existing R2
+//      candle file (read → mergeCandles → re-upload) rather than
+//      overwriting, since a month's file is built up incrementally
+//      across many runs as new trade-days appear in it.
+//   6. Mark synced only after every timeframe's merge+upload has
+//      succeeded — a day for the daily path, every needed day in the
+//      group AND the month itself for the monthly path (the month
+//      manifest write is what lets step 4b short-circuit on a later
+//      run) — so a run that fails partway leaves things unmarked and
+//      they're naturally retried next run, never silently skipped.
+//   7. Any archive file that doesn't exist yet (symbol/suffix
+//      combination Exness never published for that day/month) is
+//      logged and skipped — never throws and kills the whole run over
+//      one missing file, per the "handle gracefully" requirement. A
+//      skipped day/month is NOT marked synced, so it's retried on
+//      future runs rather than permanently given up on.
 //
 // Idempotent and safe to re-run: a day already in the manifest is
 // skipped on the next run rather than re-fetched, which is what keeps
@@ -75,7 +82,7 @@ import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
 import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, mergeCandles } from "./candleAggregation";
 import { tradeUtcDays, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "./tradeDays";
-import { manifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
+import { manifestKey, monthManifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -269,6 +276,22 @@ async function writeManifest(s3: S3Client, bucket: string, instrument: string, d
   );
 }
 
+async function readMonthManifest(s3: S3Client, bucket: string, instrument: string): Promise<Set<string>> {
+  const raw = await readR2Json(s3, bucket, monthManifestKey(instrument));
+  return parseManifest(raw);
+}
+
+async function writeMonthManifest(s3: S3Client, bucket: string, instrument: string, months: Set<string>) {
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: monthManifestKey(instrument),
+      Body: serializeManifest(months),
+      ContentType: "application/json",
+    })
+  );
+}
+
 async function readExistingCandles(s3: S3Client, bucket: string, instrument: string, timeframe: string, month: string): Promise<Candle[]> {
   const raw = await readR2Json(s3, bucket, candleKey(instrument, timeframe, month));
   if (!raw) return [];
@@ -354,6 +377,7 @@ async function main() {
   for (const [instrument, closedDays] of instrumentDays) {
     console.log(`\n== ${instrument} ==`);
     const manifest = await readManifest(s3, bucket, instrument);
+    const monthManifest = await readMonthManifest(s3, bucket, instrument);
     const daysToFetch = daysNeedingSync(manifest, [...closedDays].sort());
 
     if (daysToFetch.length === 0) {
@@ -404,6 +428,21 @@ async function main() {
     }
 
     for (const [month, daysInMonth] of pastMonthGroups) {
+      // A month already in the month manifest means its whole archive
+      // was fetched and fully merged into R2 on a prior run — every
+      // day's candles for that month are already there. A NEW
+      // trade-day landing in that same month (the scenario this
+      // manifest exists for) needs no re-fetch at all: just record the
+      // day(s) as synced so future runs don't keep re-checking them,
+      // with zero network/aggregation cost.
+      if (monthManifest.has(month)) {
+        for (const day of daysInMonth) manifest.add(day);
+        await writeManifest(s3, bucket, instrument, manifest);
+        totalDaysSynced += daysInMonth.length;
+        console.log(`  ✓ ${month} already fully synced — marking ${daysInMonth.length} new trade-day(s) synced with no re-fetch: ${daysInMonth.join(", ")}`);
+        continue;
+      }
+
       const fetched = await fetchMonthTickCsv(instrument, month);
       if (!fetched) {
         totalDaysSkipped += daysInMonth.length;
@@ -411,20 +450,26 @@ async function main() {
       }
 
       // The monthly archive contains ticks for the whole month; only
-      // the specific trade-days actually needed get marked synced
-      // below (a month may have plenty of days with no logged trade at
-      // all — those never need to be tracked in the manifest), but the
-      // candles merged into R2 come from the full month's ticks, same
-      // as aggregating a single day's ticks would for that day's file.
+      // the specific trade-days actually needed get marked synced in
+      // the day manifest below (a month may have plenty of days with
+      // no logged trade at all — those never need day-level tracking),
+      // but the candles merged into R2 come from the full month's
+      // ticks, same as aggregating a single day's ticks would for that
+      // day's file. Once the merge succeeds, the whole month is marked
+      // done in monthManifest too — that's what lets a later trade on
+      // a different day in this same month skip straight to the branch
+      // above instead of re-fetching.
       const byTimeframe = aggregateTicksToAllTimeframes(fetched.csv);
       const monthFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, month, month, byTimeframe);
 
       if (monthFullySynced) {
         for (const day of daysInMonth) manifest.add(day);
         await writeManifest(s3, bucket, instrument, manifest);
+        monthManifest.add(month);
+        await writeMonthManifest(s3, bucket, instrument, monthManifest);
         totalDaysSynced += daysInMonth.length;
         console.log(
-          `  ✓ ${month} (via ${fetched.archiveSymbol}, covers ${daysInMonth.length} needed trade-day(s): ${daysInMonth.join(", ")}): ${Object.values(byTimeframe).reduce((n, c) => n + c.length, 0)} candles merged across ${Object.keys(byTimeframe).length} timeframes`
+          `  ✓ ${month} (via ${fetched.archiveSymbol}, covers ${daysInMonth.length} needed trade-day(s): ${daysInMonth.join(", ")}): ${Object.values(byTimeframe).reduce((n, c) => n + c.length, 0)} candles merged across ${Object.keys(byTimeframe).length} timeframes — month marked fully synced`
         );
       } else {
         totalDaysSkipped += daysInMonth.length;

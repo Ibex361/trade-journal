@@ -1,9 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { manifestKey, parseManifest, serializeManifest, daysNeedingSync } from "../../scripts/candleSyncManifest";
+import { manifestKey, monthManifestKey, parseManifest, serializeManifest, daysNeedingSync } from "../../scripts/candleSyncManifest";
 
 describe("manifestKey", () => {
   it("builds the R2 key from the instrument", () => {
     expect(manifestKey("XAUUSD")).toBe("candles/XAUUSD/synced-days.json");
+  });
+});
+
+describe("monthManifestKey", () => {
+  it("builds the R2 key from the instrument, distinct from manifestKey", () => {
+    expect(monthManifestKey("XAUUSD")).toBe("candles/XAUUSD/synced-months.json");
+    expect(monthManifestKey("XAUUSD")).not.toBe(manifestKey("XAUUSD"));
   });
 });
 
@@ -50,6 +57,12 @@ describe("serializeManifest", () => {
     const original = new Set(["2026-08-10", "2026-08-11", "2026-08-12"]);
     expect(parseManifest(serializeManifest(original))).toEqual(original);
   });
+
+  it("round-trips a month manifest (\"YYYY-MM\" entries) the same way", () => {
+    const original = new Set(["2026-07", "2026-06"]);
+    expect(parseManifest(serializeManifest(original))).toEqual(original);
+    expect(serializeManifest(original)).toBe('["2026-06","2026-07"]');
+  });
 });
 
 describe("daysNeedingSync", () => {
@@ -74,5 +87,10 @@ describe("daysNeedingSync", () => {
   it("preserves candidate order rather than the synced set's insertion order", () => {
     const synced = new Set<string>();
     expect(daysNeedingSync(synced, ["2026-08-12", "2026-08-10", "2026-08-11"])).toEqual(["2026-08-12", "2026-08-10", "2026-08-11"]);
+  });
+
+  it("also works for month-manifest membership checks (\"YYYY-MM\" entries)", () => {
+    const syncedMonths = new Set(["2026-07"]);
+    expect(daysNeedingSync(syncedMonths, ["2026-06", "2026-07", "2026-08"])).toEqual(["2026-06", "2026-08"]);
   });
 });
