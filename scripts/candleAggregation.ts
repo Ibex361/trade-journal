@@ -35,32 +35,6 @@ export function monthsBetween(startYYYYMM: string, endYYYYMM: string): string[] 
   return months;
 }
 
-/**
- * The earliest month a given instrument's backfill should start from:
- * the month of its earliest logged trade, capped so a from-scratch sync
- * never backfills further back than maxBackfillMonths regardless of how
- * old the earliest trade is (see sync-candles.ts's MAX_BACKFILL_MONTHS
- * comment for why — no point fetching years of tick data nobody will
- * ever chart).
- */
-export function computeStartMonth(earliestEntryDate: string | Date, maxBackfillMonths: number, now: Date = new Date()): string {
-  // node-postgres returns a Postgres `date` column as a native JS Date
-  // object, not a string, regardless of what the query result's TS type
-  // claims — coerce defensively here so a bare .slice() call can't throw
-  // TypeError: earliestEntryDate.slice is not a function against real
-  // data, which a string-only fixture in tests wouldn't have caught.
-  const asString =
-    earliestEntryDate instanceof Date
-      ? `${earliestEntryDate.getUTCFullYear()}-${String(earliestEntryDate.getUTCMonth() + 1).padStart(2, "0")}-${String(earliestEntryDate.getUTCDate()).padStart(2, "0")}`
-      : earliestEntryDate;
-  const earliestMonth = asString.slice(0, 7); // "YYYY-MM"
-  const [y, m] = earliestMonth.split("-").map(Number);
-  const earliestAsDate = new Date(Date.UTC(y, m - 1, 1));
-  const cap = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - maxBackfillMonths, 1));
-  const chosen = earliestAsDate > cap ? earliestAsDate : cap;
-  return `${chosen.getUTCFullYear()}-${String(chosen.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
 /** The R2 object key a given (instrument, timeframe, month) candle file is stored/read under. */
 export function candleKey(instrument: string, timeframe: string, month: string): string {
   return `candles/${instrument}/${timeframe}/${month}.json`;
@@ -216,4 +190,29 @@ export function aggregateTicksToAllTimeframes(csv: string): Record<string, Candl
     result[tf] = [...buckets[tf].values()].sort((a, b) => a.t - b.t);
   }
   return result;
+}
+
+/**
+ * Unions two candle arrays for the same (instrument, timeframe, month)
+ * by timestamp, keeping `incoming`'s candle whenever both arrays have
+ * one for the same bucket, and returns the result sorted ascending by
+ * time. Used by sync-candles.ts to merge a freshly-fetched day's
+ * candles into a month's existing R2 file rather than overwriting it —
+ * since the new day-driven sync only ever fetches the specific UTC days
+ * a logged trade touches, a month's file is built up incrementally
+ * across many runs and must never lose candles from previously-synced
+ * days still in the same month.
+ *
+ * `incoming` wins on a timestamp collision because it reflects freshly
+ * re-fetched, now-guaranteed-complete data for that exact bucket — the
+ * only way `existing` could already have a candle at that same bucket
+ * is a prior run for the same day (safe to treat as identical, but
+ * `incoming` is the more authoritative of the two since it's the one
+ * that just passed the closed-day check).
+ */
+export function mergeCandles(existing: Candle[], incoming: Candle[]): Candle[] {
+  const byTime = new Map<number, Candle>();
+  for (const c of existing) byTime.set(c.t, c);
+  for (const c of incoming) byTime.set(c.t, c);
+  return [...byTime.values()].sort((a, b) => a.t - b.t);
 }

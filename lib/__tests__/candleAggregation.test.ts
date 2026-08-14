@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { monthsBetween, computeStartMonth, candleKey, normalizeCsv, normalizedCsvBody, aggregateTicksToAllTimeframes, TIMEFRAMES_MINUTES } from "../../scripts/candleAggregation";
+import { monthsBetween, candleKey, normalizeCsv, normalizedCsvBody, aggregateTicksToAllTimeframes, mergeCandles, TIMEFRAMES_MINUTES } from "../../scripts/candleAggregation";
 
 describe("monthsBetween", () => {
   it("returns a single month when start equals end", () => {
@@ -15,41 +15,46 @@ describe("monthsBetween", () => {
   });
 });
 
-describe("computeStartMonth", () => {
-  const now = new Date(Date.UTC(2026, 7, 13)); // 2026-08-13, matches "today" in this project's context
-
-  it("starts from the earliest trade's month when that's within the backfill cap", () => {
-    expect(computeStartMonth("2026-06-15", 24, now)).toBe("2026-06");
-  });
-
-  it("caps backfill at maxBackfillMonths even if the earliest trade is much older", () => {
-    // 24 months before 2026-08 is 2024-08.
-    expect(computeStartMonth("2020-01-01", 24, now)).toBe("2024-08");
-  });
-
-  it("respects a smaller maxBackfillMonths", () => {
-    expect(computeStartMonth("2020-01-01", 3, now)).toBe("2026-05");
-  });
-
-  it("accepts a native Date object (what node-postgres actually returns for a `date` column), not just a string", () => {
-    // Regression test: pg returns Postgres `date` columns as JS Date
-    // objects at runtime regardless of the query result's TS type
-    // annotation — a bare .slice() call on that value throws "X.slice
-    // is not a function" the first time this runs against a real
-    // database, which a string-only fixture can't catch.
-    const asDate = new Date(Date.UTC(2026, 5, 15)); // 2026-06-15
-    expect(computeStartMonth(asDate, 24, now)).toBe("2026-06");
-  });
-
-  it("a Date object still gets capped the same way a string does", () => {
-    const asDate = new Date(Date.UTC(2020, 0, 1)); // 2020-01-01
-    expect(computeStartMonth(asDate, 24, now)).toBe("2024-08");
-  });
-});
-
 describe("candleKey", () => {
   it("builds the R2 key from instrument, timeframe, and month", () => {
     expect(candleKey("XAUUSD", "15min", "2026-07")).toBe("candles/XAUUSD/15min/2026-07.json");
+  });
+});
+
+describe("mergeCandles", () => {
+  it("unions two disjoint candle arrays and sorts the result by time", () => {
+    const existing = [{ t: 100, o: 1, h: 1, l: 1, c: 1 }];
+    const incoming = [{ t: 50, o: 2, h: 2, l: 2, c: 2 }];
+    expect(mergeCandles(existing, incoming)).toEqual([
+      { t: 50, o: 2, h: 2, l: 2, c: 2 },
+      { t: 100, o: 1, h: 1, l: 1, c: 1 },
+    ]);
+  });
+
+  it("prefers incoming's candle on a timestamp collision", () => {
+    const existing = [{ t: 100, o: 1, h: 1, l: 1, c: 1 }];
+    const incoming = [{ t: 100, o: 9, h: 9, l: 9, c: 9 }];
+    expect(mergeCandles(existing, incoming)).toEqual([{ t: 100, o: 9, h: 9, l: 9, c: 9 }]);
+  });
+
+  it("returns existing unchanged (just sorted) when incoming is empty", () => {
+    const existing = [
+      { t: 200, o: 1, h: 1, l: 1, c: 1 },
+      { t: 100, o: 2, h: 2, l: 2, c: 2 },
+    ];
+    expect(mergeCandles(existing, [])).toEqual([
+      { t: 100, o: 2, h: 2, l: 2, c: 2 },
+      { t: 200, o: 1, h: 1, l: 1, c: 1 },
+    ]);
+  });
+
+  it("returns incoming unchanged (just sorted) when existing is empty", () => {
+    const incoming = [{ t: 100, o: 1, h: 1, l: 1, c: 1 }];
+    expect(mergeCandles([], incoming)).toEqual(incoming);
+  });
+
+  it("handles both empty", () => {
+    expect(mergeCandles([], [])).toEqual([]);
   });
 });
 

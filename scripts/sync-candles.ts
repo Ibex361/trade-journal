@@ -6,55 +6,69 @@
 // it needs Node's fs/network APIs and a direct Postgres connection that
 // have no place inside the app's own browser/server-route code.
 //
+// DESIGN (day-driven, trade-scoped — replaces the old month-range
+// backfill entirely):
+//
+//   Old design: for every instrument, fetch a whole month's tick zip
+//   for every month between its earliest trade and now, re-fetching the
+//   current month on every run. This downloaded far more data than any
+//   chart could ever need (there's no "Monthly" chart timeframe), and
+//   "append today's partial daily file" could ingest incomplete ticks
+//   for a still-in-progress day.
+//
+//   New design: fetch only the individual UTC calendar days a real
+//   logged trade actually spans (entry through exit inclusive — see
+//   tradeDays.ts's tradeUtcDays), and ONLY once that day is fully
+//   closed (isUtcDayClosed) — never a still-forming day's archive file,
+//   with absolutely no tolerance for partial-day data (per explicit
+//   instruction: a trade whose day isn't fully closed yet simply waits
+//   for a future run rather than being marked synced with incomplete
+//   ticks).
+//
 // For every instrument currently logged in `trades` (across all
-// accounts — chart data is market data, not account-scoped, so one
-// instrument's candles serve every account that trades it):
-//   1. Figure out which (instrument, month) combinations are already in
-//      R2 vs still missing, and always treat the current month as
-//      needing a refresh (it's still accumulating ticks).
-//   2. For each month that needs fetching: download that month's tick
-//      zip from Exness's public archive, trying the plain symbol first
-//      and an "m"-suffixed (Standard MT4) variant second — the archive's
-//      instrument naming depends on account type (an unsuffixed name
-//      like XAUUSD means Pro/Raw Spread; other account types add a
-//      suffix like "m"), so a hardcoded single form isn't reliable
-//      across every instrument.
-//   3. Parse the CSV (Timestamp, Symbol, Bid, Ask) once, bucket the BID
-//      price into all 6 timeframes in one pass (ticks are the expensive
-//      part to fetch/parse — deriving every timeframe from the same
-//      in-memory tick array is nearly free by comparison — see
-//      candleAggregation.ts), and upload one JSON candle array per
-//      (instrument, timeframe, month) to R2.
-//   4. Any archive file that doesn't exist yet (future month, or a
-//      symbol/suffix combination Exness never published) is logged and
+// accounts — chart data is market data, not account-scoped):
+//   1. Query every trade's instrument + entry/exit date+time (not just
+//      earliest entry_date — a full backfill window is no longer
+//      computed at all).
+//   2. Per instrument, compute the full set of distinct UTC trade-days
+//      via tradeUtcDays, keep only the ones that have fully closed.
+//   3. Read that instrument's synced-days manifest from R2
+//      (candles/{instrument}/synced-days.json) and skip any day
+//      already marked synced.
+//   4. For each remaining day, fetch that single day's daily zip
+//      directly (.../YYYY/MM/DD/Exness_{SYMBOL}_{YYYY}_{MM}_{DD}.zip —
+//      trying the plain symbol then an "m"-suffixed variant, same
+//      account-type ambiguity as before), aggregate its ticks into all
+//      6 timeframes, and MERGE the result into that day's month's
+//      existing R2 candle file (read → mergeCandles → re-upload) rather
+//      than overwriting, since a month's file is now built up
+//      incrementally across many runs as new trade-days appear in it.
+//   5. Mark the day synced in the manifest only after every timeframe's
+//      merge+upload for that day has succeeded — so a run that fails
+//      partway through leaves that day unmarked and it's naturally
+//      retried on the next run, never silently skipped.
+//   6. Any archive file that doesn't exist yet (symbol/suffix
+//      combination Exness never published for that day) is logged and
 //      skipped — never throws and kills the whole run over one missing
-//      file, per the "handle gracefully" requirement.
+//      file, per the "handle gracefully" requirement. A skipped day is
+//      NOT marked synced, so it's retried on future runs rather than
+//      permanently given up on.
 //
-// Idempotent and safe to re-run: a month already fully synced (and not
-// the current month) is skipped on the next run rather than re-fetched,
-// which is what keeps this cheap to run daily.
+// Idempotent and safe to re-run: a day already in the manifest is
+// skipped on the next run rather than re-fetched, which is what keeps
+// this cheap to run daily even as more trade-days accumulate over time.
 //
-// The tick-bucketing/date-math logic lives in candleAggregation.ts
-// instead of inline here, specifically so it can be unit tested
-// (lib/__tests__/candleAggregation.test.ts) without pulling in this
-// file's env-var/S3-client/Postgres side effects.
+// The tick-bucketing/date-math/merge logic lives in candleAggregation.ts
+// and tradeDays.ts instead of inline here, specifically so it can be
+// unit tested without pulling in this file's env-var/S3-client/Postgres
+// side effects.
 
-import { S3Client, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
-import { TIMEFRAMES_MINUTES, Candle, monthsBetween, computeStartMonth, candleKey, normalizeCsv, normalizedCsvBody, aggregateTicksToAllTimeframes } from "./candleAggregation";
-
-// ---------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------
-
-// How far back to backfill on a from-scratch run (no R2 data yet at all
-// for an instrument). Chosen to comfortably cover this journal's actual
-// trade history without backfilling years of tick data nobody will ever
-// chart — see computeStartMonth (candleAggregation.ts) for how this
-// bounds against the earliest trade actually logged for that instrument
-// instead of always backfilling the full window regardless of need.
-const MAX_BACKFILL_MONTHS = 24;
+import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, mergeCandles } from "./candleAggregation";
+import { tradeUtcDays, isUtcDayClosed } from "./tradeDays";
+import { manifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -80,55 +94,62 @@ function makeS3Client() {
 }
 
 // ---------------------------------------------------------------------
-// Step 1: which instruments does this journal actually need candles for?
+// Step 1: which (instrument, UTC day) pairs does this journal need candles for?
 // ---------------------------------------------------------------------
+
+type TradeDateFields = {
+  instrument: string;
+  entry_date: string | null;
+  entry_time: string | null;
+  exit_date: string | null;
+  exit_time: string | null;
+};
 
 /**
- * All distinct instrument symbols across every account's trades, plus
- * the earliest entry_date logged for each — the latter bounds how far
- * back that instrument needs backfilling (no point fetching 2023 tick
- * data for an instrument first traded in 2026).
+ * Every logged trade's instrument + entry/exit date+time fields, across
+ * all accounts. Unlike the old design, this fetches every trade's full
+ * date/time fields (not just a per-instrument minimum), since the set
+ * of days actually needed is now the union of every individual trade's
+ * own entry→exit span, not a single earliest-to-now range.
  */
-async function fetchInstrumentsToSync(pg: PgClient): Promise<Map<string, string | Date>> {
-  // node-postgres's own generic here does NOT change what's returned at
-  // runtime — a Postgres `date` column always comes back as a native JS
-  // Date object, string annotation notwithstanding. Typed honestly as
-  // `string | Date` so computeStartMonth's own signature (which accepts
-  // both, see candleAggregation.ts) isn't fighting a lying type here.
-  const { rows } = await pg.query<{ instrument: string; earliest: string | Date }>(
-    `select instrument, min(entry_date) as earliest
+async function fetchTradeDateFields(pg: PgClient): Promise<TradeDateFields[]> {
+  const { rows } = await pg.query<TradeDateFields>(
+    `select instrument, entry_date, entry_time, exit_date, exit_time
      from trades
-     where instrument is not null and instrument <> ''
-     group by instrument
-     order by instrument`
+     where instrument is not null and instrument <> ''`
   );
-  return new Map(rows.map((r) => [r.instrument, r.earliest]));
+  return rows;
+}
+
+/**
+ * Groups trades by instrument and reduces each instrument's trades to
+ * the full set of distinct, already-closed UTC calendar days that need
+ * candle data — the union of every one of that instrument's trades'
+ * own tradeUtcDays(), filtered to days that have fully closed as of
+ * `now`. A trade whose day(s) haven't closed yet simply doesn't
+ * contribute those days this run; it's picked up automatically once
+ * they close on a future run — no partial-day tolerance anywhere in
+ * this path.
+ */
+function computeInstrumentDays(trades: TradeDateFields[], now: Date): Map<string, Set<string>> {
+  const byInstrument = new Map<string, Set<string>>();
+  for (const trade of trades) {
+    const days = tradeUtcDays(trade.entry_date, trade.entry_time, trade.exit_date, trade.exit_time);
+    if (days.length === 0) continue; // unparseable/missing entry_date — nothing to sync for this trade
+    let set = byInstrument.get(trade.instrument);
+    if (!set) {
+      set = new Set();
+      byInstrument.set(trade.instrument, set);
+    }
+    for (const day of days) {
+      if (isUtcDayClosed(day, now)) set.add(day);
+    }
+  }
+  return byInstrument;
 }
 
 // ---------------------------------------------------------------------
-// Step 2: figure out which (instrument, month) pairs need (re)fetching
-// ---------------------------------------------------------------------
-
-/** Every R2 object key that already exists under candles/{instrument}/, as a Set for O(1) lookup. */
-async function listExistingKeys(s3: S3Client, bucket: string, instrument: string): Promise<Set<string>> {
-  const keys = new Set<string>();
-  let continuationToken: string | undefined;
-  do {
-    const res = await s3.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: `candles/${instrument}/`,
-        ContinuationToken: continuationToken,
-      })
-    );
-    for (const obj of res.Contents ?? []) if (obj.Key) keys.add(obj.Key);
-    continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
-  } while (continuationToken);
-  return keys;
-}
-
-// ---------------------------------------------------------------------
-// Step 3: download + parse one month's tick archive
+// Step 2: fetch one closed day's tick archive
 // ---------------------------------------------------------------------
 
 const ARCHIVE_BASE = "https://ticks.ex2archive.com/ticks";
@@ -136,82 +157,83 @@ const ARCHIVE_BASE = "https://ticks.ex2archive.com/ticks";
 /**
  * Tries the plain instrument symbol first, then an "m"-suffixed
  * (Standard MT4) variant — Exness's tick archive names instruments per
- * the account type that traded them (see this file's header comment),
- * and this app's own trades table already normalizes to the unsuffixed
- * form (contractSizeFor / exnessImport.ts strip a trailing "m"), so the
- * raw archive file is very likely to actually be under the suffixed
- * name. Returns the raw CSV text and which symbol form worked, or null
- * if neither exists for this month (logged by the caller, not an error
- * — a future/not-yet-published month is expected, not a bug).
+ * the account type that traded them, and this app's own trades table
+ * already normalizes to the unsuffixed form (contractSizeFor /
+ * exnessImport.ts strip a trailing "m"), so the raw archive file is
+ * very likely to actually be under the suffixed name. Returns the
+ * normalized CSV text and which symbol form worked, or null if neither
+ * exists for this day (logged by the caller, not an error — a symbol
+ * Exness never published under either form is expected, not a bug).
  */
-async function fetchMonthTickCsv(
-  instrument: string,
-  month: string
-): Promise<{ csv: string; archiveSymbol: string } | null> {
-  const [year, mm] = month.split("-");
+async function fetchDayTickCsv(instrument: string, day: string): Promise<{ csv: string; archiveSymbol: string } | null> {
+  const [year, mm, dd] = day.split("-");
   const candidates = [instrument, `${instrument}m`];
 
   for (const archiveSymbol of candidates) {
-    const url = `${ARCHIVE_BASE}/${archiveSymbol}/${year}/${mm}/Exness_${archiveSymbol}_${year}_${mm}.zip`;
+    const url = `${ARCHIVE_BASE}/${archiveSymbol}/${year}/${mm}/${dd}/Exness_${archiveSymbol}_${year}_${mm}_${dd}.zip`;
     const res = await fetch(url);
-    if (res.status === 404) continue; // this symbol form doesn't exist for this month — try the next
+    if (res.status === 404) continue; // this symbol form doesn't exist for this day — try the next
     if (!res.ok) {
-      console.warn(`  ! ${archiveSymbol} ${month}: unexpected HTTP ${res.status} fetching ${url}, skipping this month`);
+      console.warn(`  ! ${archiveSymbol} ${day}: unexpected HTTP ${res.status} fetching ${url}, skipping this day`);
       return null;
     }
     const buf = new Uint8Array(await res.arrayBuffer());
     const files = unzipSync(buf);
     const csvName = Object.keys(files).find((n) => n.toLowerCase().endsWith(".csv"));
     if (!csvName) {
-      console.warn(`  ! ${archiveSymbol} ${month}: zip had no CSV inside, skipping`);
+      console.warn(`  ! ${archiveSymbol} ${day}: zip had no CSV inside, skipping`);
       return null;
     }
     return { csv: normalizeCsv(new TextDecoder().decode(files[csvName])), archiveSymbol };
   }
-  console.log(`  - ${instrument} ${month}: no archive file under any known symbol form yet, skipping`);
+  console.log(`  - ${instrument} ${day}: no archive file under any known symbol form yet, skipping`);
   return null;
 }
 
-/**
- * Downloads today's still-accumulating daily tick file (the archive
- * publishes the current month day-by-day until the month closes) and
- * appends it to a month's normalized CSV text, so the current month's
- * candles include today's ticks without waiting for Exness to publish
- * the whole month. Silently a no-op (returns the month CSV unchanged)
- * if today's daily file isn't published yet — normal early in the
- * trading day.
- *
- * Both the monthly and daily CSVs are normalized to "Timestamp,Bid"
- * before concatenation (see normalizeCsv in candleAggregation.ts) so
- * the two source files' different column orders don't corrupt the
- * merged row stream — the monthly CSV is already normalized by
- * fetchMonthTickCsv; the daily CSV is normalized here before appending.
- */
-async function appendTodayIfCurrentMonth(monthCsv: string, archiveSymbol: string, month: string): Promise<string> {
-  const now = new Date();
-  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  if (month !== currentMonth) return monthCsv;
+// ---------------------------------------------------------------------
+// Step 3: R2 read/merge/write helpers
+// ---------------------------------------------------------------------
 
-  const year = String(now.getUTCFullYear());
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(now.getUTCDate()).padStart(2, "0");
-  const url = `${ARCHIVE_BASE}/${archiveSymbol}/${year}/${mm}/${dd}/Exness_${archiveSymbol}_${year}_${mm}_${dd}.zip`;
-  const res = await fetch(url);
-  if (!res.ok) return monthCsv; // today's file not published yet — expected, not an error
-
-  const buf = new Uint8Array(await res.arrayBuffer());
-  const files = unzipSync(buf);
-  const csvName = Object.keys(files).find((n) => n.toLowerCase().endsWith(".csv"));
-  if (!csvName) return monthCsv;
-  const todayNormalized = normalizeCsv(new TextDecoder().decode(files[csvName]));
-  // normalizedCsvBody() strips the "Timestamp,Bid" header so the merged
-  // string has exactly one header row at the start (from monthCsv).
-  return `${monthCsv}\n${normalizedCsvBody(todayNormalized)}`;
+/** Reads and JSON-parses an R2 object's body as text, or returns null if it doesn't exist / can't be read. */
+async function readR2Json(s3: S3Client, bucket: string, key: string): Promise<string | null> {
+  try {
+    const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const body = await res.Body?.transformToString();
+    return body ?? null;
+  } catch {
+    // A missing object throws (NoSuchKey) rather than returning null —
+    // that's the expected, common case for a brand-new instrument/month
+    // and not an error worth logging.
+    return null;
+  }
 }
 
-// ---------------------------------------------------------------------
-// Step 4: upload
-// ---------------------------------------------------------------------
+async function readManifest(s3: S3Client, bucket: string, instrument: string): Promise<Set<string>> {
+  const raw = await readR2Json(s3, bucket, manifestKey(instrument));
+  return parseManifest(raw);
+}
+
+async function writeManifest(s3: S3Client, bucket: string, instrument: string, days: Set<string>) {
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: manifestKey(instrument),
+      Body: serializeManifest(days),
+      ContentType: "application/json",
+    })
+  );
+}
+
+async function readExistingCandles(s3: S3Client, bucket: string, instrument: string, timeframe: string, month: string): Promise<Candle[]> {
+  const raw = await readR2Json(s3, bucket, candleKey(instrument, timeframe, month));
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Candle[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 async function uploadCandles(s3: S3Client, bucket: string, instrument: string, timeframe: string, month: string, candles: Candle[]) {
   await s3.send(
@@ -235,60 +257,67 @@ async function main() {
   const pg = new PgClient({ connectionString: requireEnv("SUPABASE_DB_URL") });
   await pg.connect();
 
-  let instruments: Map<string, string | Date>;
+  let trades: TradeDateFields[];
   try {
-    instruments = await fetchInstrumentsToSync(pg);
+    trades = await fetchTradeDateFields(pg);
   } finally {
     await pg.end();
   }
 
-  console.log(`Found ${instruments.size} distinct instrument(s) across all trades.`);
-
   const now = new Date();
-  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const instrumentDays = computeInstrumentDays(trades, now);
 
-  let totalUploaded = 0;
-  let totalSkipped = 0;
+  console.log(`Found ${instrumentDays.size} distinct instrument(s) with at least one closed trade-day.`);
 
-  for (const [instrument, earliestEntryDate] of instruments) {
+  let totalDaysSynced = 0;
+  let totalDaysSkipped = 0;
+
+  for (const [instrument, closedDays] of instrumentDays) {
     console.log(`\n== ${instrument} ==`);
-    const startMonth = computeStartMonth(earliestEntryDate, MAX_BACKFILL_MONTHS, now);
-    const allMonths = monthsBetween(startMonth, currentMonth);
-    const existingKeys = await listExistingKeys(s3, bucket, instrument);
+    const manifest = await readManifest(s3, bucket, instrument);
+    const daysToFetch = daysNeedingSync(manifest, [...closedDays].sort());
 
-    // A month is "done" only if every timeframe's file already exists
-    // for it — otherwise a prior run that failed partway through would
-    // be treated as complete and never retried. The current month is
-    // always re-fetched regardless (still accumulating).
-    const monthsNeeded = allMonths.filter((month) => {
-      if (month === currentMonth) return true;
-      return !Object.keys(TIMEFRAMES_MINUTES).every((tf) => existingKeys.has(candleKey(instrument, tf, month)));
-    });
-
-    if (monthsNeeded.length === 0) {
-      console.log(`  Already fully synced (${allMonths.length} month(s)), nothing to do.`);
+    if (daysToFetch.length === 0) {
+      console.log(`  Already fully synced (${closedDays.size} closed trade-day(s)), nothing to do.`);
       continue;
     }
 
-    for (const month of monthsNeeded) {
-      const fetched = await fetchMonthTickCsv(instrument, month);
+    for (const day of daysToFetch) {
+      const fetched = await fetchDayTickCsv(instrument, day);
       if (!fetched) {
-        totalSkipped++;
-        continue;
+        totalDaysSkipped++;
+        continue; // not marked synced — retried on a future run
       }
-      const csv = await appendTodayIfCurrentMonth(fetched.csv, fetched.archiveSymbol, month);
-      const byTimeframe = aggregateTicksToAllTimeframes(csv);
 
-      for (const [tf, candles] of Object.entries(byTimeframe)) {
-        if (candles.length === 0) continue;
-        await uploadCandles(s3, bucket, instrument, tf, month, candles);
-        totalUploaded++;
+      const month = day.slice(0, 7); // "YYYY-MM"
+      const byTimeframe = aggregateTicksToAllTimeframes(fetched.csv);
+
+      let dayFullySynced = true;
+      for (const tf of Object.keys(TIMEFRAMES_MINUTES)) {
+        const newCandles = byTimeframe[tf] ?? [];
+        if (newCandles.length === 0) continue; // nothing to merge for this timeframe from this day
+        try {
+          const existing = await readExistingCandles(s3, bucket, instrument, tf, month);
+          const merged = mergeCandles(existing, newCandles);
+          await uploadCandles(s3, bucket, instrument, tf, month, merged);
+        } catch (err) {
+          console.warn(`  ! ${instrument} ${day} ${tf}: merge/upload failed, day will be retried next run:`, err);
+          dayFullySynced = false;
+        }
       }
-      console.log(`  ✓ ${month} (via ${fetched.archiveSymbol}): ${Object.values(byTimeframe).reduce((n, c) => n + c.length, 0)} candles across ${Object.keys(byTimeframe).length} timeframes`);
+
+      if (dayFullySynced) {
+        manifest.add(day);
+        await writeManifest(s3, bucket, instrument, manifest);
+        totalDaysSynced++;
+        console.log(`  ✓ ${day} (via ${fetched.archiveSymbol}): ${Object.values(byTimeframe).reduce((n, c) => n + c.length, 0)} candles merged across ${Object.keys(byTimeframe).length} timeframes`);
+      } else {
+        totalDaysSkipped++;
+      }
     }
   }
 
-  console.log(`\nDone. ${totalUploaded} candle file(s) uploaded, ${totalSkipped} month(s) skipped (no archive available).`);
+  console.log(`\nDone. ${totalDaysSynced} trade-day(s) synced, ${totalDaysSkipped} day(s) skipped (no archive available or a merge/upload error — will retry next run).`);
 }
 
 main().catch((err) => {
