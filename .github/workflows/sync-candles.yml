@@ -26,6 +26,14 @@ name: Sync candles
 # instrument synced-days manifest so already-fetched days are never
 # re-downloaded.
 #
+# ARCHIVE URL SHAPE: Exness only publishes a per-day archive file for
+# the current, still-open month. Every already-closed month only has a
+# single monthly archive (no per-day files at all). This script fetches
+# a needed day directly when its month is the current UTC month, and
+# falls back to the whole-month archive (fetched once per month, not
+# once per day) for any needed day in a past month — see
+# isCurrentUtcMonth in scripts/tradeDays.ts.
+#
 # Runs at 02:00 UTC daily (every day of the week, not just weekdays —
 # trades can be logged and need syncing regardless of whether markets
 # were open that day; the archive simply has no file for a closed-

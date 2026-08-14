@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tradeUtcDays, isUtcDayClosed, pgDateToString } from "../../scripts/tradeDays";
+import { tradeUtcDays, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "../../scripts/tradeDays";
 
 describe("tradeUtcDays", () => {
   it("returns a single UTC day for a same-day trade with no exit", () => {
@@ -150,5 +150,35 @@ describe("isUtcDayClosed", () => {
   it("returns false for a future day", () => {
     const now = new Date("2026-08-14T15:00:00Z");
     expect(isUtcDayClosed("2026-08-20", now)).toBe(false);
+  });
+});
+
+describe("isCurrentUtcMonth", () => {
+  it("returns true for the current UTC month", () => {
+    const now = new Date("2026-08-14T15:00:00Z");
+    expect(isCurrentUtcMonth("2026-08", now)).toBe(true);
+  });
+
+  it("returns false for a past month in the same year", () => {
+    const now = new Date("2026-08-14T15:00:00Z");
+    expect(isCurrentUtcMonth("2026-07", now)).toBe(false);
+  });
+
+  it("returns false for a past month across a year boundary", () => {
+    const now = new Date("2026-01-05T00:00:00Z");
+    expect(isCurrentUtcMonth("2025-12", now)).toBe(false);
+  });
+
+  it("returns false for a future month", () => {
+    const now = new Date("2026-08-14T15:00:00Z");
+    expect(isCurrentUtcMonth("2026-09", now)).toBe(false);
+  });
+
+  it("uses the UTC month even near a local-time month boundary", () => {
+    // 2026-08-01T00:30:00Z is definitively August in UTC regardless of
+    // any local timezone interpretation.
+    const now = new Date("2026-08-01T00:30:00Z");
+    expect(isCurrentUtcMonth("2026-08", now)).toBe(true);
+    expect(isCurrentUtcMonth("2026-07", now)).toBe(false);
   });
 });

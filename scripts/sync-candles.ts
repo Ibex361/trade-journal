@@ -35,14 +35,21 @@
 //   3. Read that instrument's synced-days manifest from R2
 //      (candles/{instrument}/synced-days.json) and skip any day
 //      already marked synced.
-//   4. For each remaining day, fetch that single day's daily zip
-//      directly (.../YYYY/MM/DD/Exness_{SYMBOL}_{YYYY}_{MM}_{DD}.zip —
-//      trying the plain symbol then an "m"-suffixed variant, same
-//      account-type ambiguity as before), aggregate its ticks into all
-//      6 timeframes, and MERGE the result into that day's month's
-//      existing R2 candle file (read → mergeCandles → re-upload) rather
-//      than overwriting, since a month's file is now built up
-//      incrementally across many runs as new trade-days appear in it.
+//   4. For each remaining day, fetch that day's tick archive and
+//      aggregate its ticks into all 6 timeframes, then MERGE the result
+//      into that day's month's existing R2 candle file (read →
+//      mergeCandles → re-upload) rather than overwriting, since a
+//      month's file is now built up incrementally across many runs as
+//      new trade-days appear in it. Exness only publishes a DAILY
+//      per-day archive for the month that's still in progress
+//      (.../YYYY/MM/DD/Exness_{SYMBOL}_{YYYY}_{MM}_{DD}.zip); every
+//      other, already-closed month only has a MONTHLY archive
+//      (.../YYYY/MM/Exness_{SYMBOL}_{YYYY}_{MM}.zip, no /DD/ segment) —
+//      see isCurrentUtcMonth in tradeDays.ts. Needed days are grouped
+//      by month first so a past month with several needed trade-days
+//      downloads its one monthly archive exactly once rather than once
+//      per day. Both URL shapes try the plain symbol then an
+//      "m"-suffixed variant (same account-type ambiguity as before).
 //   5. Mark the day synced in the manifest only after every timeframe's
 //      merge+upload for that day has succeeded — so a run that fails
 //      partway through leaves that day unmarked and it's naturally
@@ -67,7 +74,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
 import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, mergeCandles } from "./candleAggregation";
-import { tradeUtcDays, isUtcDayClosed, pgDateToString } from "./tradeDays";
+import { tradeUtcDays, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "./tradeDays";
 import { manifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
 
 function requireEnv(name: string): string {
@@ -196,6 +203,38 @@ async function fetchDayTickCsv(instrument: string, day: string): Promise<{ csv: 
   return null;
 }
 
+/**
+ * Fetches a whole month's tick archive (used for any month that has
+ * already closed — see isCurrentUtcMonth). Same plain/"m"-suffix
+ * fallback and normalization as fetchDayTickCsv, just a different URL
+ * shape: no /dd/ path segment and no _dd suffix on the filename, since
+ * Exness keys a closed month's archive by month only.
+ */
+async function fetchMonthTickCsv(instrument: string, month: string): Promise<{ csv: string; archiveSymbol: string } | null> {
+  const [year, mm] = month.split("-");
+  const candidates = [instrument, `${instrument}m`];
+
+  for (const archiveSymbol of candidates) {
+    const url = `${ARCHIVE_BASE}/${archiveSymbol}/${year}/${mm}/Exness_${archiveSymbol}_${year}_${mm}.zip`;
+    const res = await fetch(url);
+    if (res.status === 404) continue; // this symbol form doesn't exist for this month — try the next
+    if (!res.ok) {
+      console.warn(`  ! ${archiveSymbol} ${month}: unexpected HTTP ${res.status} fetching ${url}, skipping this month`);
+      return null;
+    }
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const files = unzipSync(buf);
+    const csvName = Object.keys(files).find((n) => n.toLowerCase().endsWith(".csv"));
+    if (!csvName) {
+      console.warn(`  ! ${archiveSymbol} ${month}: zip had no CSV inside, skipping`);
+      return null;
+    }
+    return { csv: normalizeCsv(new TextDecoder().decode(files[csvName])), archiveSymbol };
+  }
+  console.log(`  - ${instrument} ${month}: no monthly archive file under any known symbol form yet, skipping`);
+  return null;
+}
+
 // ---------------------------------------------------------------------
 // Step 3: R2 read/merge/write helpers
 // ---------------------------------------------------------------------
@@ -252,6 +291,40 @@ async function uploadCandles(s3: S3Client, bucket: string, instrument: string, t
   );
 }
 
+/**
+ * Merges freshly-aggregated candles (from either a single day's or a
+ * whole month's tick archive) into R2 across all six timeframes for
+ * one instrument/month, read→merge→upload per timeframe. `label` is
+ * only used for the warning log (a day string or a month string,
+ * whichever the caller is fetching). Returns true only if every
+ * timeframe with candles to merge succeeded — a partial failure means
+ * the caller should NOT mark anything synced, so it's retried whole on
+ * the next run rather than left in a half-merged state.
+ */
+async function mergeTimeframesIntoR2(
+  s3: S3Client,
+  bucket: string,
+  instrument: string,
+  label: string,
+  month: string,
+  byTimeframe: Record<string, Candle[]>
+): Promise<boolean> {
+  let fullySynced = true;
+  for (const tf of Object.keys(TIMEFRAMES_MINUTES)) {
+    const newCandles = byTimeframe[tf] ?? [];
+    if (newCandles.length === 0) continue; // nothing to merge for this timeframe
+    try {
+      const existing = await readExistingCandles(s3, bucket, instrument, tf, month);
+      const merged = mergeCandles(existing, newCandles);
+      await uploadCandles(s3, bucket, instrument, tf, month, merged);
+    } catch (err) {
+      console.warn(`  ! ${instrument} ${label} ${tf}: merge/upload failed, will be retried next run:`, err);
+      fullySynced = false;
+    }
+  }
+  return fullySynced;
+}
+
 // ---------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------
@@ -288,7 +361,15 @@ async function main() {
       continue;
     }
 
-    for (const day of daysToFetch) {
+    // Exness only publishes a DAILY archive file for the still-open
+    // current month; every past (closed) month only has a MONTHLY
+    // archive. Split the needed days accordingly so past-month days
+    // fetch the right URL shape instead of 404ing against a daily path
+    // that no longer exists for that month.
+    const currentMonthDays = daysToFetch.filter((day) => isCurrentUtcMonth(day.slice(0, 7), now));
+    const pastMonthDays = daysToFetch.filter((day) => !isCurrentUtcMonth(day.slice(0, 7), now));
+
+    for (const day of currentMonthDays) {
       const fetched = await fetchDayTickCsv(instrument, day);
       if (!fetched) {
         totalDaysSkipped++;
@@ -297,20 +378,7 @@ async function main() {
 
       const month = day.slice(0, 7); // "YYYY-MM"
       const byTimeframe = aggregateTicksToAllTimeframes(fetched.csv);
-
-      let dayFullySynced = true;
-      for (const tf of Object.keys(TIMEFRAMES_MINUTES)) {
-        const newCandles = byTimeframe[tf] ?? [];
-        if (newCandles.length === 0) continue; // nothing to merge for this timeframe from this day
-        try {
-          const existing = await readExistingCandles(s3, bucket, instrument, tf, month);
-          const merged = mergeCandles(existing, newCandles);
-          await uploadCandles(s3, bucket, instrument, tf, month, merged);
-        } catch (err) {
-          console.warn(`  ! ${instrument} ${day} ${tf}: merge/upload failed, day will be retried next run:`, err);
-          dayFullySynced = false;
-        }
-      }
+      const dayFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, day, month, byTimeframe);
 
       if (dayFullySynced) {
         manifest.add(day);
@@ -319,6 +387,47 @@ async function main() {
         console.log(`  ✓ ${day} (via ${fetched.archiveSymbol}): ${Object.values(byTimeframe).reduce((n, c) => n + c.length, 0)} candles merged across ${Object.keys(byTimeframe).length} timeframes`);
       } else {
         totalDaysSkipped++;
+      }
+    }
+
+    // Group past-month days by month so a month with several needed
+    // trade-days (e.g. multiple July trades) downloads that month's
+    // archive exactly once, not once per day — the monthly zip already
+    // contains every day's ticks, so one fetch covers every needed day
+    // in it.
+    const pastMonthGroups = new Map<string, string[]>();
+    for (const day of pastMonthDays) {
+      const month = day.slice(0, 7);
+      const group = pastMonthGroups.get(month) ?? [];
+      group.push(day);
+      pastMonthGroups.set(month, group);
+    }
+
+    for (const [month, daysInMonth] of pastMonthGroups) {
+      const fetched = await fetchMonthTickCsv(instrument, month);
+      if (!fetched) {
+        totalDaysSkipped += daysInMonth.length;
+        continue; // not marked synced — retried on a future run
+      }
+
+      // The monthly archive contains ticks for the whole month; only
+      // the specific trade-days actually needed get marked synced
+      // below (a month may have plenty of days with no logged trade at
+      // all — those never need to be tracked in the manifest), but the
+      // candles merged into R2 come from the full month's ticks, same
+      // as aggregating a single day's ticks would for that day's file.
+      const byTimeframe = aggregateTicksToAllTimeframes(fetched.csv);
+      const monthFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, month, month, byTimeframe);
+
+      if (monthFullySynced) {
+        for (const day of daysInMonth) manifest.add(day);
+        await writeManifest(s3, bucket, instrument, manifest);
+        totalDaysSynced += daysInMonth.length;
+        console.log(
+          `  ✓ ${month} (via ${fetched.archiveSymbol}, covers ${daysInMonth.length} needed trade-day(s): ${daysInMonth.join(", ")}): ${Object.values(byTimeframe).reduce((n, c) => n + c.length, 0)} candles merged across ${Object.keys(byTimeframe).length} timeframes`
+        );
+      } else {
+        totalDaysSkipped += daysInMonth.length;
       }
     }
   }

@@ -114,3 +114,27 @@ export function isUtcDayClosed(day: string, now: Date = new Date()): boolean {
   const dayEndUtcMs = new Date(`${day}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000;
   return now.getTime() >= dayEndUtcMs;
 }
+
+/**
+ * True if "YYYY-MM" is the current UTC calendar month as of `now`.
+ *
+ * This is the boundary sync-candles.ts uses to decide which archive
+ * URL shape to fetch: Exness only publishes a DAILY per-day archive
+ * file for the month that's still in progress. Once a month closes,
+ * Exness stops publishing per-day files for it entirely — only a
+ * single MONTHLY archive remains available (a different URL, with no
+ * /dd/ path segment and no _dd suffix). A day-shaped fetch against a
+ * past month's date 404s for every single day of that month, which is
+ * exactly what surfaced this: real, valid trade-days from a prior
+ * month (e.g. mid-July while the current month was August) were being
+ * logged as "no archive file" and silently skipped, even though
+ * Exness has that data — just under the monthly path, not the daily
+ * one. sync-candles.ts fetches the current month's needed days via
+ * fetchDayTickCsv (daily URL) and every other month's needed days via
+ * fetchMonthTickCsv (monthly URL), grouped by month so a month with
+ * several needed trade-days only downloads its one archive once.
+ */
+export function isCurrentUtcMonth(month: string, now: Date = new Date()): boolean {
+  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  return month === currentMonth;
+}
