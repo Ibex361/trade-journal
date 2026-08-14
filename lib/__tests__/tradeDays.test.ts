@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tradeUtcDays, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "../../scripts/tradeDays";
+import { tradeUtcDays, tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "../../scripts/tradeDays";
 
 describe("tradeUtcDays", () => {
   it("returns a single UTC day for a same-day trade with no exit", () => {
@@ -90,6 +90,37 @@ describe("tradeUtcDays", () => {
     // it blindly), the trade is still treated as spanning at least its
     // entry day.
     expect(tradeUtcDays("2026-08-14", "10:00", "2026-08-10", "10:00")).toEqual(["2026-08-14"]);
+  });
+});
+
+describe("tradeUtcDaysWithContext", () => {
+  it("returns an empty array when entry_date is missing (same as tradeUtcDays)", () => {
+    expect(tradeUtcDaysWithContext(null, "10:00", null, null)).toEqual([]);
+  });
+
+  it("adds 15 days of buffer before and after a same-day trade", () => {
+    const days = tradeUtcDaysWithContext("2026-08-14", "10:00", null, null);
+    expect(days[0]).toBe("2026-07-30"); // 2026-08-14 minus 15 days
+    expect(days[days.length - 1]).toBe("2026-08-29"); // 2026-08-14 plus 15 days
+    expect(days).toHaveLength(31); // 15 before + the trade day + 15 after
+  });
+
+  it("buffers on each side of a multi-day held trade's own span, not just its entry day", () => {
+    const days = tradeUtcDaysWithContext("2026-08-10", "09:00", "2026-08-13", "17:00");
+    expect(days[0]).toBe("2026-07-26"); // 2026-08-10 (first core day) minus 15
+    expect(days[days.length - 1]).toBe("2026-08-28"); // 2026-08-13 (last core day) plus 15
+    expect(days).toHaveLength(15 + 4 + 15); // 15 before + 4 core days + 15 after
+  });
+
+  it("is contiguous with no gaps or duplicates", () => {
+    const days = tradeUtcDaysWithContext("2026-08-14", "10:00", null, null);
+    const unique = new Set(days);
+    expect(unique.size).toBe(days.length);
+    for (let i = 1; i < days.length; i++) {
+      const prev = new Date(`${days[i - 1]}T00:00:00Z`);
+      prev.setUTCDate(prev.getUTCDate() + 1);
+      expect(prev.toISOString().slice(0, 10)).toBe(days[i]);
+    }
   });
 });
 

@@ -16,14 +16,15 @@
 //   "append today's partial daily file" could ingest incomplete ticks
 //   for a still-in-progress day.
 //
-//   New design: fetch only the individual UTC calendar days a real
-//   logged trade actually spans (entry through exit inclusive — see
-//   tradeDays.ts's tradeUtcDays), and ONLY once that day is fully
-//   closed (isUtcDayClosed) — never a still-forming day's archive file,
-//   with absolutely no tolerance for partial-day data (per explicit
-//   instruction: a trade whose day isn't fully closed yet simply waits
-//   for a future run rather than being marked synced with incomplete
-//   ticks).
+//   New design: fetch only the UTC calendar days a real logged trade
+//   actually needs — its entry-through-exit span, PLUS a 15-day buffer
+//   on each side (see tradeDays.ts's tradeUtcDaysWithContext) so the
+//   1day chart has real candles around the trade instead of a gap —
+//   and ONLY once a day is fully closed (isUtcDayClosed) — never a
+//   still-forming day's archive file, with absolutely no tolerance for
+//   partial-day data (per explicit instruction: a trade whose day isn't
+//   fully closed yet simply waits for a future run rather than being
+//   marked synced with incomplete ticks).
 //
 // For every instrument currently logged in `trades` (across all
 // accounts — chart data is market data, not account-scoped):
@@ -31,7 +32,8 @@
 //      earliest entry_date — a full backfill window is no longer
 //      computed at all).
 //   2. Per instrument, compute the full set of distinct UTC trade-days
-//      via tradeUtcDays, keep only the ones that have fully closed.
+//      via tradeUtcDaysWithContext, keep only the ones that have fully
+//      closed.
 //   3. Read that instrument's synced-days manifest from R2
 //      (candles/{instrument}/synced-days.json) and skip any day
 //      already marked synced. Also read its synced-months manifest
@@ -81,7 +83,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
 import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, mergeCandles } from "./candleAggregation";
-import { tradeUtcDays, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "./tradeDays";
+import { tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "./tradeDays";
 import { manifestKey, monthManifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
 
 function requireEnv(name: string): string {
@@ -145,16 +147,18 @@ async function fetchTradeDateFields(pg: PgClient): Promise<TradeDateFields[]> {
  * Groups trades by instrument and reduces each instrument's trades to
  * the full set of distinct, already-closed UTC calendar days that need
  * candle data — the union of every one of that instrument's trades'
- * own tradeUtcDays(), filtered to days that have fully closed as of
- * `now`. A trade whose day(s) haven't closed yet simply doesn't
- * contribute those days this run; it's picked up automatically once
- * they close on a future run — no partial-day tolerance anywhere in
- * this path.
+ * own tradeUtcDaysWithContext() (the trade's entry→exit span PLUS a
+ * 15-day buffer on each side, so the 1day chart has real candles around
+ * the trade instead of a gap — see CHART_CONTEXT_BUFFER_DAYS in
+ * tradeDays.ts), filtered to days that have fully closed as of `now`. A
+ * trade whose day(s) haven't closed yet simply doesn't contribute those
+ * days this run; it's picked up automatically once they close on a
+ * future run — no partial-day tolerance anywhere in this path.
  */
 function computeInstrumentDays(trades: TradeDateFields[], now: Date): Map<string, Set<string>> {
   const byInstrument = new Map<string, Set<string>>();
   for (const trade of trades) {
-    const days = tradeUtcDays(trade.entry_date, trade.entry_time, trade.exit_date, trade.exit_time);
+    const days = tradeUtcDaysWithContext(trade.entry_date, trade.entry_time, trade.exit_date, trade.exit_time);
     if (days.length === 0) continue; // unparseable/missing entry_date — nothing to sync for this trade
     let set = byInstrument.get(trade.instrument);
     if (!set) {

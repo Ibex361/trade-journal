@@ -99,6 +99,57 @@ export function tradeUtcDays(entryDate: string | null, entryTime: string | null,
   return days;
 }
 
+// How many calendar days of buffer to sync on each side of a trade's own
+// entry->exit span, so the 1day chart (60-day pad, see
+// PAD_HOURS_BY_TIMEFRAME in lib/chartTradeWindow.ts) has real candles to
+// show around the trade instead of a gap. Deliberately much smaller than
+// the chart's 60-day pad -- this is "enough days to not look broken
+// close to the trade," not an attempt to fill the whole padded window,
+// which would defeat the point of a trade-scoped sync.
+const CHART_CONTEXT_BUFFER_DAYS = 15;
+
+/**
+ * tradeUtcDays(), extended by CHART_CONTEXT_BUFFER_DAYS calendar days on
+ * each side of the trade's own entry->exit span. Used by sync-candles.ts
+ * instead of tradeUtcDays() directly so the daily chart always has some
+ * real context around a trade rather than only ever having candles for
+ * the exact day(s) traded.
+ *
+ * The "after" side is naturally clamped to however many buffer days are
+ * actually available before `now` -- e.g. a trade from 5 days ago only
+ * gets 5 "after" days, not 15, since the other 10 haven't happened yet.
+ * No special-casing needed for this: isUtcDayClosed() (already applied
+ * by the caller, computeInstrumentDays) filters out any day that hasn't
+ * closed yet, which is exactly "days that don't exist yet" for a recent
+ * trade. Days before the trade's entry are never clamped this way since
+ * the past is always available.
+ *
+ * Returns an empty array under the same condition tradeUtcDays() does
+ * (entry_date missing/unparseable) -- there's no core span to buffer
+ * around in that case.
+ */
+export function tradeUtcDaysWithContext(entryDate: string | null, entryTime: string | null, exitDate: string | null, exitTime: string | null): string[] {
+  const coreDays = tradeUtcDays(entryDate, entryTime, exitDate, exitTime);
+  if (coreDays.length === 0) return [];
+
+  const firstCoreDay = new Date(`${coreDays[0]}T00:00:00Z`);
+  const lastCoreDay = new Date(`${coreDays[coreDays.length - 1]}T00:00:00Z`);
+
+  const start = new Date(firstCoreDay);
+  start.setUTCDate(start.getUTCDate() - CHART_CONTEXT_BUFFER_DAYS);
+
+  const end = new Date(lastCoreDay);
+  end.setUTCDate(end.getUTCDate() + CHART_CONTEXT_BUFFER_DAYS);
+
+  const days: string[] = [];
+  const cursor = new Date(start);
+  while (cursor.getTime() <= end.getTime()) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
+
 /**
  * True if the given UTC calendar day ("YYYY-MM-DD") has fully closed as
  * of `now` — i.e. `now` is at or past the start of the NEXT UTC day.
