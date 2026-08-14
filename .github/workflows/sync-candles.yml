@@ -2,16 +2,40 @@ name: Sync candles
 
 # Replaces the old live Twelve Data chart fetch with a pre-computed
 # pipeline: every day this downloads Exness's public tick archive for
-# every instrument actually logged in `trades` (across all accounts —
-# chart data is market data, not account-scoped), aggregates ticks into
-# OHLC candles at six timeframes (1m/5m/15m/1H/4H/1D) using the BID
-# price, and uploads the result to Cloudflare R2. The Next.js app then
-# reads directly from R2 at chart-open time instead of calling a live
-# market-data API — see app/api/chart-data/route.ts.
+# the individual UTC calendar days a logged trade actually spans (entry
+# through exit inclusive, across all accounts — chart data is market
+# data, not account-scoped), aggregates ticks into OHLC candles at six
+# timeframes (1m/5m/15m/1H/4H/1D) using the BID price, and merges the
+# result into Cloudflare R2. The Next.js app then reads directly from R2
+# at chart-open time instead of calling a live market-data API — see
+# app/api/chart-data/route.ts.
 #
-# Runs late in the trading day (9 PM East Africa Time = 18:00 UTC) on
-# weekdays, so the current day's ticks are already published by Exness
-# before this runs, plus manual dispatch any time from the Actions tab.
+# DATA SOURCING: only trade-days actually needed, only once closed.
+# Older design fetched a whole month's tick zip per instrument and kept
+# re-fetching the current month's still-forming data on every run. This
+# version fetches only the specific UTC calendar days a real logged
+# trade touches, and ONLY once that day has fully passed (UTC
+# midnight) — a day's archive file is never downloaded while it could
+# still be incomplete, with no tolerance for partial-day data. A day
+# whose trade hasn't closed yet simply isn't fetched this run; it's
+# picked up automatically once it closes, on a future run. See
+# scripts/tradeDays.ts (which days a trade needs, and whether a day has
+# closed) and scripts/sync-candles.ts's header comment for the full
+# design, including how per-day fetches get merged into the existing
+# month-keyed R2 storage layout (unchanged) and tracked via a per-
+# instrument synced-days manifest so already-fetched days are never
+# re-downloaded.
+#
+# Runs at 02:00 UTC daily (every day of the week, not just weekdays —
+# trades can be logged and need syncing regardless of whether markets
+# were open that day; the archive simply has no file for a closed-
+# market day, which the existing "skip gracefully" handling already
+# covers), 2 hours after UTC midnight so a trade-day that just closed
+# gets synced with a safety margin, plus manual dispatch any time from
+# the Actions tab. Since the sync only ever fetches days it has
+# confirmed are closed, correctness doesn't depend on the exact cron
+# time — this margin only affects how soon after a day closes its data
+# actually lands in R2.
 #
 # SETUP (one-time, required for this to work):
 #   1. Cloudflare R2:
@@ -44,20 +68,20 @@ name: Sync candles
 #      workflow" in the Actions tab to backfill immediately rather than
 #      waiting for the next scheduled run.
 #
-# First run will be slower than subsequent ones — it backfills up to 24
-# months per instrument (capped at each instrument's own earliest logged
-# trade, whichever is later — see computeStartMonth in the script).
-# Every run after that only fetches what's actually missing, so it's
-# fast and cheap: a metals/forex instrument with months already synced
-# does nothing but re-check R2's file listing and refresh the current
-# month.
+# First run only fetches trade-days that already exist and have closed
+# — there's no more month-range backfill, so it's no slower than any
+# later run. Every run after that only fetches what's actually new
+# (newly logged trades, or a previously-open trade's day that has since
+# closed), tracked via each instrument's synced-days manifest — an
+# instrument with nothing new to sync does nothing but one cheap
+# manifest read.
 #
 # If a step fails (e.g. a secret missing/wrong), the job fails loudly
 # and GitHub emails you — check the Actions tab for the error.
 
 on:
   schedule:
-    - cron: "0 18 * * 1-5" # 18:00 UTC = 21:00 (9 PM) East Africa Time, weekdays only
+    - cron: "0 2 * * *" # 02:00 UTC daily, every day of the week — see header comment above
   workflow_dispatch: {} # lets you click "Run workflow" in the Actions tab any time
 
 jobs:
