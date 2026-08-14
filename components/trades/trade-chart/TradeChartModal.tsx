@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IChartApi, ISeriesApi, ISeriesMarkersPluginApi, Time, UTCTimestamp } from "lightweight-charts";
 import { Trade, Direction } from "@/lib/trades";
-import { computeTradeChartWindow } from "@/lib/chartTradeWindow";
+import { computeTradeChartWindow, coversCandleTarget } from "@/lib/chartTradeWindow";
 
 type Timeframe = "1min" | "5min" | "15min" | "1h" | "4h" | "1day";
 
@@ -92,7 +92,8 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
       setState({ status: "error", message: "This trade doesn't have an entry date to chart against." });
       return;
     }
-    if (window_.isFuture) {
+    const tradeWindow = window_; // narrows to non-null for the rest of this closure
+    if (tradeWindow.isFuture) {
       // No tick data can exist yet for an entry later than "now" — showing
       // a chart anyway would silently place the marker on whatever the
       // last real candle happens to be (right price, wrong time — see
@@ -109,8 +110,8 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     const url = new URL("/api/chart-data", window.location.origin);
     url.searchParams.set("symbol", trade.instrument);
     url.searchParams.set("timeframe", timeframe);
-    url.searchParams.set("start", toDateParam(window_.rangeStartUtcSeconds));
-    url.searchParams.set("end", toDateParam(window_.rangeEndUtcSeconds));
+    url.searchParams.set("start", toDateParam(tradeWindow.rangeStartUtcSeconds));
+    url.searchParams.set("end", toDateParam(tradeWindow.rangeEndUtcSeconds));
 
     fetch(url.toString())
       .then(async (res) => {
@@ -120,7 +121,22 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
           setState({ status: "error", message: data?.error || "Couldn't load chart data. Please try again." });
           return;
         }
-        setState({ status: "ready", candles: data.candles ?? [] });
+        const candles: Candle[] = data.candles ?? [];
+        // The trade's own entry (and exit, if present) is what the chart
+        // needs to actually cover — checking this here, against the real
+        // response, is what catches "entry already happened but today's
+        // sync hasn't run yet" (see coversTarget's doc comment), which
+        // isFuture alone can't detect since it only knows the trade's
+        // timestamp, not whether R2 has been synced past it.
+        const targetUtcSeconds = tradeWindow.exitUtcSeconds ?? tradeWindow.entryUtcSeconds;
+        if (!coversCandleTarget(candles, targetUtcSeconds, timeframe)) {
+          setState({
+            status: "error",
+            message: "Chart data hasn't synced for this trade's time yet — the daily sync runs once a day, so very recent trades may not have data until the next run.",
+          });
+          return;
+        }
+        setState({ status: "ready", candles });
       })
       .catch(() => {
         if (!cancelled) setState({ status: "error", message: "Couldn't reach chart storage." });

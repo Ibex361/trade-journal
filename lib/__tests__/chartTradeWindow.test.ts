@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tradeLocalToUtcSeconds, snapToCandle, computeTradeChartWindow } from "../chartTradeWindow";
+import { tradeLocalToUtcSeconds, snapToCandle, computeTradeChartWindow, coversCandleTarget } from "../chartTradeWindow";
 import { makeTrade } from "../testFixtures";
 
 describe("tradeLocalToUtcSeconds", () => {
@@ -219,5 +219,58 @@ describe("computeTradeChartWindow", () => {
     const trade = makeTrade({ entry_date: entryDate, entry_time: entryTime });
     const window = computeTradeChartWindow(trade, "15min")!;
     expect(window.isFuture).toBe(false);
+  });
+});
+
+describe("coversCandleTarget", () => {
+  const tenAm = Date.UTC(2026, 0, 1, 10, 0, 0) / 1000;
+  const nineFortyFive = Date.UTC(2026, 0, 1, 9, 45, 0) / 1000;
+  const nineThirty = Date.UTC(2026, 0, 1, 9, 30, 0) / 1000;
+
+  it("returns false for an empty candle list — no data means no coverage", () => {
+    expect(coversCandleTarget([], tenAm, "15min")).toBe(false);
+  });
+
+  it("returns true when the last candle is exactly at the target time", () => {
+    expect(coversCandleTarget([{ time: tenAm }], tenAm, "15min")).toBe(true);
+  });
+
+  it("returns true when the last candle is after the target time", () => {
+    const after = tenAm + 15 * 60;
+    expect(coversCandleTarget([{ time: tenAm }, { time: after }], tenAm, "15min")).toBe(true);
+  });
+
+  it("returns true when the last candle is within one bucket before the target (still-forming-bar tolerance)", () => {
+    // Target is 10:00, last candle is 09:45 — exactly one 15min bucket
+    // short, which is expected: the bar covering 10:00 might still be
+    // forming/not yet synced even though the trade itself already happened.
+    expect(coversCandleTarget([{ time: nineFortyFive }], tenAm, "15min")).toBe(true);
+  });
+
+  it("returns false when the last candle is more than one bucket before the target — the core bug fix case", () => {
+    // Regression test: trade entry at 10:00, but the daily sync hasn't run
+    // for today yet, so the most recent available candle is from 09:30 —
+    // two buckets short. Without this check, the chart would silently
+    // render with the entry marker placed on unrelated data.
+    expect(coversCandleTarget([{ time: nineThirty }], tenAm, "15min")).toBe(false);
+  });
+
+  it("uses the max candle time when candles aren't sorted", () => {
+    const unsorted = [{ time: nineThirty }, { time: tenAm }, { time: nineFortyFive }];
+    expect(coversCandleTarget(unsorted, tenAm, "15min")).toBe(true);
+  });
+
+  it("scales the tolerance bucket to the timeframe", () => {
+    // 1h timeframe: a candle 45 minutes before target is still within
+    // one 1h bucket's tolerance, even though it would fail for 15min.
+    const target = Date.UTC(2026, 0, 1, 10, 0, 0) / 1000;
+    const candle = Date.UTC(2026, 0, 1, 9, 15, 0) / 1000; // 45 min before
+    expect(coversCandleTarget([{ time: candle }], target, "1h")).toBe(true);
+    expect(coversCandleTarget([{ time: candle }], target, "15min")).toBe(false);
+  });
+
+  it("falls back to a 15min-equivalent bucket for an unrecognized timeframe key", () => {
+    expect(coversCandleTarget([{ time: nineFortyFive }], tenAm, "not-a-real-timeframe")).toBe(true);
+    expect(coversCandleTarget([{ time: nineThirty }], tenAm, "not-a-real-timeframe")).toBe(false);
   });
 });

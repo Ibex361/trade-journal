@@ -65,9 +65,15 @@ export function snapToCandle(utcSeconds: number, timeframe: string): number {
 }
 
 export type TradeChartWindow = {
-  /** UTC epoch seconds for the trade's entry, snapped to the current timeframe's candle bucket. */
-  entryUtcSeconds: number | null;
-  /** UTC epoch seconds for the trade's exit, snapped to the current timeframe's candle bucket. */
+  /**
+   * UTC epoch seconds for the trade's entry, snapped to the current
+   * timeframe's candle bucket. Always a number (never null) here — a
+   * missing/unparseable entry_date makes computeTradeChartWindow return
+   * null for the whole window instead, so by the time callers have a
+   * TradeChartWindow at all, the entry timestamp is guaranteed resolved.
+   */
+  entryUtcSeconds: number;
+  /** UTC epoch seconds for the trade's exit, snapped to the current timeframe's candle bucket. Null when the trade has no exit_date. */
   exitUtcSeconds: number | null;
   /** Suggested fetch range start (UTC epoch seconds) — padded before entry. */
   rangeStartUtcSeconds: number;
@@ -143,4 +149,31 @@ export function computeTradeChartWindow(trade: Trade, timeframe: string): TradeC
     rangeEndUtcSeconds: Math.min(spanEnd + padSeconds, nowSeconds),
     isFuture,
   };
+}
+
+/**
+ * True if `candles` contains a bar at or after `targetUtcSeconds`, within
+ * one timeframe-bucket's tolerance. This is the check that catches "the
+ * trade's entry already happened, but today's sync hasn't run yet": it's
+ * 9:20 AM, a trade's entry was logged at 9:00 AM, isFuture (above)
+ * correctly says false (9:00 AM already happened) — but the sync
+ * workflow runs once a day, so if today's ticks haven't been synced yet,
+ * R2 has no candle anywhere near 9:00 AM today. The chart-data API
+ * silently returns whatever's in range (possibly just an earlier day's
+ * tail, or nothing), and rendering that as if it were the trade's own
+ * chart puts markers on the wrong candles — same visual symptom as the
+ * already-handled future-entry case, but caused by unsynced data rather
+ * than a future timestamp, so isFuture alone can't catch it.
+ *
+ * One bucket of tolerance because the most recent real candle for "right
+ * now" is always at least one bucket old (a still-forming bar isn't
+ * closed/synced yet) — an exact-match requirement at targetUtcSeconds
+ * would falsely reject perfectly good, fully-synced data.
+ */
+export function coversCandleTarget(candles: { time: number }[], targetUtcSeconds: number, timeframe: string): boolean {
+  if (candles.length === 0) return false;
+  const minutes = TIMEFRAMES_MINUTES[timeframe] ?? 15;
+  const bucketSeconds = minutes * 60;
+  const lastCandleTime = Math.max(...candles.map((c) => c.time));
+  return lastCandleTime >= targetUtcSeconds - bucketSeconds;
 }
