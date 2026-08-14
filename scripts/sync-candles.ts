@@ -67,7 +67,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
 import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, mergeCandles } from "./candleAggregation";
-import { tradeUtcDays, isUtcDayClosed } from "./tradeDays";
+import { tradeUtcDays, isUtcDayClosed, pgDateToString } from "./tradeDays";
 import { manifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
 
 function requireEnv(name: string): string {
@@ -113,12 +113,18 @@ type TradeDateFields = {
  * own entry→exit span, not a single earliest-to-now range.
  */
 async function fetchTradeDateFields(pg: PgClient): Promise<TradeDateFields[]> {
-  const { rows } = await pg.query<TradeDateFields>(
+  const { rows } = await pg.query<{ instrument: string; entry_date: string | Date | null; entry_time: string | null; exit_date: string | Date | null; exit_time: string | null }>(
     `select instrument, entry_date, entry_time, exit_date, exit_time
      from trades
      where instrument is not null and instrument <> ''`
   );
-  return rows;
+  return rows.map((r) => ({
+    instrument: r.instrument,
+    entry_date: pgDateToString(r.entry_date),
+    entry_time: r.entry_time,
+    exit_date: pgDateToString(r.exit_date),
+    exit_time: r.exit_time,
+  }));
 }
 
 /**

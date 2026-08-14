@@ -22,6 +22,28 @@ function utcDateString(utcSeconds: number): string {
 }
 
 /**
+ * node-postgres returns a Postgres `date` column as a native JS Date
+ * object at runtime, regardless of what a query result's TS type
+ * annotation claims. tradeUtcDays() (below) expects entry_date/exit_date
+ * as plain "YYYY-MM-DD" strings — every other caller reaches it via the
+ * Supabase JS client, which serializes `date` columns as strings, so
+ * this mismatch never surfaced until sync-candles.ts started querying
+ * Postgres directly via `pg`. Interpolating a raw Date into a template
+ * string calls its .toString() instead of producing "YYYY-MM-DDT...",
+ * which the underlying `new Date(...)` parse silently fails on —
+ * tradeLocalToUtcSeconds returns null, tradeUtcDays returns [], and the
+ * trade vanishes from the sync with no error at all. Any caller
+ * reading entry_date/exit_date from a raw `pg` query result MUST run it
+ * through this first. `time` columns (entry_time/exit_time) are NOT
+ * affected — pg returns those as strings already ("HH:MM:SS").
+ */
+export function pgDateToString(value: string | Date | null): string | null {
+  if (value === null) return null;
+  if (!(value instanceof Date)) return value;
+  return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-${String(value.getUTCDate()).padStart(2, "0")}`;
+}
+
+/**
  * Every distinct UTC calendar day ("YYYY-MM-DD") a trade's tick data
  * actually needs to be fetched for, spanning entry through exit
  * inclusive.

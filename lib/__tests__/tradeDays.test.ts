@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tradeUtcDays, isUtcDayClosed } from "../../scripts/tradeDays";
+import { tradeUtcDays, isUtcDayClosed, pgDateToString } from "../../scripts/tradeDays";
 
 describe("tradeUtcDays", () => {
   it("returns a single UTC day for a same-day trade with no exit", () => {
@@ -72,11 +72,57 @@ describe("tradeUtcDays", () => {
     ]);
   });
 
+  it("returns an empty array if a raw Date object is passed instead of a string (documents why pgDateToString must run first)", () => {
+    // tradeUtcDays/tradeLocalToUtcSeconds interpolate `date` into a
+    // template string. A real "YYYY-MM-DD" string produces a parseable
+    // ISO datetime; a raw Date object interpolates via .toString()
+    // instead, which fails to parse. This test exists so that if
+    // tradeUtcDays' signature is ever loosened to accept `string | Date`
+    // without also fixing the interpolation, it fails loudly here
+    // rather than silently dropping trades again the way it did before
+    // sync-candles.ts started coercing with pgDateToString() first.
+    const asDate = new Date(Date.UTC(2026, 7, 12)) as unknown as string;
+    expect(tradeUtcDays(asDate, "10:50", null, null)).toEqual([]);
+  });
+
   it("ignores an exit_date that's before entry_date (bad data) rather than producing a reversed or empty range", () => {
     // If exit somehow predates entry (shouldn't happen, but don't trust
     // it blindly), the trade is still treated as spanning at least its
     // entry day.
     expect(tradeUtcDays("2026-08-14", "10:00", "2026-08-10", "10:00")).toEqual(["2026-08-14"]);
+  });
+});
+
+describe("pgDateToString", () => {
+  it("returns a string value unchanged", () => {
+    expect(pgDateToString("2026-08-12")).toBe("2026-08-12");
+  });
+
+  it("returns null unchanged", () => {
+    expect(pgDateToString(null)).toBe(null);
+  });
+
+  it("converts a native Date (what node-postgres actually returns for a `date` column) to a YYYY-MM-DD string", () => {
+    // Regression test for the exact bug this exists to prevent: a raw
+    // Date interpolated into a template string (as tradeLocalToUtcSeconds
+    // does) calls .toString() instead of producing an ISO date, which
+    // silently makes the whole trade vanish from the sync (tradeUtcDays
+    // returns [] with no error) — this is what happened for a real
+    // manually-entered trade before this coercion was added at the
+    // pg-query boundary in sync-candles.ts.
+    const asDate = new Date(Date.UTC(2026, 7, 12)); // 2026-08-12
+    expect(pgDateToString(asDate)).toBe("2026-08-12");
+  });
+
+  it("pads single-digit month and day", () => {
+    const asDate = new Date(Date.UTC(2026, 0, 5)); // 2026-01-05
+    expect(pgDateToString(asDate)).toBe("2026-01-05");
+  });
+
+  it("a Date-derived string feeds correctly into tradeUtcDays, unlike the raw Date would", () => {
+    const asDate = new Date(Date.UTC(2026, 7, 12));
+    const dateString = pgDateToString(asDate);
+    expect(tradeUtcDays(dateString, "10:50", dateString, "11:39")).toEqual(["2026-08-12"]);
   });
 });
 
