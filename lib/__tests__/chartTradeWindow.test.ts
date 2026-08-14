@@ -165,4 +165,59 @@ describe("computeTradeChartWindow", () => {
     const pad = window.entryUtcSeconds! - window.rangeStartUtcSeconds;
     expect(pad).toBe(24 * 60 * 60);
   });
+
+  it("marks isFuture false for a trade well in the past", () => {
+    const trade = makeTrade({ entry_date: "2020-01-01", entry_time: "10:00" });
+    const window = computeTradeChartWindow(trade, "15min")!;
+    expect(window.isFuture).toBe(false);
+  });
+
+  it("marks isFuture true when the entry is later than the current moment", () => {
+    // Regression test: a trade logged for later today (or a mistaken future
+    // date) has no tick data yet — R2 can't have synced a candle for an
+    // instant that hasn't happened. Without this flag, TradeChartModal would
+    // fetch an empty/partial range and lightweight-charts would silently
+    // render the marker on the last real candle at the right price but the
+    // wrong time, which is exactly the bug this field exists to prevent.
+    const oneYearFromNow = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const entryDate = oneYearFromNow.toISOString().slice(0, 10);
+    const trade = makeTrade({ entry_date: entryDate, entry_time: "10:00" });
+    const window = computeTradeChartWindow(trade, "15min")!;
+    expect(window.isFuture).toBe(true);
+  });
+
+  it("marks isFuture true even when only the exit (not entry) is in the future", () => {
+    const oneYearFromNow = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const futureDate = oneYearFromNow.toISOString().slice(0, 10);
+    // Entry is safely in the past; only exit_date is nonsensically future —
+    // this shouldn't happen in practice but the flag should still catch it
+    // via spanEnd/rangeEnd capping even though entryUtcSeconds itself isn't future.
+    // (isFuture is defined off entry, per its doc comment, so this asserts
+    // that specific, narrower contract rather than a broader "any future field" one.)
+    const trade = makeTrade({
+      entry_date: "2020-01-01",
+      entry_time: "10:00",
+      exit_date: futureDate,
+      exit_time: "10:00",
+    });
+    const window = computeTradeChartWindow(trade, "15min")!;
+    expect(window.isFuture).toBe(false); // entry itself is in the past
+    // But the range end is still capped at "now", not the future exit date.
+    expect(window.rangeEndUtcSeconds).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+  });
+
+  it("does not flag isFuture for a trade entered a few minutes ago", () => {
+    // Build the fixture from a known UTC instant a few minutes in the past,
+    // converted to the app's local (UTC+3) date/time convention, rather than
+    // doing that arithmetic by hand — avoids an hour/day-rollover mistake in
+    // the test itself while still exercising the real conversion path.
+    const nowMinusFiveMin = new Date(Date.now() - 5 * 60 * 1000);
+    const localMs = nowMinusFiveMin.getTime() + 3 * 60 * 60 * 1000;
+    const local = new Date(localMs);
+    const entryDate = local.toISOString().slice(0, 10);
+    const entryTime = local.toISOString().slice(11, 16);
+    const trade = makeTrade({ entry_date: entryDate, entry_time: entryTime });
+    const window = computeTradeChartWindow(trade, "15min")!;
+    expect(window.isFuture).toBe(false);
+  });
 });

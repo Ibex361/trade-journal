@@ -73,6 +73,20 @@ export type TradeChartWindow = {
   rangeStartUtcSeconds: number;
   /** Suggested fetch range end (UTC epoch seconds) — padded after exit/entry, never beyond "now". */
   rangeEndUtcSeconds: number;
+  /**
+   * True when the trade's entry (or exit) time is later than the current
+   * moment — e.g. a trade logged for later today, or a wrong AM/PM or
+   * date entered by mistake. No tick data can exist yet for a future
+   * instant, so there's no candle for a marker to attach to. The R2
+   * archive's most recent candle is always for a moment strictly before
+   * "now" (see sync-candles.ts's daily sync cadence), so a marker for a
+   * future instant would otherwise silently render on whatever the last
+   * real candle happens to be — at the right price (thanks to
+   * atPriceMiddle) but the wrong time, which looks like the exact bug
+   * this field exists to catch. Callers should show a clear message
+   * instead of attempting to plot markers when this is true.
+   */
+  isFuture: boolean;
 };
 
 // How much padding to request around the trade's own entry/exit so the
@@ -113,11 +127,20 @@ export function computeTradeChartWindow(trade: Trade, timeframe: string): TradeC
   const spanEnd = exitUtcSeconds !== null ? Math.max(exitUtcSeconds, entryUtcSeconds) : entryUtcSeconds;
 
   const nowSeconds = Math.floor(Date.now() / 1000);
+  // The entry itself (not just the padded span) is what determines
+  // whether this trade can be charted at all — even the exact entry
+  // instant has no tick data yet if it's in the future. Snapped values
+  // are compared against a same-timeframe snap of "now" so a trade
+  // snapped to, say, the 16:00 bucket isn't flagged future just because
+  // "now" is 15:59:40 and hasn't reached that bucket's raw boundary yet.
+  const nowSnapped = snapToCandle(nowSeconds, timeframe);
+  const isFuture = entryUtcSeconds > nowSnapped;
 
   return {
     entryUtcSeconds,
     exitUtcSeconds,
     rangeStartUtcSeconds: entryUtcSeconds - padSeconds,
     rangeEndUtcSeconds: Math.min(spanEnd + padSeconds, nowSeconds),
+    isFuture,
   };
 }

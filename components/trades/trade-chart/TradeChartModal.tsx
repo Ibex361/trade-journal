@@ -92,6 +92,16 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
       setState({ status: "error", message: "This trade doesn't have an entry date to chart against." });
       return;
     }
+    if (window_.isFuture) {
+      // No tick data can exist yet for an entry later than "now" — showing
+      // a chart anyway would silently place the marker on whatever the
+      // last real candle happens to be (right price, wrong time — see
+      // isFuture's doc comment in chartTradeWindow.ts). A clear message is
+      // more useful than a misleading chart, and also surfaces a likely
+      // data-entry mistake (wrong AM/PM, wrong date) to the user.
+      setState({ status: "error", message: "This trade's entry time hasn't happened yet, so there's no chart data for it." });
+      return;
+    }
 
     let cancelled = false;
     setState({ status: "loading" });
