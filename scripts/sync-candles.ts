@@ -83,7 +83,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
 import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, aggregateTicksFromBytes, mergeCandles } from "./candleAggregation";
-import { tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "./tradeDays";
+import { tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, isUtcWeekend, pgDateToString } from "./tradeDays";
 import { manifestKey, monthManifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
 
 function requireEnv(name: string): string {
@@ -178,6 +178,15 @@ function computeInstrumentDays(trades: TradeDateFields[], now: Date): Map<string
 
 const ARCHIVE_BASE = "https://ticks.ex2archive.com/ticks";
 
+// ANSI yellow, used to make the weekend hint below stand out in the
+// GitHub Actions log viewer (which renders ANSI codes) without adding
+// any real logging machinery. Renders as literal escape-code text if
+// the raw log is ever viewed outside a terminal/Actions UI (e.g.
+// downloaded as a plain-text artifact) — a cosmetic tradeoff judged
+// worth it for how much more visible the hint is in the common case.
+const ANSI_YELLOW = "\x1b[33m";
+const ANSI_RESET = "\x1b[0m";
+
 /**
  * Tries the plain instrument symbol first, then an "m"-suffixed
  * (Standard MT4) variant — Exness's tick archive names instruments per
@@ -210,7 +219,8 @@ async function fetchDayTickCsv(instrument: string, day: string): Promise<{ csv: 
     }
     return { csv: normalizeCsv(new TextDecoder().decode(files[csvName])), archiveSymbol };
   }
-  console.log(`  - ${instrument} ${day}: no archive file under any known symbol form yet, skipping`);
+  const weekendHint = isUtcWeekend(day) ? ` ${ANSI_YELLOW}(This day is a weekend, maybe that's the culprit)${ANSI_RESET}` : "";
+  console.log(`  - ${instrument} ${day}: no archive file under any known symbol form yet, skipping${weekendHint}`);
   return null;
 }
 

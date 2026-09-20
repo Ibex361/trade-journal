@@ -167,6 +167,23 @@ export function isUtcDayClosed(day: string, now: Date = new Date()): boolean {
 }
 
 /**
+ * True if "YYYY-MM-DD" falls on a Saturday or Sunday (UTC calendar
+ * day). Used only to annotate sync-candles.ts's "no archive file"
+ * log line with a hint, since Exness doesn't publish per-day archives
+ * for most instruments on weekends — a missing weekend day is expected,
+ * not a bug, and this hint saves a future debugging session that
+ * mistakes it for one. Deliberately not instrument-aware: a handful of
+ * instruments (e.g. BTCUSD) do trade on weekends, but they're unlikely
+ * to ever need this specific 15-day-buffer-only day, and a slightly
+ * misleading hint on that rare case is a fine tradeoff for keeping this
+ * a pure day-string check.
+ */
+export function isUtcWeekend(day: string): boolean {
+  const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
+  return dow === 0 || dow === 6; // Sunday=0, Saturday=6
+}
+
+/**
  * True if "YYYY-MM" is the current UTC calendar month as of `now`.
  *
  * This is the boundary sync-candles.ts uses to decide which archive

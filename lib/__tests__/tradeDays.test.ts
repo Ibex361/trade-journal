@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tradeUtcDays, tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "../../scripts/tradeDays";
+import { tradeUtcDays, tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, isUtcWeekend, pgDateToString } from "../../scripts/tradeDays";
 
 describe("tradeUtcDays", () => {
   it("returns a single UTC day for a same-day trade with no exit", () => {
@@ -181,6 +181,20 @@ describe("isUtcDayClosed", () => {
   it("returns false for a future day", () => {
     const now = new Date("2026-08-14T15:00:00Z");
     expect(isUtcDayClosed("2026-08-20", now)).toBe(false);
+  });
+});
+
+describe("isUtcWeekend", () => {
+  it("returns true for a Saturday", () => {
+    expect(isUtcWeekend("2026-09-19")).toBe(true); // confirmed Saturday
+  });
+
+  it("returns true for a Sunday", () => {
+    expect(isUtcWeekend("2026-09-20")).toBe(true); // confirmed Sunday
+  });
+
+  it("returns false for a weekday", () => {
+    expect(isUtcWeekend("2026-09-18")).toBe(false); // confirmed Friday
   });
 });
 
