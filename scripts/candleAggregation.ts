@@ -210,6 +210,93 @@ export function aggregateTicksToAllTimeframes(csv: string): Record<string, Candl
  * `incoming` is the more authoritative of the two since it's the one
  * that just passed the closed-day check).
  */
+/**
+ * Aggregates tick data directly from raw unzipped bytes into candle
+ * buckets — without ever decoding the full buffer into a JS string.
+ *
+ * Why this exists: monthly Exness tick archives for liquid instruments
+ * (XAUUSD, BTCUSD, …) can exceed 536 MB unzipped, which is V8's hard
+ * cap on string length (0x1fffffe8 chars). Calling
+ * `new TextDecoder().decode(entireBuffer)` on such a file throws
+ * ERR_STRING_TOO_LONG. This function sidesteps that by scanning the raw
+ * bytes for 0x0A (newline) boundaries and decoding one line at a time —
+ * each individual line is tiny (≈40 bytes), well within any limit.
+ *
+ * Semantically equivalent to `aggregateTicksToAllTimeframes(normalizeCsv(str))`
+ * but without the intermediate string. Use this for the monthly path;
+ * the daily path's files are small enough that the string-based functions
+ * remain fine.
+ *
+ * Column layout is header-driven (same logic as normalizeCsv): finds
+ * "timestamp" and "bid" columns by name so it works across both the
+ * daily ("Exness","Symbol","Timestamp","Bid","Ask") and monthly
+ * (Timestamp,Exness,Symbol,Bid,Ask) layouts without position assumptions.
+ */
+export function aggregateTicksFromBytes(bytes: Uint8Array): Record<string, Candle[]> {
+  const buckets: Record<string, Map<number, Candle>> = {};
+  for (const tf of Object.keys(TIMEFRAMES_MINUTES)) buckets[tf] = new Map();
+
+  const decoder = new TextDecoder();
+  let lineStart = 0;
+  let tsIdx = -1;
+  let bidIdx = -1;
+  let headerParsed = false;
+
+  const flush = (end: number) => {
+    if (end <= lineStart) return;
+    const line = decoder.decode(bytes.subarray(lineStart, end)).trim();
+    lineStart = end + 1; // skip the '\n' byte itself
+    if (!line) return;
+
+    if (!headerParsed) {
+      // First non-empty line is the header.
+      const fields = splitCsvRow(line).map((f) => f.toLowerCase().trim());
+      tsIdx = fields.indexOf("timestamp");
+      bidIdx = fields.indexOf("bid");
+      headerParsed = true;
+      return;
+    }
+
+    if (tsIdx === -1 || bidIdx === -1) return; // unrecognised header — skip all data rows
+
+    const fields = splitCsvRow(line);
+    if (fields.length <= Math.max(tsIdx, bidIdx)) return;
+
+    const tsRaw = fields[tsIdx];
+    const bid = Number(fields[bidIdx]);
+    if (!Number.isFinite(bid)) return;
+
+    const isoTs = tsRaw.includes("T") ? tsRaw : tsRaw.replace(" ", "T");
+    const ms = Date.parse(isoTs);
+    if (Number.isNaN(ms)) return;
+
+    for (const [tf, minutes] of Object.entries(TIMEFRAMES_MINUTES)) {
+      const bucketMs = minutes * 60_000;
+      const bucketStart = Math.floor(ms / bucketMs) * bucketMs;
+      const bucketTimeSec = Math.floor(bucketStart / 1_000);
+      const existing = buckets[tf].get(bucketTimeSec);
+      if (!existing) {
+        buckets[tf].set(bucketTimeSec, { t: bucketTimeSec, o: bid, h: bid, l: bid, c: bid });
+      } else {
+        existing.h = Math.max(existing.h, bid);
+        existing.l = Math.min(existing.l, bid);
+        existing.c = bid;
+      }
+    }
+  };
+
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0x0a) flush(i); // '\n'
+  }
+  flush(bytes.length); // last line (no trailing newline)
+
+  const result: Record<string, Candle[]> = {};
+  for (const tf of Object.keys(TIMEFRAMES_MINUTES)) {
+    result[tf] = [...buckets[tf].values()].sort((a, b) => a.t - b.t);
+  }
+  return result;
+}
+
 export function mergeCandles(existing: Candle[], incoming: Candle[]): Candle[] {
   const byTime = new Map<number, Candle>();
   for (const c of existing) byTime.set(c.t, c);

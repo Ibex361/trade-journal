@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { monthsBetween, candleKey, normalizeCsv, normalizedCsvBody, aggregateTicksToAllTimeframes, mergeCandles, TIMEFRAMES_MINUTES } from "../../scripts/candleAggregation";
+import { monthsBetween, candleKey, normalizeCsv, normalizedCsvBody, aggregateTicksToAllTimeframes, aggregateTicksFromBytes, mergeCandles, TIMEFRAMES_MINUTES } from "../../scripts/candleAggregation";
 
 describe("monthsBetween", () => {
   it("returns a single month when start equals end", () => {
@@ -237,5 +237,64 @@ describe("aggregateTicksToAllTimeframes", () => {
     const monthlyResult = aggregateTicksToAllTimeframes(normalizeCsv(rawMonthly));
     expect(monthlyResult["1min"]).toHaveLength(1);
     expect(monthlyResult["1min"][0].o).toBeCloseTo(1.15474);
+  });
+});
+
+describe("aggregateTicksFromBytes", () => {
+  const enc = new TextEncoder();
+
+  it("produces identical candles to normalizeCsv+aggregateTicksToAllTimeframes for the daily archive layout", () => {
+    const raw = [
+      '"Exness","Symbol","Timestamp","Bid","Ask"',
+      '"exness","XAUUSDm","2026-08-13 00:00:00.058Z",4414.327,4414.587',
+      '"exness","XAUUSDm","2026-08-13 00:00:01.000Z",4414.400,4414.660',
+    ].join("\n");
+    const expected = aggregateTicksToAllTimeframes(normalizeCsv(raw));
+    const actual = aggregateTicksFromBytes(enc.encode(raw));
+    expect(actual["1min"]).toHaveLength(expected["1min"].length);
+    expect(actual["1min"][0].o).toBeCloseTo(expected["1min"][0].o);
+    expect(actual["1min"][0].c).toBeCloseTo(expected["1min"][0].c);
+  });
+
+  it("produces identical candles to normalizeCsv+aggregateTicksToAllTimeframes for the monthly archive layout", () => {
+    const raw = [
+      "Timestamp,Exness,Symbol,Bid,Ask",
+      "2026-08-02 21:05:04.170000+00:00,exness,EURUSD,1.15474,1.15508",
+      "2026-08-02 21:05:05.669000+00:00,exness,EURUSD,1.15449,1.15499",
+      "2026-08-02 21:06:00.000000+00:00,exness,EURUSD,1.15500,1.15530",
+    ].join("\n");
+    const expected = aggregateTicksToAllTimeframes(normalizeCsv(raw));
+    const actual = aggregateTicksFromBytes(enc.encode(raw));
+    for (const tf of Object.keys(TIMEFRAMES_MINUTES)) {
+      expect(actual[tf].length).toBe(expected[tf].length);
+    }
+    expect(actual["1min"][0].o).toBeCloseTo(expected["1min"][0].o);
+  });
+
+  it("handles a file with no trailing newline", () => {
+    const raw = "Timestamp,Bid\n2026-08-13 00:00:00.058Z,4414.327"; // no \n at end
+    const actual = aggregateTicksFromBytes(enc.encode(raw));
+    expect(actual["1min"]).toHaveLength(1);
+    expect(actual["1min"][0].o).toBeCloseTo(4414.327);
+  });
+
+  it("returns empty candle arrays for an unrecognised header (same as aggregateTicksToAllTimeframes)", () => {
+    const raw = "WrongCol1,WrongCol2\n123,456";
+    const actual = aggregateTicksFromBytes(enc.encode(raw));
+    for (const tf of Object.keys(TIMEFRAMES_MINUTES)) {
+      expect(actual[tf]).toHaveLength(0);
+    }
+  });
+
+  it("skips malformed data rows without crashing", () => {
+    const raw = [
+      "Timestamp,Bid",
+      "not-a-date,4414.327",
+      "2026-08-13 00:01:00.000Z,not-a-number",
+      "2026-08-13 00:02:00.000Z,4415.000",
+    ].join("\n");
+    const actual = aggregateTicksFromBytes(enc.encode(raw));
+    expect(actual["1min"]).toHaveLength(1);
+    expect(actual["1min"][0].o).toBeCloseTo(4415.0);
   });
 });

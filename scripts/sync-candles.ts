@@ -82,7 +82,7 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { Client as PgClient } from "pg";
 import { unzipSync } from "fflate";
-import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, mergeCandles } from "./candleAggregation";
+import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, aggregateTicksFromBytes, mergeCandles } from "./candleAggregation";
 import { tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, pgDateToString } from "./tradeDays";
 import { manifestKey, monthManifestKey, parseManifest, serializeManifest, daysNeedingSync } from "./candleSyncManifest";
 
@@ -221,7 +221,7 @@ async function fetchDayTickCsv(instrument: string, day: string): Promise<{ csv: 
  * shape: no /dd/ path segment and no _dd suffix on the filename, since
  * Exness keys a closed month's archive by month only.
  */
-async function fetchMonthTickCsv(instrument: string, month: string): Promise<{ csv: string; archiveSymbol: string } | null> {
+async function fetchMonthTickCsv(instrument: string, month: string): Promise<{ candles: Record<string, Candle[]>; archiveSymbol: string } | null> {
   const [year, mm] = month.split("-");
   const candidates = [instrument, `${instrument}m`];
 
@@ -240,7 +240,13 @@ async function fetchMonthTickCsv(instrument: string, month: string): Promise<{ c
       console.warn(`  ! ${archiveSymbol} ${month}: zip had no CSV inside, skipping`);
       return null;
     }
-    return { csv: normalizeCsv(new TextDecoder().decode(files[csvName])), archiveSymbol };
+    // Aggregate directly from the raw bytes — never materialise the full
+    // CSV as a JS string. Monthly archives for liquid instruments like
+    // XAUUSD can exceed 536 MB unzipped, which is V8's hard string-length
+    // cap (ERR_STRING_TOO_LONG). aggregateTicksFromBytes scans for '\n'
+    // at the byte level and decodes one line at a time, so it works
+    // regardless of archive size.
+    return { candles: aggregateTicksFromBytes(files[csvName]), archiveSymbol };
   }
   console.log(`  - ${instrument} ${month}: no monthly archive file under any known symbol form yet, skipping`);
   return null;
@@ -463,7 +469,7 @@ async function main() {
       // done in monthManifest too — that's what lets a later trade on
       // a different day in this same month skip straight to the branch
       // above instead of re-fetching.
-      const byTimeframe = aggregateTicksToAllTimeframes(fetched.csv);
+      const byTimeframe = fetched.candles;
       const monthFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, month, month, byTimeframe);
 
       if (monthFullySynced) {
