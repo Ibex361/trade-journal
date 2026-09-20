@@ -98,18 +98,18 @@ describe("tradeUtcDaysWithContext", () => {
     expect(tradeUtcDaysWithContext(null, "10:00", null, null)).toEqual([]);
   });
 
-  it("adds 15 days of buffer before and after a same-day trade", () => {
+  it("adds 30 days of buffer before and after a same-day trade", () => {
     const days = tradeUtcDaysWithContext("2026-08-14", "10:00", null, null);
-    expect(days[0]).toBe("2026-07-30"); // 2026-08-14 minus 15 days
-    expect(days[days.length - 1]).toBe("2026-08-29"); // 2026-08-14 plus 15 days
-    expect(days).toHaveLength(31); // 15 before + the trade day + 15 after
+    expect(days[0]).toBe("2026-07-15"); // 2026-08-14 minus 30 days
+    expect(days[days.length - 1]).toBe("2026-09-13"); // 2026-08-14 plus 30 days
+    expect(days).toHaveLength(61); // 30 before + the trade day + 30 after
   });
 
   it("buffers on each side of a multi-day held trade's own span, not just its entry day", () => {
     const days = tradeUtcDaysWithContext("2026-08-10", "09:00", "2026-08-13", "17:00");
-    expect(days[0]).toBe("2026-07-26"); // 2026-08-10 (first core day) minus 15
-    expect(days[days.length - 1]).toBe("2026-08-28"); // 2026-08-13 (last core day) plus 15
-    expect(days).toHaveLength(15 + 4 + 15); // 15 before + 4 core days + 15 after
+    expect(days[0]).toBe("2026-07-11"); // 2026-08-10 (first core day) minus 30
+    expect(days[days.length - 1]).toBe("2026-09-12"); // 2026-08-13 (last core day) plus 30
+    expect(days).toHaveLength(30 + 4 + 30); // 30 before + 4 core days + 30 after
   });
 
   it("is contiguous with no gaps or duplicates", () => {

@@ -102,11 +102,20 @@ export function tradeUtcDays(entryDate: string | null, entryTime: string | null,
 // How many calendar days of buffer to sync on each side of a trade's own
 // entry->exit span, so the 1day chart (60-day pad, see
 // PAD_HOURS_BY_TIMEFRAME in lib/chartTradeWindow.ts) has real candles to
-// show around the trade instead of a gap. Deliberately much smaller than
-// the chart's 60-day pad -- this is "enough days to not look broken
-// close to the trade," not an attempt to fill the whole padded window,
-// which would defeat the point of a trade-scoped sync.
-const CHART_CONTEXT_BUFFER_DAYS = 15;
+// show around the trade instead of a gap. Deliberately smaller than the
+// chart's 60-day pad -- this is "enough days to not look broken close to
+// the trade," not an attempt to fill the whole padded window, which
+// would defeat the point of a trade-scoped sync.
+//
+// 30 (raised from 15) is also what makes a 1day-timeframe EMA overlay
+// seedable at all: TradeChartModal requests EMA_SEED_CANDLES (30, see
+// lib/chartTradeWindow.ts) candles of extra lookback before the visible
+// window for EMA warmup, and on the 1day timeframe each candle IS a
+// calendar day -- so a 15-day buffer could only ever seed a ~15-period
+// daily EMA, one day short of even that. 30 days of buffer guarantees
+// the full 30-candle seed request has real data behind it on every
+// timeframe this app offers, including 1day.
+const CHART_CONTEXT_BUFFER_DAYS = 30;
 
 /**
  * tradeUtcDays(), extended by CHART_CONTEXT_BUFFER_DAYS calendar days on

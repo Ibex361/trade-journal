@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { IChartApi, ISeriesApi, ISeriesMarkersPluginApi, Time, UTCTimestamp } from "lightweight-charts";
 import { Trade, Direction } from "@/lib/trades";
 import { computeTradeChartWindow, coversCandleTarget } from "@/lib/chartTradeWindow";
+import { computeEMA } from "@/lib/indicators";
 
 type Timeframe = "1min" | "5min" | "15min" | "1h" | "4h" | "1day";
 
@@ -21,6 +22,25 @@ const TIMEFRAMES: { value: Timeframe; label: string }[] = [
 // multi-hour trade requires a lot of scrolling to see, and without
 // starting so zoomed out (1day) that a same-day trade is a single candle.
 const DEFAULT_TIMEFRAME: Timeframe = "15min";
+
+// Fixed set of EMA periods the toggle row offers, capped at 30 — matches
+// EMA_SEED_CANDLES in lib/chartTradeWindow.ts, which fetches exactly 30
+// candles of extra lookback before the display window specifically so
+// every period offered here has enough seed data to compute a real (not
+// truncated/misleading) value from the first visible candle onward. Adding
+// a period above 30 here would need EMA_SEED_CANDLES raised to match, or
+// early visible candles would silently get a less-accurate seed.
+const EMA_PERIODS = [9, 20, 30] as const;
+type EmaPeriod = (typeof EMA_PERIODS)[number];
+
+// One distinct, colorblind-legible color per EMA period so multiple
+// overlays stay visually distinguishable from each other and from the
+// candlestick colors (teal/rose, see CandlestickSeries options below).
+const EMA_COLORS: Record<EmaPeriod, string> = {
+  9: "#facc15", // amber
+  20: "#60a5fa", // blue
+  30: "#c084fc", // violet
+};
 
 type Candle = { time: number; open: number; high: number; low: number; close: number };
 
@@ -60,10 +80,19 @@ function toDateParam(utcSeconds: number): string {
 export default function TradeChartModal({ trade, onClose }: { trade: Trade; onClose: () => void }) {
   const [timeframe, setTimeframe] = useState<Timeframe>(DEFAULT_TIMEFRAME);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  // No EMA shown by default — an indicator overlay is an opt-in analysis
+  // tool, not part of the base chart view every trade opens with.
+  const [activeEmaPeriods, setActiveEmaPeriods] = useState<Set<EmaPeriod>>(new Set());
 
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  // One line series per possible EMA period, created once alongside the
+  // candlestick series (see the chart-init effect below) and toggled via
+  // applyOptions({ visible }) rather than added/removed — cheaper than
+  // recreating a series every time a period is toggled on/off, and
+  // avoids ever leaking a series if toggled rapidly.
+  const emaSeriesRef = useRef<Partial<Record<EmaPeriod, ISeriesApi<"Line">>>>({});
   // Markers are created via createSeriesMarkers (a primitive returned
   // separately from the series itself, not a method on the series) —
   // see lightweight-charts v5's migration notes; kept in a ref so a
@@ -159,7 +188,7 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     const container = containerRef.current;
     if (!container) return;
 
-    import("lightweight-charts").then(({ createChart, CandlestickSeries, ColorType, createSeriesMarkers }) => {
+    import("lightweight-charts").then(({ createChart, CandlestickSeries, LineSeries, ColorType, createSeriesMarkers }) => {
       if (disposed || !container) return;
       const chart = createChart(container, {
         layout: {
@@ -183,6 +212,22 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
       chartRef.current = chart;
       seriesRef.current = series;
       markersRef.current = createSeriesMarkers(series, []);
+
+      // Created hidden — the data-push effect below fills each visible
+      // one via setData() once state is ready, and the toggle-row effect
+      // flips visibility on/off. Created once, up front, for every period
+      // EMA_PERIODS offers regardless of which are currently toggled on,
+      // so toggling a period never needs to recreate a series mid-session.
+      for (const period of EMA_PERIODS) {
+        emaSeriesRef.current[period] = chart.addSeries(LineSeries, {
+          color: EMA_COLORS[period],
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          visible: false,
+        });
+      }
     });
 
     return () => {
@@ -191,6 +236,7 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
       chartRef.current = null;
       seriesRef.current = null;
       markersRef.current = null;
+      emaSeriesRef.current = {};
     };
   }, []);
 
@@ -213,6 +259,20 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     // display window.
     const visible = window_ ? sorted.filter((c) => c.time >= window_.rangeStartUtcSeconds) : sorted;
     series.setData(visible.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
+
+    // EMA is computed over the FULL fetched range (sorted, seed candles
+    // included) — that's the whole point of the extra lookback: an EMA
+    // needs `period` prior candles to produce a real value, and computeEMA
+    // itself already drops the seed window from its own output (see its
+    // doc comment), so the resulting points that actually reach setData()
+    // start at or after rangeStartUtcSeconds in every case that matters —
+    // no separate filtering needed here.
+    for (const period of EMA_PERIODS) {
+      const emaSeries = emaSeriesRef.current[period];
+      if (!emaSeries) continue;
+      const emaPoints = computeEMA(sorted, period);
+      emaSeries.setData(emaPoints.map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
+    }
 
     const markers: Parameters<typeof markersApi.setMarkers>[0] = [];
     if (window_?.entryUtcSeconds !== null && window_?.entryUtcSeconds !== undefined) {
@@ -280,6 +340,18 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     // eslint-disable-next-line react-hooks/exhaustive-deps -- window_/trade are stable for the lifetime of one candle load; re-running per state.status="ready" is what we want.
   }, [state]);
 
+  // Toggles each EMA line series' visibility to match activeEmaPeriods,
+  // without touching its data — kept separate from the data-load effect
+  // above so flipping a toggle is a cheap visibility flag, not a
+  // recompute or a re-fetch. Runs after the chart-init effect has created
+  // the series (a no-op via the `?.` below on the very first render,
+  // before that effect's dynamic import resolves).
+  useEffect(() => {
+    for (const period of EMA_PERIODS) {
+      emaSeriesRef.current[period]?.applyOptions({ visible: activeEmaPeriods.has(period) });
+    }
+  }, [activeEmaPeriods]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-black/80 motion-safe:animate-fade-in" onClick={onClose} />
@@ -315,6 +387,30 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
               {tf.label}
             </button>
           ))}
+          <span className="w-px h-4 bg-surface-border mx-1 shrink-0" aria-hidden="true" />
+          {EMA_PERIODS.map((period) => {
+            const active = activeEmaPeriods.has(period);
+            return (
+              <button
+                key={period}
+                onClick={() =>
+                  setActiveEmaPeriods((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(period)) next.delete(period);
+                    else next.add(period);
+                    return next;
+                  })
+                }
+                aria-pressed={active}
+                className={`text-xs font-medium px-2.5 py-1 rounded-full transition-colors shrink-0 border ${
+                  active ? "text-surface-0 border-transparent" : "text-ink-secondary hover:text-ink-primary bg-surface-2 border-transparent"
+                }`}
+                style={active ? { backgroundColor: EMA_COLORS[period] } : undefined}
+              >
+                EMA {period}
+              </button>
+            );
+          })}
         </div>
 
         <div className="relative flex-1 min-h-0">

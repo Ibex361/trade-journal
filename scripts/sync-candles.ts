@@ -17,7 +17,7 @@
 //   for a still-in-progress day.
 //
 //   New design: fetch only the UTC calendar days a real logged trade
-//   actually needs — its entry-through-exit span, PLUS a 15-day buffer
+//   actually needs — its entry-through-exit span, PLUS a 30-day buffer
 //   on each side (see tradeDays.ts's tradeUtcDaysWithContext) so the
 //   1day chart has real candles around the trade instead of a gap —
 //   and ONLY once a day is fully closed (isUtcDayClosed) — never a
@@ -148,7 +148,7 @@ async function fetchTradeDateFields(pg: PgClient): Promise<TradeDateFields[]> {
  * the full set of distinct, already-closed UTC calendar days that need
  * candle data — the union of every one of that instrument's trades'
  * own tradeUtcDaysWithContext() (the trade's entry→exit span PLUS a
- * 15-day buffer on each side, so the 1day chart has real candles around
+ * 30-day buffer on each side, so the 1day chart has real candles around
  * the trade instead of a gap — see CHART_CONTEXT_BUFFER_DAYS in
  * tradeDays.ts), filtered to days that have fully closed as of `now`. A
  * trade whose day(s) haven't closed yet simply doesn't contribute those
