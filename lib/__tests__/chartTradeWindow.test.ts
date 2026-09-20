@@ -153,6 +153,34 @@ describe("computeTradeChartWindow", () => {
     expect(dayPad).toBeGreaterThan(minutePad);
   });
 
+  it("fetchStartUtcSeconds is exactly 30 candle-widths before rangeStartUtcSeconds, for EMA seeding", () => {
+    const trade = makeTrade({ entry_date: "2020-01-01", entry_time: "10:00" });
+    const window = computeTradeChartWindow(trade, "15min")!;
+    const candleWidthSeconds = 15 * 60;
+    expect(window.rangeStartUtcSeconds - window.fetchStartUtcSeconds).toBe(30 * candleWidthSeconds);
+  });
+
+  it("fetchStartUtcSeconds scales with the timeframe's own candle width", () => {
+    const trade = makeTrade({ entry_date: "2020-01-01", entry_time: "10:00" });
+    const minuteWindow = computeTradeChartWindow(trade, "1min")!;
+    const dayWindow = computeTradeChartWindow(trade, "1day")!;
+    const minuteSeed = minuteWindow.rangeStartUtcSeconds - minuteWindow.fetchStartUtcSeconds;
+    const daySeed = dayWindow.rangeStartUtcSeconds - dayWindow.fetchStartUtcSeconds;
+    expect(minuteSeed).toBe(30 * 60); // 30 candles × 1 minute
+    expect(daySeed).toBe(30 * 24 * 60 * 60); // 30 candles × 1 day
+  });
+
+  it("fetchStartUtcSeconds never shifts rangeStartUtcSeconds or rangeEndUtcSeconds themselves", () => {
+    // Regression guard: the seed lookback must only widen the FETCH, never
+    // the visible/display window — those still drive setVisibleRange() in
+    // TradeChartModal and must stay exactly as before this field existed.
+    const trade = makeTrade({ entry_date: "2020-01-01", entry_time: "10:00" });
+    const window = computeTradeChartWindow(trade, "15min")!;
+    const entryPad = window.entryUtcSeconds! - window.rangeStartUtcSeconds;
+    expect(entryPad).toBe(24 * 60 * 60); // unchanged 15min pad from PAD_HOURS_BY_TIMEFRAME
+    expect(window.fetchStartUtcSeconds).toBeLessThan(window.rangeStartUtcSeconds);
+  });
+
   it("never returns a range end beyond the current moment", () => {
     const trade = makeTrade({ entry_date: "2020-01-01", entry_time: "10:00" });
     const window = computeTradeChartWindow(trade, "1day")!;

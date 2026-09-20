@@ -64,6 +64,20 @@ export function snapToCandle(utcSeconds: number, timeframe: string): number {
   return Math.floor(utcSeconds / bucketSeconds) * bucketSeconds;
 }
 
+// How many candles of extra history to request BEFORE rangeStartUtcSeconds,
+// purely so an EMA overlay has enough prior data to seed correctly for the
+// first visible candle — never rendered as candlesticks themselves, never
+// used for setVisibleRange (which still uses rangeStartUtcSeconds, the
+// actual display window). 30 covers every EMA period this app currently
+// offers (max 30-period) without over-fetching: EMA converges well before
+// 30 prior candles for any period ≤ 30, and — this is the important part
+// for cost — it's still one and the same /api/chart-data request as
+// before, just with a wider `start` param, so it costs zero extra
+// round-trips and, in the common case, zero extra R2 reads too (the
+// R2 side is grouped by month, so 30 extra candles usually land in a
+// month already being fetched for the display range itself).
+const EMA_SEED_CANDLES = 30;
+
 export type TradeChartWindow = {
   /**
    * UTC epoch seconds for the trade's entry, snapped to the current
@@ -79,6 +93,19 @@ export type TradeChartWindow = {
   rangeStartUtcSeconds: number;
   /** Suggested fetch range end (UTC epoch seconds) — padded after exit/entry, never beyond "now". */
   rangeEndUtcSeconds: number;
+  /**
+   * The actual `start` value callers should request from /api/chart-data —
+   * EMA_SEED_CANDLES candle-widths before rangeStartUtcSeconds, so any EMA
+   * overlay computed over the fetched data has a real value from the very
+   * first VISIBLE candle onward instead of an empty/undefined stretch at
+   * the left edge. Distinct from rangeStartUtcSeconds on purpose: the
+   * chart's setVisibleRange() must keep using rangeStartUtcSeconds (the
+   * trade's own padded window) — only the fetch should reach further back.
+   * Rendering code must slice out the seed-only candles (time <
+   * rangeStartUtcSeconds) before drawing candlesticks, so they're used
+   * for indicator math only and never appear as visible bars.
+   */
+  fetchStartUtcSeconds: number;
   /**
    * True when the trade's entry (or exit) time is later than the current
    * moment — e.g. a trade logged for later today, or a wrong AM/PM or
@@ -142,11 +169,15 @@ export function computeTradeChartWindow(trade: Trade, timeframe: string): TradeC
   const nowSnapped = snapToCandle(nowSeconds, timeframe);
   const isFuture = entryUtcSeconds > nowSnapped;
 
+  const rangeStartUtcSeconds = entryUtcSeconds - padSeconds;
+  const candleWidthSeconds = (TIMEFRAMES_MINUTES[timeframe] ?? 15) * 60;
+
   return {
     entryUtcSeconds,
     exitUtcSeconds,
-    rangeStartUtcSeconds: entryUtcSeconds - padSeconds,
+    rangeStartUtcSeconds,
     rangeEndUtcSeconds: Math.min(spanEnd + padSeconds, nowSeconds),
+    fetchStartUtcSeconds: rangeStartUtcSeconds - EMA_SEED_CANDLES * candleWidthSeconds,
     isFuture,
   };
 }

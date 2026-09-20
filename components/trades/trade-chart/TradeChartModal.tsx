@@ -110,7 +110,7 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     const url = new URL("/api/chart-data", window.location.origin);
     url.searchParams.set("symbol", trade.instrument);
     url.searchParams.set("timeframe", timeframe);
-    url.searchParams.set("start", toDateParam(tradeWindow.rangeStartUtcSeconds));
+    url.searchParams.set("start", toDateParam(tradeWindow.fetchStartUtcSeconds));
     url.searchParams.set("end", toDateParam(tradeWindow.rangeEndUtcSeconds));
 
     fetch(url.toString())
@@ -206,7 +206,13 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     if (state.status !== "ready") return;
 
     const sorted = [...state.candles].sort((a, b) => a.time - b.time);
-    series.setData(sorted.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
+    // state.candles includes EMA_SEED_CANDLES worth of extra history before
+    // rangeStartUtcSeconds (see chartTradeWindow.ts's fetchStartUtcSeconds) —
+    // that lookback is for indicator math only and must never be drawn as a
+    // visible bar, so the candlestick series only gets the trade's own
+    // display window.
+    const visible = window_ ? sorted.filter((c) => c.time >= window_.rangeStartUtcSeconds) : sorted;
+    series.setData(visible.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
 
     const markers: Parameters<typeof markersApi.setMarkers>[0] = [];
     if (window_?.entryUtcSeconds !== null && window_?.entryUtcSeconds !== undefined) {
