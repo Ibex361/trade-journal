@@ -143,13 +143,15 @@ async function uploadCandles(s3: S3Client, bucket: string, instrument: string, t
 }
 
 /**
- * Merges freshly-aggregated candles into R2 across the given
- * timeframes, read→merge→upload per timeframe. `onlyTimeframes`, when
- * given, restricts which timeframes actually get persisted —
- * sync-candles.ts (live trades) always wants all 6 (omit the param);
- * sync-backtest-candles.ts only wants whichever timeframes a run's
- * declared feeds actually use. Returns true only if every timeframe
- * that WAS merged succeeded.
+ * Merges freshly-aggregated candles into R2 across ALL timeframes,
+ * read→merge→upload per timeframe. Both callers (sync-candles.ts and
+ * sync-backtest-candles.ts) always persist every timeframe — the
+ * synced-days/synced-months manifests track days and months, not
+ * timeframes, so persisting only a subset would let a later run that
+ * needs a different timeframe wrongly skip a day the manifest calls
+ * "done" (see sync-backtest-candles.ts's header for the full
+ * explanation). Returns true only if every timeframe that had candles
+ * was merged and uploaded successfully.
  */
 export async function mergeTimeframesIntoR2(
   s3: S3Client,
@@ -157,12 +159,10 @@ export async function mergeTimeframesIntoR2(
   instrument: string,
   label: string,
   month: string,
-  byTimeframe: Record<string, Candle[]>,
-  onlyTimeframes?: Set<string>
+  byTimeframe: Record<string, Candle[]>
 ): Promise<boolean> {
   let fullySynced = true;
   for (const tf of Object.keys(TIMEFRAMES_MINUTES)) {
-    if (onlyTimeframes && !onlyTimeframes.has(tf)) continue;
     const newCandles = byTimeframe[tf] ?? [];
     if (newCandles.length === 0) continue;
     try {

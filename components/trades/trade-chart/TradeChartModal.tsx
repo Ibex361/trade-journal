@@ -77,7 +77,25 @@ function toDateParam(utcSeconds: number): string {
  * fixed-max-w-md shared Modal.tsx — a chart needs much more width/height
  * than that component offers.
  */
-export default function TradeChartModal({ trade, onClose }: { trade: Trade; onClose: () => void }) {
+export default function TradeChartModal({
+  trade,
+  onClose,
+  chartDataPath = "/api/chart-data",
+  badge,
+}: {
+  trade: Trade;
+  onClose: () => void;
+  /**
+   * Which candle API to read. Defaults to the live-trade route; the
+   * Backtest run page passes "/api/backtest-chart-data" so a backtest
+   * trade's chart reads from the backtest bucket (the same candles the
+   * strategy traded on) instead of the live one. Both routes share one
+   * request/response contract (see lib/chartDataR2.ts).
+   */
+  chartDataPath?: string;
+  /** Small label shown beside the instrument, e.g. "Backtest" — so a simulated trade's chart is never mistaken for a real one. */
+  badge?: string;
+}) {
   const [timeframe, setTimeframe] = useState<Timeframe>(DEFAULT_TIMEFRAME);
   const [state, setState] = useState<LoadState>({ status: "loading" });
   // No EMA shown by default — an indicator overlay is an opt-in analysis
@@ -136,7 +154,7 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
     let cancelled = false;
     setState({ status: "loading" });
 
-    const url = new URL("/api/chart-data", window.location.origin);
+    const url = new URL(chartDataPath, window.location.origin);
     url.searchParams.set("symbol", trade.instrument);
     url.searchParams.set("timeframe", timeframe);
     url.searchParams.set("start", toDateParam(tradeWindow.fetchStartUtcSeconds));
@@ -161,7 +179,10 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
         if (!coversCandleTarget(candles, targetUtcSeconds, timeframe)) {
           setState({
             status: "error",
-            message: "Chart data hasn't synced for this trade's time yet — the daily sync runs once a day, so very recent trades may not have data until the next run.",
+            message:
+              chartDataPath === "/api/chart-data"
+                ? "Chart data hasn't synced for this trade's time yet — the daily sync runs once a day, so very recent trades may not have data until the next run."
+                : "Backtest candle data doesn't cover this trade's time.",
           });
           return;
         }
@@ -175,7 +196,7 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- window_ is derived from trade+timeframe, already covered by those two deps.
-  }, [timeframe, trade.instrument]);
+  }, [timeframe, trade.instrument, chartDataPath]);
 
   // Create the chart instance once the container is mounted, and tear it
   // down on unmount. Recreated only if the container element itself
@@ -358,7 +379,10 @@ export default function TradeChartModal({ trade, onClose }: { trade: Trade; onCl
       <div className="relative w-full h-full sm:h-[85vh] sm:max-w-5xl bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass flex flex-col motion-safe:animate-scale-in overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-surface-border shrink-0">
           <div>
-            <h2 className="font-display text-lg font-medium">{trade.instrument}</h2>
+            <h2 className="font-display text-lg font-medium flex items-center gap-2">
+              {trade.instrument}
+              {badge && <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-glow-violet/20 text-glow-violet font-medium">{badge}</span>}
+            </h2>
             <p className="text-xs text-ink-secondary font-mono mt-0.5">
               {trade.entry_date}
               {trade.entry_time && ` ${trade.entry_time}`} · <span className="capitalize">{trade.direction ?? "—"}</span>

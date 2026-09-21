@@ -1,0 +1,179 @@
+name: Run backtest
+
+# Triggered ONLY by the web app (POST /api/backtests/trigger calls GitHub's
+# workflow_dispatch API with a run_id) — there is no schedule. One
+# dispatch = one backtest run, in three steps:
+#
+#   1. scripts/sync-backtest-candles.ts   — makes sure every candle this
+#      run needs is in the exness-backtest-candles R2 bucket. Already-
+#      synced days/months are skipped via per-instrument manifests, so an
+#      overlapping range across different runs never re-downloads.
+#   2. scripts/backtest/run_backtest.py   — reads the candles back out of
+#      R2, runs the uploaded strategy through Backtrader, saves
+#      backtest_trades + Backtrader's own analyzer output to Postgres, and
+#      POSTs a completion webhook to the app.
+#   3. (only if step 1 or 2 died) a last-resort step that marks the run
+#      'failed'. run_backtest.py already marks its OWN failures, but it
+#      can't help if it never started (a sync failure, a pip install
+#      failure) or was killed (runner timeout/cancel) — without this step
+#      the run would sit on 'running'/'pending' forever and the UI would
+#      poll it indefinitely.
+#
+# CONCURRENCY: one run_id per group, never cancelled mid-flight. Two
+# backtests CAN run at once (they're independent), but two dispatches of
+# the SAME run id must queue rather than race on the same rows.
+#
+# RUNTIME: a job is capped at 6 hours by GitHub on the free tier
+# (timeout-minutes below is set to that ceiling). A multi-year, multi-feed
+# 15min run takes minutes to tens of minutes once candles are cached; the
+# first run for a new instrument/range is dominated by the tick-archive
+# download. You said you're happy to let it take a while.
+#
+# SETUP (one-time):
+#   1. Cloudflare R2: create a SECOND bucket named exactly
+#      "exness-backtest-candles" (same account as the live bucket). Then
+#      either widen your existing R2 API token to cover it, or create a
+#      new token with Object Read & Write scoped to it. Reusing the same
+#      R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY secrets is
+#      fine if the token covers both buckets.
+#   2. GitHub repo secrets (Settings -> Secrets and variables -> Actions):
+#        SUPABASE_DB_URL          (already set)
+#        R2_ACCOUNT_ID            (already set)
+#        R2_ACCESS_KEY_ID         (already set — must cover the new bucket)
+#        R2_SECRET_ACCESS_KEY     (already set — must cover the new bucket)
+#        R2_BACKTEST_BUCKET_NAME  NEW  = exness-backtest-candles
+#        BACKTEST_WEBHOOK_SECRET  NEW  = any long random string
+#   3. GitHub repo VARIABLE (same page, "Variables" tab — not a secret,
+#      it's just a URL):
+#        BACKTEST_WEBHOOK_URL     NEW  = https://<your-app>.vercel.app/api/backtests/webhook
+#      (If unset the webhook step is skipped and the UI just polls —
+#      everything still works, results simply appear on the next poll.)
+#   4. Vercel env vars (Project -> Settings -> Environment Variables):
+#        R2_BACKTEST_BUCKET_NAME  = exness-backtest-candles   (chart route reads it)
+#        BACKTEST_WEBHOOK_SECRET  = the SAME string as the GitHub secret
+#        GITHUB_DISPATCH_TOKEN    = a fine-grained PAT, this repo only,
+#                                   permission "Actions: Read and write"
+#                                   (lets the app trigger this workflow)
+#        GITHUB_REPO              = Ibex361/trade-journal
+#   5. Run supabase/migrations/025_backtests.sql in the Supabase SQL
+#      editor (creates the three backtest tables).
+#
+# WHY THE WEBHOOK CARRIES NO DATA: run_backtest.py writes trades and
+# analysis straight to Postgres, so by the time it POSTs the webhook the
+# result is already saved. The webhook is a verified "it finished"
+# signal (see app/api/backtests/webhook/route.ts), deliberately given no
+# database access and therefore no privileged Supabase key — the UI
+# reads results with the normal logged-in session as always.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "backtest_runs.id to execute (a UUID — set by the web app)"
+        required: true
+        type: string
+
+concurrency:
+  group: backtest-${{ inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      BACKTEST_RUN_ID: ${{ inputs.run_id }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BACKTEST_BUCKET_NAME: ${{ secrets.R2_BACKTEST_BUCKET_NAME }}
+      WEBHOOK_URL: ${{ vars.BACKTEST_WEBHOOK_URL }}
+      BACKTEST_WEBHOOK_SECRET: ${{ secrets.BACKTEST_WEBHOOK_SECRET }}
+    steps:
+      - name: Validate run id
+        run: |
+          # The id is interpolated into nothing shell-executable below (it is
+          # only ever read via the BACKTEST_RUN_ID env var), but a malformed
+          # value would just produce a confusing "no such run" later — fail
+          # early and clearly instead.
+          if ! echo "$BACKTEST_RUN_ID" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
+            echo "::error::run_id '$BACKTEST_RUN_ID' is not a UUID."
+            exit 1
+          fi
+
+      - name: Verify required secrets are set
+        run: |
+          missing=""
+          for name in SUPABASE_DB_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BACKTEST_BUCKET_NAME; do
+            value="${!name}"
+            if [ -z "$value" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secret(s):$missing. See the SETUP section at the top of .github/workflows/backtest.yml."
+            exit 1
+          fi
+
+      - name: Check out repo
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: scripts/backtest/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install -r scripts/backtest/requirements.txt
+
+      - name: Mark run as running
+        # Flip pending -> running as early as possible so the UI reflects
+        # that the workflow actually started (it can sit queued for a
+        # while on a busy runner). run_backtest.py sets it again itself;
+        # this early write just closes the gap during the sync step,
+        # which can be the longest part of a first-time run.
+        run: |
+          python - <<'PY'
+          import os, psycopg2
+          conn = psycopg2.connect(os.environ["SUPABASE_DB_URL"])
+          with conn.cursor() as cur:
+              cur.execute("update backtest_runs set status = 'running' where id = %s and status = 'pending'", (os.environ["BACKTEST_RUN_ID"],))
+          conn.commit()
+          PY
+
+      - name: Sync backtest candles from Exness archive to R2
+        run: npx tsx scripts/sync-backtest-candles.ts
+
+      - name: Run Backtrader
+        working-directory: scripts/backtest
+        run: python run_backtest.py
+
+      - name: Mark run failed (last-resort)
+        # Runs only if an earlier step died or the job was cancelled.
+        # `where status in ('pending','running')` is the important guard:
+        # run_backtest.py may already have written a precise failure
+        # message (or even 'completed'), and this step must never
+        # overwrite a real result with a generic one.
+        if: failure() || cancelled()
+        run: |
+          python - <<'PY'
+          import os, psycopg2
+          run_url = f"{os.environ.get('GITHUB_SERVER_URL')}/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}"
+          msg = f"The backtest workflow stopped before finishing (a setup, candle-sync or timeout failure). See the workflow run for details: {run_url}"
+          conn = psycopg2.connect(os.environ["SUPABASE_DB_URL"])
+          with conn.cursor() as cur:
+              cur.execute(
+                  "update backtest_runs set status = 'failed', error_message = %s, completed_at = now() where id = %s and status in ('pending', 'running')",
+                  (msg, os.environ["BACKTEST_RUN_ID"]),
+              )
+          conn.commit()
+          PY

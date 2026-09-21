@@ -6,20 +6,21 @@ import { usePathname } from "next/navigation";
 import AccountSwitcher from "@/components/AccountSwitcher";
 import NavTabs from "@/components/NavTabs";
 import SignOutButton from "@/components/SignOutButton";
-import { NAV_TABS } from "@/lib/navTabs";
-import { AnalyticsIcon, StrategiesIcon, ReportsIcon, CloseIcon, HamburgerIcon } from "@/components/icons";
+import { NAV_TABS, isTabActive } from "@/lib/navTabs";
+import { AnalyticsIcon, StrategiesIcon, BacktestsIcon, ReportsIcon, CloseIcon, HamburgerIcon } from "@/components/icons";
 
-const MORE_HREFS = ["/analytics", "/strategies", "/reports"];
+const MORE_HREFS = ["/analytics", "/strategies", "/backtests", "/reports"];
 const MORE_ICONS: Record<string, (props: { className?: string }) => JSX.Element> = {
   "/analytics": AnalyticsIcon,
   "/strategies": StrategiesIcon,
+  "/backtests": BacktestsIcon,
   "/reports": ReportsIcon,
 };
 
 /**
  * App header. On mobile, the top-left slot that used to hold the brand orb
  * now holds the hamburger trigger for the "More" menu (Analytics,
- * Strategies, Reports) — thumb-reachable real estate near where the
+ * Strategies, Backtests, Reports) — thumb-reachable real estate near where the
  * mobile bottom tab bar's own hamburger used to float, consolidated here
  * instead so there's a single, obvious entry point for the overflow pages
  * rather than a second floating control competing with the FAB. Desktop
@@ -58,7 +59,7 @@ export default function AppHeader() {
 
   if (pathname === "/login") return null;
 
-  const moreActive = MORE_HREFS.includes(pathname);
+  const moreActive = MORE_HREFS.some((href) => isTabActive(pathname, href));
 
   return (
     <>
@@ -93,8 +94,8 @@ export default function AppHeader() {
 }
 
 /**
- * Left-side nav drawer for the three pages that don't fit the mobile tab
- * bar (Analytics, Strategies, Reports). Slides in from the left edge —
+ * Left-side nav drawer for the pages that don't fit the mobile tab
+ * bar (Analytics, Strategies, Backtests, Reports). Slides in from the left edge —
  * same side as the hamburger trigger — rather than up from the bottom,
  * matching how the reference apps this was modeled on treat navigation
  * overflow (a drawer, not an action sheet). Closes on backdrop click,
@@ -155,7 +156,7 @@ function MoreDrawer({
           {MORE_HREFS.map((href) => {
             const tab = NAV_TABS.find((t) => t.href === href)!;
             const Icon = MORE_ICONS[href];
-            const active = pathname === href;
+            const active = isTabActive(pathname, href);
             return (
               <Link
                 key={href}

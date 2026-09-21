@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_TABS } from "@/lib/navTabs";
+import { NAV_TABS, isTabActive } from "@/lib/navTabs";
 
 // Desktop only — mobile navigation is MobileTabBar, a fixed bottom bar
 // (the standard mobile-app pattern), not this pill nav shrunk into a
@@ -13,7 +13,7 @@ export default function NavTabs() {
   return (
     <nav className="hidden md:flex items-center gap-1 bg-surface-2 backdrop-blur-md rounded-full p-1 border border-surface-border">
       {NAV_TABS.map((tab) => {
-        const active = pathname === tab.href;
+        const active = isTabActive(pathname, tab.href);
         return (
           <Link
             key={tab.href}

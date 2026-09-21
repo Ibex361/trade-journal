@@ -40,3 +40,32 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The Backtest runner is Python (scripts/backtest). Its tests run here
+      # too, in the same job, because one of them is a cross-language check:
+      # it runs the REAL TypeScript tradeLocalToUtcSeconds on the Python
+      # runner's output to prove backtest trade times land on the right
+      # candle. That needs node_modules (from `npm ci` above), which is why
+      # this is a step in this job rather than a separate one.
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: scripts/backtest/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r scripts/backtest/requirements.txt pytest
+
+      - name: Python tests (backtest runner)
+        working-directory: scripts/backtest
+        # -rs prints skip reasons; the grep below turns a skipped
+        # cross-language test into a failure. That test skips itself
+        # (politely) when node/tsx is missing, which locally is fine but
+        # in CI would silently drop the one check spanning both languages.
+        run: |
+          python -m pytest -q -rs -W ignore::DeprecationWarning | tee pytest.log
+          if grep -q "SKIPPED" pytest.log; then
+            echo "::error::A backtest test was skipped in CI. The cross-language offset test must actually run."
+            exit 1
+          fi

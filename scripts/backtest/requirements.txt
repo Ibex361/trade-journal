@@ -1,0 +1,12 @@
+# Python dependencies for scripts/backtest/run_backtest.py — installed by
+# .github/workflows/backtest.yml. Pinned to exact versions: backtrader has
+# been effectively unmaintained since 2021 and its behavior is what every
+# uploaded strategy is written against, so an unpinned upgrade of it (or
+# of pandas/numpy underneath it) is exactly the kind of silent change that
+# makes an old backtest stop being reproducible.
+backtrader==1.9.78.123
+boto3==1.43.98
+pandas==2.3.3
+numpy==2.4.4
+psycopg2-binary==2.9.13
+requests==2.33.1

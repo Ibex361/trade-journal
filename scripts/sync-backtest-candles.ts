@@ -41,11 +41,20 @@
 //     candles — they may still be needed by another run. Clearing the
 //     backtest candle cache is therefore a separate, deliberate action
 //     (emptying the bucket), never a side effect of deleting a run.
-//   - Only the specific (instrument, timeframe) pairs a run's
-//     backtest_run_feeds rows declare are synced — a run using only
-//     15min EURUSD data never triggers a fetch for any other
-//     timeframe/instrument, unlike the live sync which always covers
-//     all 6 timeframes for whatever's logged.
+//   - Only the INSTRUMENTS a run's backtest_run_feeds rows declare are
+//     synced (a run using only EURUSD never triggers a fetch for any
+//     other instrument) — but for each of those, ALL 6 timeframes are
+//     always persisted, never just the ones this particular run asked
+//     for. This is deliberate and load-bearing, not an oversight: the
+//     synced-days / synced-months manifests track which DAYS/MONTHS are
+//     done, not which timeframes. If run A (15min only) marked January
+//     as synced after persisting only 15min, then run B (1h) would see
+//     January in the manifest, skip the fetch, and find no 1h data —
+//     silently feeding Backtrader nothing. Tick aggregation produces
+//     every timeframe from the same ticks for free, so persisting all 6
+//     costs a few MB of R2 storage and buys the guarantee that "already
+//     synced" means "synced for every timeframe, forever" — which is
+//     exactly what "never re-download across runs" requires.
 //
 // Idempotent and safe to re-run for the same run id, or run for a
 // different run touching overlapping days/instruments — either way,
@@ -140,17 +149,9 @@ async function main() {
     return;
   }
 
-  // Only the timeframes this run's feeds actually declare get fetched —
-  // fetchDayTickCsv/fetchMonthTickCsv still aggregate a tick archive
-  // into ALL 6 timeframes at once (that's inherent to how tick
-  // aggregation works — you get every timeframe's candles from the same
-  // ticks for free), but mergeTimeframesIntoR2 is only asked to persist
-  // the ones this run needs, so a run using only 15min data doesn't
-  // pointlessly write 1min/1h/4h/1day files nobody asked for.
-  const neededTimeframes = new Set(run.feeds.map((f) => f.timeframe));
   const instruments = [...new Set(run.feeds.map((f) => f.instrument))];
 
-  console.log(`Backtest run ${runId}: ${instruments.length} instrument(s), ${days.length} closed day(s) in range, timeframes: ${[...neededTimeframes].join(", ")}.`);
+  console.log(`Backtest run ${runId}: ${instruments.length} instrument(s), ${days.length} closed day(s) in range (all 6 timeframes are persisted per instrument).`);
 
   let totalDaysSynced = 0;
   let totalDaysSkipped = 0;
@@ -176,7 +177,7 @@ async function main() {
         continue;
       }
       const month = day.slice(0, 7);
-      const dayFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, day, month, fetched.byTimeframe, neededTimeframes);
+      const dayFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, day, month, fetched.byTimeframe);
       if (dayFullySynced) {
         manifest.add(day);
         await writeManifest(s3, bucket, instrument, manifest, manifestKey);
@@ -210,7 +211,7 @@ async function main() {
         continue;
       }
 
-      const monthFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, month, month, fetched.candles, neededTimeframes);
+      const monthFullySynced = await mergeTimeframesIntoR2(s3, bucket, instrument, month, month, fetched.candles);
       if (monthFullySynced) {
         for (const day of daysInMonth) manifest.add(day);
         await writeManifest(s3, bucket, instrument, manifest, manifestKey);
