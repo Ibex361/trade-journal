@@ -27,13 +27,9 @@
 //     backtest_runs.start_date/end_date (via backtestUtcDays.ts), not
 //     from a logged trade's own entry/exit span — a backtest run
 //     declares its instruments/timeframes and date range explicitly up
-//     front (see the New Backtest form). There's no per-TRADE buffer
-//     concept here (unlike tradeUtcDaysWithContext's per-trade 15-day
-//     pad) since a run's trades aren't known until after it executes —
-//     but backtestUtcDays does pad the whole declared range by
-//     CHART_PADDING_BUFFER_DAYS on both ends, so a trade entered/exited
-//     near either edge still has real chart data under it. See that
-//     constant's doc comment in backtestDays.ts for the exact reasoning.
+//     front (see the New Backtest form), so there's no "trade span plus
+//     a buffer" concept here, just the plain requested range clipped to
+//     already-closed days.
 //   - candles/{instrument}/{timeframe}/{month}.json is keyed by
 //     INSTRUMENT ONLY, never by run id — this is what guarantees "no
 //     re-download even for overlapping ranges" across different runs:
