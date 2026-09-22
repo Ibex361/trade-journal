@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Card from "@/components/shared/Card";
 import Skeleton from "@/components/shared/Skeleton";
+import Button from "@/components/shared/Button";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import StatusBadge from "@/components/backtests/StatusBadge";
 import BacktraderResults from "@/components/backtests/BacktraderResults";
 import BacktestTradesTable from "@/components/backtests/BacktestTradesTable";
@@ -12,6 +14,7 @@ import { useInterval } from "@/hooks/useInterval";
 import { isUuid } from "@/lib/backtestValidation";
 import { reportedClosedTrades } from "@/lib/backtestAnalysis";
 import {
+  deleteBacktestRun,
   fetchBacktestFeeds,
   fetchBacktestRun,
   fetchBacktestTrades,
@@ -29,6 +32,7 @@ type LoadState =
 
 export default function BacktestDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params?.id ?? "";
   const validId = isUuid(id);
 
@@ -37,6 +41,9 @@ export default function BacktestDetailPage() {
   const [trades, setTrades] = useState<BacktestTrade[] | null>(null);
   const [tradesError, setTradesError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(0);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadRun = useCallback(async () => {
     if (!validId) return;
@@ -86,6 +93,23 @@ export default function BacktestDetailPage() {
   useInterval(() => void loadRun(), delay);
 
   const closedReported = useMemo(() => reportedClosedTrades(run?.backtrader_analysis), [run?.backtrader_analysis]);
+
+  // Deletes the run row -- its feeds and trades go with it via ON DELETE
+  // CASCADE in Postgres (see supabase/migrations/025_backtests.sql), so
+  // this one call is all that's needed on the data side. Candles in R2
+  // are untouched (they're shared across runs, not owned by this one).
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    const { error } = await deleteBacktestRun(id);
+    setDeleting(false);
+    if (error) {
+      setDeleteError(error.message);
+      setConfirmingDelete(false);
+      return;
+    }
+    router.push("/backtests");
+  }
 
   const back = (
     <Link href="/backtests" className="text-sm text-ink-secondary hover:text-glow transition-colors">
@@ -143,12 +167,32 @@ export default function BacktestDetailPage() {
             {duration && <span className="text-ink-muted"> · ran in {duration}</span>}
           </p>
         </div>
-        {stale ? (
-          <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full font-medium bg-loss/15 text-loss">Stalled</span>
-        ) : (
-          <StatusBadge status={run.status} />
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {stale ? (
+            <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full font-medium bg-loss/15 text-loss">Stalled</span>
+          ) : (
+            <StatusBadge status={run.status} />
+          )}
+          <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>
+            Delete
+          </Button>
+        </div>
       </div>
+
+      {deleteError && (
+        <p role="alert" className="text-sm text-loss">
+          Couldn&apos;t delete this backtest: {deleteError}
+        </p>
+      )}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete this backtest?"
+        description={`This permanently deletes "${run.name}" and all of its trades. This can't be undone.`}
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmingDelete(false)}
+      />
 
       <Card title="Setup" padding="tight">
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">

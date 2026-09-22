@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Card from "@/components/shared/Card";
 import Skeleton from "@/components/shared/Skeleton";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import StatusBadge from "@/components/backtests/StatusBadge";
 import { useInterval } from "@/hooks/useInterval";
 import {
+  deleteBacktestRun,
   fetchBacktestRuns,
   fetchFeedsForRuns,
   type BacktestFeed,
@@ -42,6 +44,11 @@ export default function BacktestRunsList({ refreshKey = 0 }: { refreshKey?: numb
   // Held in state (not read via Date.now() during render) so render stays
   // pure and the stale check moves forward exactly when we re-fetch.
   const [nowMs, setNowMs] = useState(0);
+  // One shared confirm dialog for the whole list (not one per row) -- same
+  // reasoning as TradesList's requestDelete/confirmingId pattern.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data, error: runsError } = await fetchBacktestRuns();
@@ -84,6 +91,24 @@ export default function BacktestRunsList({ refreshKey = 0 }: { refreshKey?: numb
 
   useInterval(() => void load(), delay);
 
+  // Deletes the run row -- its feeds and trades go with it via ON DELETE
+  // CASCADE (see supabase/migrations/025_backtests.sql). Refetches the
+  // list afterward rather than filtering client-side, so feed grouping
+  // and counts stay correct with zero extra bookkeeping.
+  async function handleDelete() {
+    if (!confirmingId) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const { error: delError } = await deleteBacktestRun(confirmingId);
+    setDeleting(false);
+    setConfirmingId(null);
+    if (delError) {
+      setDeleteError(delError.message);
+      return;
+    }
+    await load();
+  }
+
   if (error && !runs) {
     return (
       <Card title="Backtests">
@@ -113,6 +138,11 @@ export default function BacktestRunsList({ refreshKey = 0 }: { refreshKey?: numb
           Couldn&apos;t refresh: {error}
         </p>
       )}
+      {deleteError && (
+        <p role="alert" className="mb-3 text-xs text-loss">
+          Couldn&apos;t delete: {deleteError}
+        </p>
+      )}
       {runs.length === 0 ? (
         <p className="text-sm text-ink-muted py-4 text-center">No backtests yet. Upload a strategy above to run your first one.</p>
       ) : (
@@ -122,10 +152,10 @@ export default function BacktestRunsList({ refreshKey = 0 }: { refreshKey?: numb
             const stale = isStale(run.status, run.created_at, nowMs);
             const duration = formatDuration(run.created_at, run.completed_at);
             return (
-              <li key={run.id}>
+              <li key={run.id} className="flex items-center gap-1">
                 <Link
                   href={`/backtests/${run.id}`}
-                  className="flex items-center justify-between gap-3 py-3 rounded-lg hover:bg-surface-2/50 transition-colors duration-fast -mx-2 px-2"
+                  className="flex-1 min-w-0 flex items-center justify-between gap-3 py-3 rounded-lg hover:bg-surface-2/50 transition-colors duration-fast -mx-2 px-2"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{run.name}</p>
@@ -146,11 +176,30 @@ export default function BacktestRunsList({ refreshKey = 0 }: { refreshKey?: numb
                     )}
                   </div>
                 </Link>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setConfirmingId(run.id);
+                  }}
+                  aria-label={`Delete backtest ${run.name}`}
+                  className="shrink-0 p-2 rounded-lg text-ink-muted hover:text-loss hover:bg-loss/10 transition-colors"
+                >
+                  ✕
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+      <ConfirmDialog
+        open={confirmingId !== null}
+        title="Delete this backtest?"
+        description="This permanently deletes the run and all of its trades. This can't be undone."
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmingId(null)}
+      />
       {runs.some((r) => isActiveStatus(r.status)) && delay !== null && (
         <p className="mt-3 text-[11px] text-ink-muted">Updating automatically while runs are in progress.</p>
       )}
