@@ -36,6 +36,34 @@ describe("validateTriggerInput — happy path", () => {
     }
   });
 
+  it("preserves a lowercase account-type suffix instead of uppercasing it away (R2 keys are case-sensitive)", () => {
+    const r = validateTriggerInput({
+      ...good(),
+      feeds: [
+        { instrument: " XAUUSDc ", timeframe: "15min" },
+        { instrument: "eurusdm", timeframe: "1h" },
+        { instrument: "ustec", timeframe: "1h" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      // "eurusdm" is all-lowercase, so the suffix can't be told from the
+      // base and it is uppercased like any plain symbol — the documented limit.
+      expect(r.value.feeds.map((f) => f.instrument)).toEqual(["XAUUSDc", "EURUSDM", "USTEC"]);
+    }
+  });
+
+  it("treats a cent feed and its plain symbol as different feeds, not duplicates", () => {
+    const r = validateTriggerInput({
+      ...good(),
+      feeds: [
+        { instrument: "XAUUSDc", timeframe: "1h" },
+        { instrument: "XAUUSD", timeframe: "1h" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+  });
+
   it("supports multi-asset, multi-timeframe feeds", () => {
     const r = validateTriggerInput({
       ...good(),

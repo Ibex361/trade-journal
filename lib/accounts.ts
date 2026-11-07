@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { deleteScreenshots } from "./screenshots";
 import { seedDefaultDropdownItems } from "./dropdownSettings";
 import { localDateString } from "./date";
+import type { AccountType } from "./accountUnits";
 
 // Friendlier text for the one conflict we expect regularly
 // (the accounts_name_unique index in phase1c_migration.sql,
@@ -20,6 +21,7 @@ export async function createAccount(input: {
   broker: string;
   currency: string;
   starting_balance: number;
+  account_type?: AccountType;
 }) {
   const result = await supabase
     .from("accounts")
@@ -27,6 +29,7 @@ export async function createAccount(input: {
       name: input.name,
       broker: input.broker || null,
       currency: input.currency,
+      account_type: input.account_type ?? "standard",
       starting_balance: input.starting_balance,
       is_demo: false,
     })
@@ -66,6 +69,8 @@ export async function updateAccountDetails(
     broker: string;
     currency: string;
     starting_balance: number;
+    // Omit to leave the account's type untouched.
+    account_type?: AccountType;
   }
 ) {
   const result = await supabase
@@ -74,6 +79,7 @@ export async function updateAccountDetails(
       broker: details.broker || null,
       currency: details.currency,
       starting_balance: details.starting_balance,
+      ...(details.account_type ? { account_type: details.account_type } : {}),
     })
     .eq("id", id);
   if (result.error) {

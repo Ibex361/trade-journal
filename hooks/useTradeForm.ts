@@ -4,6 +4,7 @@ import { fetchDropdownItems, DropdownItem } from "@/lib/dropdownSettings";
 import { fetchDistinctTags } from "@/lib/tagSettings";
 import { createTrade, updateTrade, Trade, TradeInput, Direction, ExitReason, StopMovement } from "@/lib/trades";
 import { calculatePnl, calculateRMultiple } from "@/lib/metrics";
+import { unitModel } from "@/lib/accountUnits";
 import { localDateString } from "@/lib/date";
 import { uploadScreenshot, deleteScreenshot, validateScreenshotFile } from "@/lib/screenshots";
 import type { SelectOption } from "@/components/shared/Select";
@@ -56,9 +57,9 @@ function matchesCalc(stored: number | null, calculated: number | null): boolean 
 // sees the default "auto" state and the sync effect below overwrites a
 // genuinely manual figure (e.g. a real fee-adjusted P&L) with the raw
 // auto-calculated one before this check has had a chance to correct it.
-function initialPnlAuto(trade: Trade | null): boolean {
+function initialPnlAuto(trade: Trade | null, moneyScale: number): boolean {
   if (!trade) return true;
-  const autoPnl = calculatePnl(trade.direction, trade.entry_price, trade.exit_price, trade.size);
+  const autoPnl = calculatePnl(trade.direction, trade.entry_price, trade.exit_price, trade.size, moneyScale);
   return matchesCalc(trade.pnl, autoPnl);
 }
 
@@ -172,6 +173,10 @@ export type UseTradeFormArgs = {
  */
 export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDiary }: UseTradeFormArgs) {
   const { selectedAccount } = useAccount();
+  // 1 for a Standard account, 100 for a Cent account (P&L in USC) — see
+  // lib/accountUnits.ts. Auto-calculated P&L must be in the account's own
+  // unit or it would read 100x too small (and falsely "mismatch" imports).
+  const moneyScale = unitModel(selectedAccount).moneyScale;
   const [form, setForm] = useState<FormState>(() => {
     if (trade) return tradeToForm(trade);
     if (duplicateFrom) {
@@ -220,7 +225,7 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
   // Starts in manual mode when editing an existing trade whose stored
   // value doesn't match what auto-calc would produce (so we never
   // silently overwrite a deliberate manual figure) — see initialPnlAuto.
-  const [pnlAuto, setPnlAuto] = useState(() => initialPnlAuto(trade ?? duplicateFrom ?? null));
+  const [pnlAuto, setPnlAuto] = useState(() => initialPnlAuto(trade ?? duplicateFrom ?? null, moneyScale));
   const [rAuto, setRAuto] = useState(() => initialRAuto(trade ?? duplicateFrom ?? null));
 
   // Chart screenshot: file staged for upload, current preview (existing
@@ -416,8 +421,8 @@ export function useTradeForm({ trade, duplicateFrom, onClose, onSaved, onOpenDia
   const sizeNum = form.size ? parseFloat(form.size) : null;
 
   const computedPnl = useMemo(
-    () => calculatePnl(form.direction, entryNum, exitNum, sizeNum),
-    [form.direction, entryNum, exitNum, sizeNum]
+    () => calculatePnl(form.direction, entryNum, exitNum, sizeNum, moneyScale),
+    [form.direction, entryNum, exitNum, sizeNum, moneyScale]
   );
   const computedR = useMemo(
     () => calculateRMultiple(form.direction, entryNum, exitNum, stopNum),

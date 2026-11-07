@@ -5,6 +5,22 @@ import { useAccount } from "@/lib/AccountContext";
 import { createAccount, renameAccount, updateAccountDetails, archiveAccount, restoreAccount, deleteAccountPermanently } from "@/lib/accounts";
 import SettingsCard from "./SettingsCard";
 import Button from "@/components/shared/Button";
+import { Select } from "@/components/shared/Select";
+import { accountTypeOf, accountTypeLabel, defaultCurrencyFor, formatMajorEquivalent, unitModelFor, type AccountType } from "@/lib/accountUnits";
+
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "standard", label: "Standard account" },
+  { value: "cent", label: "Cent account (Exness Standard Cent, USC)" },
+];
+
+// Switching type should also move the currency label off its OTHER type's
+// default (USD <-> USC) — but never clobber a currency the user typed
+// themselves.
+function currencyAfterTypeChange(current: string, next: AccountType): string {
+  const trimmed = current.trim();
+  const other = defaultCurrencyFor(next === "cent" ? "standard" : "cent");
+  return trimmed === "" || trimmed.toUpperCase() === other ? defaultCurrencyFor(next) : current;
+}
 
 export default function AccountManager() {
   const { accounts, archivedAccounts, refreshAccounts } = useAccount();
@@ -13,7 +29,14 @@ export default function AccountManager() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [editingDetailsId, setEditingDetailsId] = useState<string | null>(null);
-  const [editDetailsForm, setEditDetailsForm] = useState({ broker: "", currency: "", starting_balance: "" });
+  const [editDetailsForm, setEditDetailsForm] = useState<{ broker: string; currency: string; starting_balance: string; account_type: AccountType }>({
+    broker: "",
+    currency: "",
+    starting_balance: "",
+    account_type: "standard",
+  });
+  // The type the account was saved with, to detect (and warn about) a change.
+  const [editOriginalType, setEditOriginalType] = useState<AccountType>("standard");
   const [editDetailsError, setEditDetailsError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -21,11 +44,18 @@ export default function AccountManager() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string;
+    broker: string;
+    currency: string;
+    starting_balance: string;
+    account_type: AccountType;
+  }>({
     name: "",
     broker: "",
     currency: "USD",
     starting_balance: "",
+    account_type: "standard",
   });
 
   async function handleCreate() {
@@ -38,10 +68,11 @@ export default function AccountManager() {
         broker: form.broker.trim(),
         currency: form.currency,
         starting_balance: parseFloat(form.starting_balance) || 0,
+        account_type: form.account_type,
       });
       if (!error) {
         await refreshAccounts();
-        setForm({ name: "", broker: "", currency: "USD", starting_balance: "" });
+        setForm({ name: "", broker: "", currency: "USD", starting_balance: "", account_type: "standard" });
         setShowNew(false);
       } else {
         setCreateError(error.message);
@@ -80,8 +111,9 @@ export default function AccountManager() {
     try {
       const { error } = await updateAccountDetails(id, {
         broker: editDetailsForm.broker.trim(),
-        currency: editDetailsForm.currency.trim() || "USD",
+        currency: editDetailsForm.currency.trim() || defaultCurrencyFor(editDetailsForm.account_type),
         starting_balance: parseFloat(editDetailsForm.starting_balance) || 0,
+        account_type: editDetailsForm.account_type,
       });
       if (!error) {
         await refreshAccounts();
@@ -174,8 +206,15 @@ export default function AccountManager() {
                         Demo
                       </span>
                     )}
+                    {accountTypeOf(acc) === "cent" && (
+                      <span className="text-[11px] uppercase tracking-wide bg-surface-2 border border-surface-border text-ink-secondary px-2 py-0.5 rounded-full">
+                        Cent
+                      </span>
+                    )}
                     <span className="text-xs text-ink-muted font-mono">
                       {acc.currency} {acc.starting_balance.toLocaleString()}
+                      {formatMajorEquivalent(acc.starting_balance, unitModelFor(accountTypeOf(acc))) &&
+                        ` (${formatMajorEquivalent(acc.starting_balance, unitModelFor(accountTypeOf(acc)))})`}
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -199,7 +238,9 @@ export default function AccountManager() {
                             broker: acc.broker ?? "",
                             currency: acc.currency,
                             starting_balance: String(acc.starting_balance),
+                            account_type: accountTypeOf(acc),
                           });
+                          setEditOriginalType(accountTypeOf(acc));
                           setEditDetailsError(null);
                         }
                       }}
@@ -244,6 +285,36 @@ export default function AccountManager() {
                     className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm font-mono"
                   />
                 </div>
+                <label className="block max-w-sm">
+                  <span className="text-xs uppercase tracking-wide text-ink-muted">Account type</span>
+                  <Select
+                    value={editDetailsForm.account_type}
+                    onChange={(v) => {
+                      const next = v as AccountType;
+                      setEditDetailsForm({
+                        ...editDetailsForm,
+                        account_type: next,
+                        currency: currencyAfterTypeChange(editDetailsForm.currency, next),
+                      });
+                    }}
+                    options={ACCOUNT_TYPE_OPTIONS}
+                    fullWidth
+                    className="mt-1"
+                  />
+                </label>
+                {editDetailsForm.account_type !== editOriginalType && (
+                  <p className="text-xs text-loss">
+                    Changing the account type to {accountTypeLabel(editDetailsForm.account_type)} does not convert trades already in this
+                    account. If it already has imported trades, re-import your Exness history afterwards (Import trades → update
+                    already-imported trades) to correct their sizes, and check the starting balance is in{" "}
+                    {editDetailsForm.account_type === "cent" ? "cents (USC)" : "dollars"}.
+                  </p>
+                )}
+                {editDetailsForm.account_type === "cent" && (
+                  <p className="text-xs text-ink-muted">
+                    Cent account: balance, P&amp;L and targets are in USC (cents) — $10 is 1,000 USC — exactly as Exness reports them.
+                  </p>
+                )}
                 <p className="text-xs text-ink-muted">
                   Changing starting balance recalculates this account&apos;s equity curve and returns from that new baseline.
                 </p>
@@ -270,6 +341,19 @@ export default function AccountManager() {
 
       {showNew ? (
         <div className="mt-4 bg-surface-2 border border-surface-border rounded-card p-4 space-y-3">
+          <label className="block max-w-sm">
+            <span className="text-xs uppercase tracking-wide text-ink-muted">Account type</span>
+            <Select
+              value={form.account_type}
+              onChange={(v) => {
+                const next = v as AccountType;
+                setForm({ ...form, account_type: next, currency: currencyAfterTypeChange(form.currency, next) });
+              }}
+              options={ACCOUNT_TYPE_OPTIONS}
+              fullWidth
+              className="mt-1"
+            />
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <input
               placeholder="Account name"
@@ -293,13 +377,19 @@ export default function AccountManager() {
               className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm"
             />
             <input
-              placeholder="Starting balance"
+              placeholder={form.account_type === "cent" ? "Starting balance in USC ($10 = 1000)" : "Starting balance"}
               type="number"
               value={form.starting_balance}
               onChange={(e) => setForm({ ...form, starting_balance: e.target.value })}
               className="bg-surface-0 border border-surface-border rounded-md px-3 py-2 text-sm font-mono"
             />
           </div>
+          {form.account_type === "cent" && (
+            <p className="text-xs text-ink-muted">
+              Keep cent and standard accounts as separate journal accounts. Balance, P&amp;L and targets are in USC (cents), exactly as
+              Exness reports them.
+            </p>
+          )}
           {createError && <p className="text-xs text-loss">{createError}</p>}
           <div className="flex gap-3">
             <Button size="sm" onClick={handleCreate} disabled={busy}>

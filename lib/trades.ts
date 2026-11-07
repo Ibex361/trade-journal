@@ -137,6 +137,55 @@ export async function createTrades(accountId: string, inputs: TradeInput[]) {
   return { inserted, error: null };
 }
 
+/**
+ * Corrects trades that were imported earlier from a broker file, using a
+ * fresh parse of the SAME file — matched on (account_id, broker_ticket).
+ *
+ * This exists for the case where the import logic got smarter after the
+ * trades were first imported (most importantly: an account switched to
+ * Cent after its history was already imported with standard-lot sizes).
+ * It deliberately touches only what is derived from the broker file:
+ *   - `size`, always (it's lots x contract size, recomputed);
+ *   - `asset_class`, only where it is currently empty.
+ * Everything the user authored — strategy, session, emotion, tags, notes,
+ * rules_followed, screenshots, SL/TP movement — and the broker-reported
+ * P&L are never modified.
+ */
+export async function repairTradesFromImport(accountId: string, inputs: TradeInput[]) {
+  const CONCURRENCY = 10;
+  const candidates = inputs.filter((t) => t.broker_ticket);
+  let updated = 0;
+  let failed = 0;
+  for (let i = 0; i < candidates.length; i += CONCURRENCY) {
+    const batch = candidates.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (t) => {
+        const sizeResult = await supabase
+          .from("trades")
+          .update({ size: t.size })
+          .eq("account_id", accountId)
+          .eq("broker_ticket", t.broker_ticket as string);
+        if (sizeResult.error) {
+          console.error("repairTradesFromImport failed:", sizeResult.error);
+          failed++;
+          return;
+        }
+        if (t.asset_class) {
+          const classResult = await supabase
+            .from("trades")
+            .update({ asset_class: t.asset_class })
+            .eq("account_id", accountId)
+            .eq("broker_ticket", t.broker_ticket as string)
+            .is("asset_class", null);
+          if (classResult.error) console.error("repairTradesFromImport (asset_class) failed:", classResult.error);
+        }
+        updated++;
+      })
+    );
+  }
+  return { updated, failed };
+}
+
 /** Selects the updated row back — same reasoning as createTrade above. */
 export async function updateTrade(id: string, input: TradeInput) {
   const result = await supabase.from("trades").update(input).eq("id", id).select().single();

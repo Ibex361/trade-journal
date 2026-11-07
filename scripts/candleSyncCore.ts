@@ -18,6 +18,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { unzipSync } from "fflate";
 import { TIMEFRAMES_MINUTES, Candle, candleKey, normalizeCsv, aggregateTicksToAllTimeframes, aggregateTicksFromBytes, mergeCandles } from "./candleAggregation";
 import { parseManifest, serializeManifest } from "./candleSyncManifest";
+import { archiveCandidates } from "../lib/brokerSymbol";
 
 const ARCHIVE_BASE = "https://ticks.ex2archive.com/ticks";
 
@@ -26,7 +27,9 @@ const ANSI_RESET = "\x1b[0m";
 
 /**
  * Tries the plain instrument symbol first, then an "m"-suffixed
- * (Standard MT4) variant — Exness's tick archive names instruments per
+ * (Standard) variant — but an already-suffixed symbol (cent "XAUUSDc",
+ * Standard "XAUUSDm") names its feed exactly and is tried alone (see
+ * archiveCandidates in lib/brokerSymbol.ts) — Exness's tick archive names instruments per
  * the account type that traded them. Returns every timeframe's
  * aggregated candles and which symbol form worked, or null if neither
  * exists for this day. `isWeekend` is injected (rather than imported
@@ -40,7 +43,7 @@ export async function fetchDayTickCsv(
   isWeekend: (day: string) => boolean
 ): Promise<{ byTimeframe: Record<string, Candle[]>; archiveSymbol: string } | null> {
   const [year, mm, dd] = day.split("-");
-  const candidates = [instrument, `${instrument}m`];
+  const candidates = archiveCandidates(instrument);
 
   for (const archiveSymbol of candidates) {
     const url = `${ARCHIVE_BASE}/${archiveSymbol}/${year}/${mm}/${dd}/Exness_${archiveSymbol}_${year}_${mm}_${dd}.zip`;
@@ -75,7 +78,7 @@ export async function fetchDayTickCsv(
  */
 export async function fetchMonthTickCsv(instrument: string, month: string): Promise<{ candles: Record<string, Candle[]>; archiveSymbol: string } | null> {
   const [year, mm] = month.split("-");
-  const candidates = [instrument, `${instrument}m`];
+  const candidates = archiveCandidates(instrument);
 
   for (const archiveSymbol of candidates) {
     const url = `${ARCHIVE_BASE}/${archiveSymbol}/${year}/${mm}/Exness_${archiveSymbol}_${year}_${mm}.zip`;

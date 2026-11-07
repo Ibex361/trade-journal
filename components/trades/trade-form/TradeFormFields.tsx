@@ -3,6 +3,7 @@ import { Select } from "@/components/shared/Select";
 import TagInput from "@/components/shared/TagInput";
 import Button from "@/components/shared/Button";
 import ScreenshotUploader from "./ScreenshotUploader";
+import { accountTypeOf } from "@/lib/accountUnits";
 import FormSection from "./FormSection";
 import { EXIT_REASON_OPTIONS, MOVEMENT_OPTIONS, UseTradeFormReturn } from "@/hooks/useTradeForm";
 
@@ -248,6 +249,11 @@ export default function TradeFormFields({
               className={`${f.fieldErrors.size ? errorInputClass : inputClass} font-mono`}
             />
             {f.fieldErrors.size && <p className={fieldErrorTextClass}>{f.fieldErrors.size}</p>}
+            {accountTypeOf(f.selectedAccount) === "cent" && (
+              <p className="text-[11px] text-ink-muted mt-1">
+                Cent account: size is in units of the instrument, not lots (1 cent lot of EURUSD = 1,000 units, of XAUUSD = 1 oz).
+              </p>
+            )}
           </label>
         </div>
 

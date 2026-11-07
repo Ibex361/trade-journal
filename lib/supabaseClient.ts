@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { AccountType } from "./accountUnits";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -14,6 +15,8 @@ export type Account = {
   name: string;
   broker: string | null;
   currency: string;
+  /** "cent" = Exness Standard Cent (lots are 1/100 size, money in USC); see lib/accountUnits.ts. */
+  account_type: AccountType;
   is_demo: boolean;
   is_archived: boolean;
   starting_balance: number;

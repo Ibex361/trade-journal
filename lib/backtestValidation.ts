@@ -12,6 +12,7 @@
 // imports THIS file and a client bundle can't import "node:crypto".
 
 import { TIMEFRAMES_MINUTES } from "../scripts/candleAggregation";
+import { normalizeBrokerSymbol } from "./brokerSymbol";
 
 export const BACKTEST_TIMEFRAMES = Object.keys(TIMEFRAMES_MINUTES);
 
@@ -87,7 +88,10 @@ export function validateTriggerInput(raw: unknown): ValidationResult<TriggerInpu
   for (const item of body.feeds) {
     if (typeof item !== "object" || item === null) return { ok: false, error: "Each feed must be an object." };
     const f = item as Record<string, unknown>;
-    const instrument = typeof f.instrument === "string" ? f.instrument.trim().toUpperCase() : "";
+    // Case-normalized WITHOUT destroying a valid lowercase account-type
+    // suffix: R2 candle keys are case-sensitive, and "XAUUSDc" (cent feed)
+    // is a different key from "XAUUSDC".
+    const instrument = typeof f.instrument === "string" ? normalizeBrokerSymbol(f.instrument) : "";
     const timeframe = typeof f.timeframe === "string" ? f.timeframe : "";
     if (!instrument) return { ok: false, error: "Every feed needs an instrument." };
     if (instrument.length > MAX_INSTRUMENT_LENGTH || !INSTRUMENT_PATTERN.test(instrument)) {

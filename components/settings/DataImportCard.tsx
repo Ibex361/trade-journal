@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAccount } from "@/lib/AccountContext";
 import { useTradesData } from "@/lib/TradesDataContext";
-import { createTrades, getExistingBrokerTickets, TradeInput } from "@/lib/trades";
+import { createTrades, getExistingBrokerTickets, repairTradesFromImport, TradeInput } from "@/lib/trades";
+import { accountTypeOf } from "@/lib/accountUnits";
 import { parseTradesCsv } from "@/lib/csvImport";
 import { parseExnessCsv } from "@/lib/exnessImport";
 import { fetchContractSizeOverrides } from "@/lib/exnessContractOverrides";
@@ -50,6 +51,11 @@ export default function DataImportCard() {
   const [readyTrades, setReadyTrades] = useState<TradeInput[] | null>(null);
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  // The parsed rows that ARE already in the target account (matched by
+  // broker_ticket) — kept so their sizes can be corrected from the file.
+  const [existingTrades, setExistingTrades] = useState<TradeInput[]>([]);
+  const [repairing, setRepairing] = useState(false);
+  const [repairResult, setRepairResult] = useState<{ updated: number; failed: number; accountName: string } | null>(null);
 
   // Raw CSV text, kept so an Exness file can be re-parsed if the target
   // account changes after parsing — contract-size overrides are per
@@ -59,18 +65,21 @@ export default function DataImportCard() {
   const rawTextRef = useRef<string | null>(null);
 
   const effectiveAccountId = targetAccountId || selectedAccount?.id || accounts[0]?.id || "";
+  // Cent vs Standard changes how lots become units and how symbols are
+  // read, so the parse depends on the TARGET account's type.
+  const effectiveAccountType = accountTypeOf(accounts.find((a) => a.id === effectiveAccountId));
 
   useEffect(() => {
     if (source !== "exness" || !rawTextRef.current || !effectiveAccountId) return;
     let cancelled = false;
     fetchContractSizeOverrides(effectiveAccountId).then((overrides) => {
       if (cancelled || !rawTextRef.current) return;
-      setParsed(parseExnessCsv(rawTextRef.current, overrides));
+      setParsed(parseExnessCsv(rawTextRef.current, overrides, { accountType: effectiveAccountType }));
     });
     return () => {
       cancelled = true;
     };
-  }, [effectiveAccountId, source]);
+  }, [effectiveAccountId, effectiveAccountType, source]);
 
   useEffect(() => {
     if (!parsed || parsed.trades.length === 0) {
@@ -80,6 +89,7 @@ export default function DataImportCard() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setReadyTrades(parsed?.trades ?? null);
       setDuplicateCount(0);
+      setExistingTrades([]);
       return;
     }
     if (!effectiveAccountId || !parsed.trades.some((t) => t.broker_ticket)) {
@@ -87,6 +97,7 @@ export default function DataImportCard() {
       // every parsed row is ready as-is.
       setReadyTrades(parsed.trades);
       setDuplicateCount(0);
+      setExistingTrades([]);
       return;
     }
     let cancelled = false;
@@ -96,6 +107,7 @@ export default function DataImportCard() {
       const filtered = parsed.trades.filter((t) => !t.broker_ticket || !existing.has(t.broker_ticket));
       setReadyTrades(filtered);
       setDuplicateCount(parsed.trades.length - filtered.length);
+      setExistingTrades(parsed.trades.filter((t) => t.broker_ticket && existing.has(t.broker_ticket)));
       setCheckingDuplicates(false);
     });
     return () => {
@@ -109,6 +121,8 @@ export default function DataImportCard() {
     setReadyTrades(null);
     setDuplicateCount(0);
     setResult(null);
+    setRepairResult(null);
+    setExistingTrades([]);
     setError(null);
     rawTextRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -123,9 +137,11 @@ export default function DataImportCard() {
     const file = e.target.files?.[0];
     if (!file) return;
     setResult(null);
+    setRepairResult(null);
     setError(null);
     setFileName(file.name);
     const accountForImport = targetAccountId || selectedAccount?.id || accounts[0]?.id || "";
+    const accountTypeForImport = accountTypeOf(accounts.find((a) => a.id === accountForImport));
     if (!targetAccountId && selectedAccount) setTargetAccountId(selectedAccount.id);
 
     const reader = new FileReader();
@@ -139,7 +155,7 @@ export default function DataImportCard() {
         // the user later switches "Import into account", the effect above
         // re-parses rawTextRef against the newly selected account instead.
         const overrides = accountForImport ? await fetchContractSizeOverrides(accountForImport) : new Map<string, number>();
-        setParsed(parseExnessCsv(text, overrides));
+        setParsed(parseExnessCsv(text, overrides, { accountType: accountTypeForImport }));
       } else {
         setParsed(parseTradesCsv(text));
       }
@@ -183,6 +199,24 @@ export default function DataImportCard() {
       setError("Something went wrong importing these trades. Please try again.");
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleRepair() {
+    if (existingTrades.length === 0 || !effectiveAccountId) return;
+    const account = accounts.find((a) => a.id === effectiveAccountId);
+    if (!account) return;
+    setRepairing(true);
+    setError(null);
+    try {
+      const { updated, failed } = await repairTradesFromImport(account.id, existingTrades);
+      setRepairResult({ updated, failed, accountName: account.name });
+      if (account.id === selectedAccount?.id) refreshTrades();
+    } catch (err) {
+      console.error("handleRepair threw:", err);
+      setError("Something went wrong updating these trades. Please try again.");
+    } finally {
+      setRepairing(false);
     }
   }
 
@@ -270,11 +304,35 @@ export default function DataImportCard() {
               </div>
             )}
 
+            {parsed.warnings && parsed.warnings.length > 0 && (
+              <div className="border-l-2 border-glow pl-3 space-y-1">
+                <p className="text-xs font-medium text-ink-primary">Heads up</p>
+                {parsed.warnings.map((w, i) => (
+                  <p key={i} className="text-xs text-ink-secondary">
+                    {w}
+                  </p>
+                ))}
+              </div>
+            )}
+
             <p className="text-xs text-ink-muted">
               {source === "exness"
                 ? "P&L includes commission and swap. Take-profit, equity, and margin level aren't tracked by this app and are left out. Screenshots aren't part of a broker export, so add those individually if you want them."
                 : "Screenshots come along automatically if the file was exported from this app — each trade's screenshot link is restored."}
             </p>
+
+            {source === "exness" && existingTrades.length > 0 && !checkingDuplicates && (
+              <div className="space-y-2">
+                <p className="text-xs text-ink-muted">
+                  {existingTrades.length} trade{existingTrades.length === 1 ? " is" : "s are"} already in this account. If they were
+                  imported before this account&apos;s type was set correctly (or before a contract size was fixed), you can correct
+                  their sizes from this file. Strategy, notes, tags, screenshots and P&amp;L are left untouched.
+                </p>
+                <Button onClick={handleRepair} disabled={repairing || importing} size="sm" variant="secondary">
+                  {repairing ? "Updating…" : `Update sizes of ${existingTrades.length} already-imported trade${existingTrades.length === 1 ? "" : "s"}`}
+                </Button>
+              </div>
+            )}
 
             {error && <p className="text-xs text-loss">{error}</p>}
 
@@ -313,6 +371,14 @@ export default function DataImportCard() {
         )}
 
         {!parsed && error && <p className="text-xs text-loss">{error}</p>}
+
+        {repairResult && (
+          <p className="text-sm text-ink-primary">
+            Updated sizes on <span className="font-medium">{repairResult.updated}</span> trade
+            {repairResult.updated === 1 ? "" : "s"} in <span className="font-medium">{repairResult.accountName}</span>
+            {repairResult.failed > 0 ? ` (${repairResult.failed} couldn't be updated — please try again)` : ""}.
+          </p>
+        )}
 
         {result && (
           <p className="text-sm text-ink-primary">

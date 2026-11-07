@@ -2,6 +2,8 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trade } from "@/lib/trades";
+import { useAccount } from "@/lib/AccountContext";
+import { accountTypeOf } from "@/lib/accountUnits";
 import { getTradeRowEmphasis } from "@/lib/metrics";
 import { Select } from "@/components/shared/Select";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
@@ -76,6 +78,7 @@ function TradesList({
   // the whole Trade (not just an id) since the row that opened it may
   // have scrolled out of `trades` by the time the modal closes (e.g. a
   // filter change), and the modal needs entry/exit/instrument regardless.
+  const { selectedAccount } = useAccount();
   const [chartTrade, setChartTrade] = useState<Trade | null>(null);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   // One shared confirm dialog for the whole list, rather than the old
@@ -355,7 +358,7 @@ function TradesList({
         <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
 
-      {chartTrade && <TradeChartModal trade={chartTrade} onClose={() => setChartTrade(null)} />}
+      {chartTrade && <TradeChartModal trade={chartTrade} onClose={() => setChartTrade(null)} accountType={accountTypeOf(selectedAccount)} />}
 
       <ConfirmDialog
         open={pendingDeleteId !== null}

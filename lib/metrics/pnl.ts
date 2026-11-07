@@ -8,19 +8,25 @@ import { Direction, Trade } from "../trades";
  * P&L = (exit - entry) * size for a long, or (entry - exit) * size for a short.
  * "size" is treated as a plain number of units (not lots), so this is a
  * direct price-difference calculation with no pip/contract conversion.
+ * `moneyScale` converts that result (in the instrument's quote currency)
+ * into the account's own unit — 1 for a normal account, 100 for a cent
+ * account whose balance is in USC (see lib/accountUnits.ts). It assumes the
+ * quote currency is the account's major currency (e.g. USD-quoted pairs on
+ * a USD/USC account); for other quote currencies enter P&L manually.
  * Returns null if any required input is missing.
  */
 export function calculatePnl(
   direction: Direction | null,
   entryPrice: number | null,
   exitPrice: number | null,
-  size: number | null
+  size: number | null,
+  moneyScale: number = 1
 ): number | null {
   if (entryPrice == null || exitPrice == null || size == null) return null;
   if (Number.isNaN(entryPrice) || Number.isNaN(exitPrice) || Number.isNaN(size)) return null;
 
   const priceDiff = direction === "short" ? entryPrice - exitPrice : exitPrice - entryPrice;
-  return priceDiff * size;
+  return priceDiff * size * moneyScale;
 }
 
 /**

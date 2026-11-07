@@ -1,7 +1,9 @@
 import { TradeInput, ExitReason } from "./trades";
 import { parseCsvRows, parseNumber, ImportRowIssue, ParsedImport } from "./csvUtils";
 import { calculateRMultiple } from "./metrics";
-import { contractSizeFor } from "./exnessContractSize";
+import { contractSizeFor, hasKnownContractSize } from "./exnessContractSize";
+import { parseBrokerSymbol } from "./brokerSymbol";
+import { type AccountType } from "./accountUnits";
 
 // Exness exports opening_time_utc in UTC. This journal logs everything in
 // East Africa Time (UTC+3), the user's local time, so imported timestamps
@@ -51,21 +53,31 @@ const REQUIRED_HEADERS = ["ticket", "opening_time_utc", "symbol", "type", "profi
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Exness suffixes symbols with a lowercase "m" on some account types
-// (XAUUSDm, BTCUSDm, EURUSDm) that isn't part of the actual instrument
-// name — strip it so the instrument matches what you'd type by hand.
-function cleanSymbol(symbol: string): string {
-  return /^[A-Z0-9]{3,}m$/.test(symbol) ? symbol.slice(0, -1) : symbol;
+// Exness suffixes symbols with a lowercase letter that names the account
+// type they belong to (see lib/brokerSymbol.ts): "m" for Standard accounts
+// (XAUUSDm, EURUSDm) and "c" for Standard Cent accounts (XAUUSDc). For a
+// Standard account the "m" isn't part of the instrument name, so it's
+// stripped to match what you'd type by hand. For a Cent account the
+// symbol is kept exactly as exported: the "c" is part of the feed's
+// identity (the tick archive and chart data are keyed by it) and is what
+// tells the rest of the app how to size and chart the trade.
+function instrumentFor(symbolRaw: string, accountType: AccountType): string {
+  if (accountType === "cent") return symbolRaw;
+  const parts = parseBrokerSymbol(symbolRaw);
+  return parts.suffix === "m" ? parts.base : symbolRaw;
 }
 
-// Best-effort category guess from the cleaned symbol, purely to save
-// re-typing it for every row — left null (and easy to edit per-trade
-// afterward) for anything not confidently recognized.
+// Best-effort category guess from the symbol's BASE (so a cent "GBPUSDc"
+// classifies exactly like "GBPUSD"), purely to save re-typing it for
+// every row — left null (and easy to edit per-trade afterward) for
+// anything not confidently recognized.
 function guessAssetClass(symbol: string): string | null {
-  const s = symbol.toUpperCase();
+  const s = parseBrokerSymbol(symbol).base.toUpperCase();
   if (/^(XAU|XAG|XPT|XPD)/.test(s)) return "Metals";
   if (/(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BNB|DOT|AVAX)/.test(s)) return "Crypto";
-  if (/^(US30|US100|US500|USTEC|SPX500|GER30|GER40|UK100|JPN225|AUS200|FRA40)/.test(s)) return "Indices";
+  if (/^(US30|US100|US500|USTEC|SPX500|DE30|GER30|GER40|UK100|JP225|JPN225|AUS200|FR40|FRA40|STOXX50|HK50)/.test(s)) return "Indices";
+  // Energies: the three Exness lists as energy contracts (USOIL/UKOIL, XNGUSD).
+  if (/^(USOIL|UKOIL|XNGUSD)$/.test(s)) return "Energies";
   if (/^[A-Z]{6}$/.test(s)) return "Forex";
   return null;
 }
@@ -119,7 +131,17 @@ function closeReasonToExitReason(reason: string): ExitReason | null {
  *   as prose. sl_movement/tp_movement are left unset — Exness doesn't
  *   report whether a stop or target was moved during the trade.
  */
-export function parseExnessCsv(csvText: string, overrides?: Map<string, number>): ParsedImport {
+export function parseExnessCsv(
+  csvText: string,
+  overrides?: Map<string, number>,
+  options?: { accountType?: AccountType }
+): ParsedImport {
+  const accountType: AccountType = options?.accountType ?? "standard";
+  // Tallies for the post-parse warnings below.
+  let centSymbolRows = 0;
+  let plainSymbolRows = 0;
+  const unknownSizeSymbols = new Set<string>();
+
   const rows = parseCsvRows(csvText).filter((r) => !(r.length === 1 && r[0].trim() === ""));
   const issues: ImportRowIssue[] = [];
   const trades: TradeInput[] = [];
@@ -182,7 +204,11 @@ export function parseExnessCsv(csvText: string, overrides?: Map<string, number>)
 
     const commission = parseNumber(cell(cells, "commission")) ?? 0;
     const swap = parseNumber(cell(cells, "swap")) ?? 0;
-    const symbol = cleanSymbol(symbolRaw);
+    const symbol = instrumentFor(symbolRaw, accountType);
+    const symbolSuffix = parseBrokerSymbol(symbolRaw).suffix;
+    if (symbolSuffix === "c") centSymbolRows++;
+    else plainSymbolRows++;
+    if (!hasKnownContractSize(symbolRaw, overrides)) unknownSizeSymbols.add(parseBrokerSymbol(symbolRaw).base);
     const direction = typeRaw === "buy" ? "long" : "short";
     const entryPrice = parseNumber(cell(cells, "opening_price"));
     const exitPrice = parseNumber(cell(cells, "closing_price"));
@@ -214,7 +240,10 @@ export function parseExnessCsv(csvText: string, overrides?: Map<string, number>)
       take_profit_price: takeProfitPrice,
       size: (() => {
         const lots = parseNumber(cell(cells, "lots"));
-        return lots === null ? null : lots * contractSizeFor(symbol, overrides);
+        if (lots === null) return null;
+        // Rounded to shed float noise (0.07 lots x 100 would otherwise
+        // come out as 7.000000000000001 units).
+        return Math.round(lots * contractSizeFor(symbol, overrides, accountType) * 1e8) / 1e8;
       })(),
       pnl: Math.round((profit + commission + swap) * 100) / 100,
       r_multiple: calculateRMultiple(direction, entryPrice, exitPrice, stopLossPrice),
@@ -230,5 +259,24 @@ export function parseExnessCsv(csvText: string, overrides?: Map<string, number>)
     });
   }
 
-  return { trades, issues };
+  const warnings: string[] = [];
+  const totalRows = centSymbolRows + plainSymbolRows;
+  if (accountType === "standard" && centSymbolRows > 0) {
+    warnings.push(
+      `${centSymbolRows} of ${totalRows} rows use cent-account symbols (ending in "c"), but the target account is a Standard account. Cent P&L is in cents, so importing it here would mix cents with dollars — set the account type to Cent in Settings → Accounts first, or import into your cent account.`
+    );
+  } else if (accountType === "cent" && plainSymbolRows > 0) {
+    warnings.push(
+      `${plainSymbolRows} of ${totalRows} rows don't use cent-account symbols (no "c" suffix), but the target account is a Cent account. Check this file came from your cent account.`
+    );
+  }
+  if (unknownSizeSymbols.size > 0) {
+    const list = [...unknownSizeSymbols].slice(0, 5).join(", ");
+    const more = unknownSizeSymbols.size > 5 ? ` and ${unknownSizeSymbols.size - 5} more` : "";
+    warnings.push(
+      `No built-in contract size for ${list}${more} — size was recorded as lots × 1. Set the contract size in Settings → Broker import, then re-import to correct it.`
+    );
+  }
+
+  return { trades, issues, warnings };
 }

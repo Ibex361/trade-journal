@@ -169,9 +169,9 @@ export default function NewBacktestForm() {
                 <Input
                   value={row.instrument}
                   onChange={(e) => updateFeed(row.key, { instrument: e.target.value })}
-                  placeholder={i === 0 ? "Instrument, e.g. XAUUSD" : "Instrument"}
+                  placeholder={i === 0 ? "Instrument, e.g. XAUUSD or XAUUSDc" : "Instrument"}
                   aria-label={`Feed ${i + 1} instrument`}
-                  className="flex-1 min-w-0 uppercase placeholder:normal-case"
+                  className="flex-1 min-w-0"
                   maxLength={30}
                 />
                 <Select value={row.timeframe} onChange={(v) => updateFeed(row.key, { timeframe: v })} options={TIMEFRAME_OPTIONS} aria-label={`Feed ${i + 1} timeframe`} className="w-24 py-2" />
@@ -192,7 +192,7 @@ export default function NewBacktestForm() {
               <PlusIcon className="w-3.5 h-3.5" />
               Add feed
             </Button>
-            <span className="text-xs text-ink-muted">One row per instrument + timeframe your strategy reads.</span>
+            <span className="text-xs text-ink-muted">One row per instrument + timeframe your strategy reads. Exness account feeds: no suffix = Pro, m = Standard, c = Cent (e.g. XAUUSDc, lowercase c).</span>
           </div>
         </div>
 

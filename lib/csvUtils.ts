@@ -66,5 +66,12 @@ export type ImportRowIssue = { row: number; message: string };
 
 export type ParsedImport = {
   trades: TradeInput[];
+  /** Rows that were skipped, with the reason. */
   issues: ImportRowIssue[];
+  /**
+   * Non-blocking notes about rows that WERE imported but deserve a second
+   * look (e.g. an account-type mismatch, or a symbol whose contract size
+   * isn't in the built-in table). Absent/empty means nothing to flag.
+   */
+  warnings?: string[];
 };

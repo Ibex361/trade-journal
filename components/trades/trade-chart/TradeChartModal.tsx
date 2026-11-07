@@ -5,6 +5,8 @@ import type { IChartApi, ISeriesApi, ISeriesMarkersPluginApi, Time, UTCTimestamp
 import { Trade, Direction } from "@/lib/trades";
 import { computeTradeChartWindow, coversCandleTarget } from "@/lib/chartTradeWindow";
 import { computeEMA } from "@/lib/indicators";
+import { archiveSymbolFor } from "@/lib/brokerSymbol";
+import type { AccountType } from "@/lib/accountUnits";
 
 type Timeframe = "1min" | "5min" | "15min" | "1h" | "4h" | "1day";
 
@@ -70,7 +72,8 @@ function toDateParam(utcSeconds: number): string {
  * string directly (see candleKey in sync-candles.ts), since the sync
  * pipeline already resolved the Exness archive's own naming quirks
  * (account-type suffixes) at write time. The chart-data route is asked
- * for `trade.instrument` as-is.
+ * for the trade's archive symbol — its instrument, normalized, and for a
+ * cent account always the cent ("c") feed (see archiveSymbolFor).
  *
  * Hand-rolled overlay (fixed inset-0 + backdrop + Escape-to-close),
  * matching ScreenshotLightbox's own convention rather than the smaller,
@@ -82,6 +85,7 @@ export default function TradeChartModal({
   onClose,
   chartDataPath = "/api/chart-data",
   badge,
+  accountType,
 }: {
   trade: Trade;
   onClose: () => void;
@@ -95,8 +99,16 @@ export default function TradeChartModal({
   chartDataPath?: string;
   /** Small label shown beside the instrument, e.g. "Backtest" — so a simulated trade's chart is never mistaken for a real one. */
   badge?: string;
+  /**
+   * The owning journal account's type. A cent account's trades chart
+   * against Exness' cent ("c") price feed even when the instrument was
+   * typed without the suffix. Leave undefined for backtest trades — their
+   * instrument is already the exact feed name.
+   */
+  accountType?: AccountType;
 }) {
   const [timeframe, setTimeframe] = useState<Timeframe>(DEFAULT_TIMEFRAME);
+  const chartSymbol = archiveSymbolFor(trade.instrument, accountType);
   const [state, setState] = useState<LoadState>({ status: "loading" });
   // No EMA shown by default — an indicator overlay is an opt-in analysis
   // tool, not part of the base chart view every trade opens with.
@@ -155,7 +167,7 @@ export default function TradeChartModal({
     setState({ status: "loading" });
 
     const url = new URL(chartDataPath, window.location.origin);
-    url.searchParams.set("symbol", trade.instrument);
+    url.searchParams.set("symbol", chartSymbol);
     url.searchParams.set("timeframe", timeframe);
     url.searchParams.set("start", toDateParam(tradeWindow.fetchStartUtcSeconds));
     url.searchParams.set("end", toDateParam(tradeWindow.rangeEndUtcSeconds));
@@ -196,7 +208,7 @@ export default function TradeChartModal({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- window_ is derived from trade+timeframe, already covered by those two deps.
-  }, [timeframe, trade.instrument, chartDataPath]);
+  }, [timeframe, chartSymbol, trade.instrument, chartDataPath]);
 
   // Create the chart instance once the container is mounted, and tear it
   // down on unmount. Recreated only if the container element itself

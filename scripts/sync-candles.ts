@@ -83,6 +83,8 @@ import { Client as PgClient } from "pg";
 import { S3Client } from "@aws-sdk/client-s3";
 import { tradeUtcDaysWithContext, isUtcDayClosed, isCurrentUtcMonth, isUtcWeekend, pgDateToString } from "./tradeDays";
 import { manifestKey, monthManifestKey, daysNeedingSync } from "./candleSyncManifest";
+import { archiveSymbolFor } from "../lib/brokerSymbol";
+import { accountTypeOf, type AccountType } from "../lib/accountUnits";
 import { readManifest, writeManifest, readMonthManifest, writeMonthManifest, mergeTimeframesIntoR2, fetchDayTickCsv, fetchMonthTickCsv } from "./candleSyncCore";
 
 function requireEnv(name: string): string {
@@ -114,6 +116,8 @@ function makeS3Client() {
 
 type TradeDateFields = {
   instrument: string;
+  /** The owning account's type — decides which archive feed (cent "c" vs. plain) the trade's chart reads. */
+  account_type: AccountType;
   entry_date: string | null;
   entry_time: string | null;
   exit_date: string | null;
@@ -128,13 +132,15 @@ type TradeDateFields = {
  * own entry→exit span, not a single earliest-to-now range.
  */
 async function fetchTradeDateFields(pg: PgClient): Promise<TradeDateFields[]> {
-  const { rows } = await pg.query<{ instrument: string; entry_date: string | Date | null; entry_time: string | null; exit_date: string | Date | null; exit_time: string | null }>(
-    `select instrument, entry_date, entry_time, exit_date, exit_time
-     from trades
-     where instrument is not null and instrument <> ''`
+  const { rows } = await pg.query<{ instrument: string; account_type: string | null; entry_date: string | Date | null; entry_time: string | null; exit_date: string | Date | null; exit_time: string | null }>(
+    `select t.instrument, a.account_type, t.entry_date, t.entry_time, t.exit_date, t.exit_time
+     from trades t
+     join accounts a on a.id = t.account_id
+     where t.instrument is not null and t.instrument <> ''`
   );
   return rows.map((r) => ({
     instrument: r.instrument,
+    account_type: accountTypeOf({ account_type: r.account_type }),
     entry_date: pgDateToString(r.entry_date),
     entry_time: r.entry_time,
     exit_date: pgDateToString(r.exit_date),
@@ -159,10 +165,14 @@ function computeInstrumentDays(trades: TradeDateFields[], now: Date): Map<string
   for (const trade of trades) {
     const days = tradeUtcDaysWithContext(trade.entry_date, trade.entry_time, trade.exit_date, trade.exit_time);
     if (days.length === 0) continue; // unparseable/missing entry_date — nothing to sync for this trade
-    let set = byInstrument.get(trade.instrument);
+    // Keyed by the ARCHIVE symbol the chart will request (a cent account's
+    // trade charts against the "c" feed even if it was typed as plain
+    // "XAUUSD"), so sync and chart always agree on the R2 key.
+    const symbol = archiveSymbolFor(trade.instrument, trade.account_type);
+    let set = byInstrument.get(symbol);
     if (!set) {
       set = new Set();
-      byInstrument.set(trade.instrument, set);
+      byInstrument.set(symbol, set);
     }
     for (const day of days) {
       if (isUtcDayClosed(day, now)) set.add(day);
