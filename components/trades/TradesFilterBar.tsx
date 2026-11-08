@@ -422,7 +422,7 @@ function FilterSheet({
         role="dialog"
         aria-modal="true"
         aria-label="Filter trades"
-        className="relative w-full max-h-[85vh] bg-surface-solid backdrop-blur-xl border-t border-surface-border rounded-t-panel shadow-glass motion-safe:animate-slide-up flex flex-col"
+        className="relative w-full max-h-[85vh] bg-surface-solid border-t border-surface-border rounded-t-panel shadow-glass motion-safe:animate-slide-up flex flex-col"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-surface-border shrink-0">

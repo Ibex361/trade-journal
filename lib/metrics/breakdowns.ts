@@ -258,10 +258,10 @@ export function getTradesInBreakdownGroup(trades: Trade[], dimension: BreakdownD
  * since it's the segment traders most want to see at a glance).
  */
 export const EXIT_REASON_META: { value: ExitReason; label: string; color: string }[] = [
-  { value: "stop_loss", label: "Stop loss", color: "#FB7185" }, // loss/coral
-  { value: "take_profit", label: "Take profit", color: "#5CE6C8" }, // gain/teal
-  { value: "manual", label: "Manual close", color: "#7C6FF0" }, // glow-violet
-  { value: "other", label: "Other", color: "#5C6180" }, // ink-muted
+  { value: "stop_loss", label: "Stop loss", color: "#F0675D" }, // loss
+  { value: "take_profit", label: "Take profit", color: "#5BD59C" }, // gain
+  { value: "manual", label: "Manual close", color: "#F2B544" }, // accent
+  { value: "other", label: "Other", color: "#6E695B" }, // ink-muted
 ];
 
 export type StrategyExitBreakdown = {

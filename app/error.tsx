@@ -27,7 +27,7 @@ export default function RootError({
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
-      <section className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass p-8 max-w-md w-full text-center">
+      <section className="bg-surface-1  border border-surface-border rounded-panel shadow-glass p-8 max-w-md w-full text-center">
         <div className="flex justify-center mb-5">
           <div className="w-12 h-12 rounded-full bg-loss/10 border border-loss/30 flex items-center justify-center">
             <svg
@@ -49,7 +49,7 @@ export default function RootError({
           </div>
         </div>
 
-        <h1 className="font-display text-lg font-medium text-ink-primary">
+        <h1 className="font-display text-lg font-normal text-ink-primary">
           Something went wrong
         </h1>
         <p className="text-ink-secondary text-sm mt-2">

@@ -21,7 +21,7 @@ export default function FormSection({
     <section>
       <div className="flex items-baseline gap-2.5 mb-4">
         <span className="signal-bar h-3.5 shrink-0" />
-        <h3 className="font-display text-[13px] font-medium tracking-wide text-ink-primary">
+        <h3 className="font-display text-[13px] font-normal tracking-wide text-ink-primary">
           {title}
         </h3>
         {description && (

@@ -91,25 +91,25 @@ export default function EquityCurveGraph({
                 whether the account is up or down over the period — the glow
                 itself is the brand, the +/- badge above carries the sentiment. */}
             <linearGradient id="equityStroke" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#7C6FF0" />
-              <stop offset="100%" stopColor="#5CE6C8" />
+              <stop offset="0%" stopColor="#F2B544" />
+              <stop offset="100%" stopColor="#F2B544" />
             </linearGradient>
             <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#5CE6C8" stopOpacity={0.38} />
-              <stop offset="100%" stopColor="#5CE6C8" stopOpacity={0} />
+              <stop offset="0%" stopColor="#F2B544" stopOpacity={0.22} />
+              <stop offset="100%" stopColor="#F2B544" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="rgba(255,255,255,0.09)" vertical={false} />
+          <CartesianGrid stroke="#2B2B28" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: "#959BBB", fontSize: 11 }}
-            axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
+            tick={{ fill: "#9A9584", fontSize: 11 }}
+            axisLine={{ stroke: "#2B2B28" }}
             tickLine={false}
             tickFormatter={formatDateLabel}
             minTickGap={40}
           />
           <YAxis
-            tick={{ fill: "#959BBB", fontSize: 11 }}
+            tick={{ fill: "#9A9584", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             width={60}

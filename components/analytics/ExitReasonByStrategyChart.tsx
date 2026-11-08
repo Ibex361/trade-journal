@@ -101,19 +101,19 @@ function ExitReasonByStrategyChart({
               margin={{ top: 5, right: 16, left: 0, bottom: 0 }}
               barCategoryGap={18}
             >
-              <CartesianGrid stroke="rgba(255,255,255,0.09)" horizontal={false} />
+              <CartesianGrid stroke="#2B2B28" horizontal={false} />
               <XAxis
                 type="number"
                 domain={[0, 100]}
                 unit="%"
-                tick={{ fill: "#959BBB", fontSize: 11 }}
-                axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
+                tick={{ fill: "#9A9584", fontSize: 11 }}
+                axisLine={{ stroke: "#2B2B28" }}
                 tickLine={false}
               />
               <YAxis
                 type="category"
                 dataKey="label"
-                tick={{ fill: "#959BBB", fontSize: 11 }}
+                tick={{ fill: "#9A9584", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={100}

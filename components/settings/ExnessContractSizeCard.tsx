@@ -251,7 +251,7 @@ export default function ExnessContractSizeCard() {
               id="exness-contract-size-listbox"
               role="listbox"
               style={{ top: panelRect.top, left: panelRect.left, width: panelRect.width }}
-              className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
+              className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid  border border-surface-border rounded-lg shadow-glass"
             >
               {filteredMatches.map((symbol, i) => (
                 <li
@@ -278,7 +278,7 @@ export default function ExnessContractSizeCard() {
 
       {!loading && overrides.length === 0 && !activeSymbol && (
         <p className="text-sm text-ink-muted mt-3">
-          No overrides set yet — type a symbol above to set its contract size.
+          No overrides set yet, type a symbol above to set its contract size.
         </p>
       )}
 

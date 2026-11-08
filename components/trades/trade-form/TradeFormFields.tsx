@@ -48,7 +48,7 @@ function SegmentedToggle<T extends string | boolean | null>({
             fullWidth ? "flex-1" : "px-3.5"
           } py-1.5 rounded-md text-xs font-medium capitalize transition-all duration-fast ${
             value === opt.value
-              ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 shadow-raised"
+              ? "bg-glow text-surface-0 shadow-raised"
               : "text-ink-secondary hover:text-ink-primary hover:bg-surface-1"
           }`}
         >
@@ -469,7 +469,7 @@ export default function TradeFormFields({
         </div>
       )}
 
-      <div className="sticky bottom-0 -mx-6 -mb-6 mt-2 px-6 py-4 bg-surface-solid backdrop-blur-xl border-t border-surface-border flex items-center gap-3">
+      <div className="sticky bottom-0 -mx-6 -mb-6 mt-2 px-6 py-4 bg-surface-solid border-t border-surface-border flex items-center gap-3">
         <Button size="md" onClick={f.handleSubmit} disabled={f.saving} className="min-w-[9rem]">
           {f.saving ? "Saving…" : isEditing ? "Save changes" : "Add trade"}
         </Button>

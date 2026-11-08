@@ -85,7 +85,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-medium tracking-tight">Dashboard</h1>
+        <h1 className="font-display text-4xl sm:text-[2.75rem] leading-none font-normal tracking-tight">Dashboard</h1>
         <p className="text-ink-secondary text-sm mt-1">
           {selectedAccount ? `Overview for ${selectedAccount.name}` : "Your trading at a glance."}
         </p>

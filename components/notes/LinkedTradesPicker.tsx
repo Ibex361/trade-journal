@@ -133,7 +133,7 @@ export default function LinkedTradesPicker({
         />
 
         {open && query.trim() && (
-          <div className="absolute z-10 mt-1 w-full bg-surface-solid backdrop-blur-xl border border-surface-border rounded-md shadow-glass max-h-64 overflow-y-auto">
+          <div className="absolute z-10 mt-1 w-full bg-surface-solid border border-surface-border rounded-md shadow-glass max-h-64 overflow-y-auto">
             {results.length === 0 ? (
               <p className="px-3 py-2 text-xs text-ink-muted">No matching trades.</p>
             ) : (

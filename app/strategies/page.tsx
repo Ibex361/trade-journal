@@ -50,7 +50,7 @@ export default function StrategiesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-medium tracking-tight">Strategies</h1>
+        <h1 className="font-display text-4xl sm:text-[2.75rem] leading-none font-normal tracking-tight">Strategies</h1>
         <p className="text-ink-secondary text-sm mt-1">
           {selectedAccount ? `Strategy performance for ${selectedAccount.name}` : "Which of your systems actually have an edge."}
         </p>

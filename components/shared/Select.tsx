@@ -69,7 +69,7 @@ export function Select({
       <SelectPrimitive.Trigger
         aria-label={ariaLabel}
         className={[
-          "bg-surface-2 backdrop-blur-md border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary",
+          "bg-surface-2  border border-surface-border rounded-md px-2.5 py-1.5 text-xs text-ink-primary",
           "inline-flex items-center justify-between gap-2",
           "transition-colors duration-fast",
           "hover:border-glow/40 hover:bg-surface-2/80",
@@ -109,7 +109,7 @@ export function Select({
           sideOffset={6}
           className={[
             "z-[60] overflow-hidden outline-none",
-            "bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass",
+            "bg-surface-solid  border border-surface-border rounded-lg shadow-glass",
             "motion-safe:data-[state=open]:animate-scale-in",
             // Content sizes to its longest label (up to a cap) rather than
             // being locked to the trigger's width — a narrow trigger like a

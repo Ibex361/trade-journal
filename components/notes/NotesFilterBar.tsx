@@ -80,7 +80,7 @@ export default function NotesFilterBar({
   const active = isNoteFiltersActive(filters);
 
   return (
-    <div className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass p-4 space-y-4">
+    <div className="bg-surface-1  border border-surface-border rounded-panel shadow-glass p-4 space-y-4">
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex-1 min-w-[200px]">
           <span className={labelClass}>Search notes</span>

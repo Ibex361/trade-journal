@@ -55,7 +55,7 @@ export default function TargetsCard() {
       title="Targets"
       description={`Goals for ${selectedAccount.name}, used by Dashboard and Reports.`}
     >
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 items-end">
         <label className="block">
           <span className="text-xs text-ink-secondary">Risk per trade (%)</span>
           <input
