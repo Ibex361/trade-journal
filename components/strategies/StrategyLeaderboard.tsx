@@ -107,7 +107,7 @@ export default function StrategyLeaderboard({
             onClick={() => setReliableOnly(false)}
             className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
               !reliableOnly
-                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-glow"
+                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >
@@ -117,7 +117,7 @@ export default function StrategyLeaderboard({
             onClick={() => setReliableOnly(true)}
             className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
               reliableOnly
-                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-glow"
+                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >
@@ -161,7 +161,7 @@ export default function StrategyLeaderboard({
                       <span>{r.label}</span>
                       {r.lowSample && (
                         <span
-                          className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-2 text-ink-muted border border-surface-border whitespace-nowrap"
+                          className="text-[11px] px-1.5 py-0.5 rounded-full bg-surface-2 text-ink-muted border border-surface-border whitespace-nowrap"
                           title={`Fewer than ${STRATEGY_MIN_SAMPLE_SIZE} trades — treat these numbers as provisional`}
                         >
                           low sample

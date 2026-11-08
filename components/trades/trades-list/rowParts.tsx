@@ -100,7 +100,7 @@ export function RulesBadge({ value }: { value: boolean | null }) {
   if (value === null) return <span className="text-ink-muted text-xs">—</span>;
   return (
     <span
-      className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold leading-none ${
+      className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[11px] font-bold leading-none ${
         value ? "bg-gain/15 text-gain" : "bg-loss/15 text-loss"
       }`}
       title={value ? "Rules followed" : "Rules not followed"}

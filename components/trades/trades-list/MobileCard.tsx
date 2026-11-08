@@ -72,12 +72,12 @@ const MobileCard = memo(function MobileCard({
             <p className="font-medium flex items-center gap-2">
               {t.instrument}
               {isBest && (
-                <span className="text-[10px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
+                <span className="text-[11px] uppercase tracking-wide text-gain bg-gain/10 px-1.5 py-0.5 rounded-full shrink-0">
                   Best
                 </span>
               )}
               {isWorst && (
-                <span className="text-[10px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
+                <span className="text-[11px] uppercase tracking-wide text-loss bg-loss/10 px-1.5 py-0.5 rounded-full shrink-0">
                   Worst
                 </span>
               )}

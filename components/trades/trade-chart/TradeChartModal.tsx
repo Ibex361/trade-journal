@@ -393,7 +393,7 @@ export default function TradeChartModal({
           <div>
             <h2 className="font-display text-lg font-medium flex items-center gap-2">
               {trade.instrument}
-              {badge && <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-glow-violet/20 text-glow-violet font-medium">{badge}</span>}
+              {badge && <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-glow-violet/20 text-glow-violet font-medium">{badge}</span>}
             </h2>
             <p className="text-xs text-ink-secondary font-mono mt-0.5">
               {trade.entry_date}

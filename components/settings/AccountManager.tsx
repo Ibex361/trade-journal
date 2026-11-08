@@ -157,13 +157,13 @@ export default function AccountManager() {
       title="Accounts"
       description="Every trade, setting, and target belongs to one account."
     >
-      <div className="space-y-2">
+      <div className="divide-y divide-surface-border">
         {accounts.map((acc) => (
           <div
             key={acc.id}
-            className="bg-surface-2 border border-surface-border rounded-card px-4 py-3"
+            className="py-4 first:pt-0 last:pb-0"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
               {renamingId === acc.id ? (
                 <div className="flex flex-col gap-1.5 flex-1">
                   <div className="flex items-center gap-2">
@@ -199,7 +199,7 @@ export default function AccountManager() {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-sm font-medium">{acc.name}</span>
                     {acc.is_demo && (
                       <span className="text-[11px] uppercase tracking-wide bg-glow/15 text-glow px-2 py-0.5 rounded-full">
@@ -252,7 +252,7 @@ export default function AccountManager() {
                       <button
                         onClick={() => handleArchive(acc.id)}
                         disabled={busy}
-                        className="text-xs text-loss/80 hover:text-loss"
+                        className="text-xs text-loss hover:brightness-125"
                       >
                         Archive
                       </button>
@@ -445,7 +445,7 @@ export default function AccountManager() {
                           setDeletingId(deletingId === acc.id ? null : acc.id);
                           setDeleteConfirmText("");
                         }}
-                        className="text-xs text-loss/80 hover:text-loss"
+                        className="text-xs text-loss hover:brightness-125"
                       >
                         Delete permanently
                       </button>

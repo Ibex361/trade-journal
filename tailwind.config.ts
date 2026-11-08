@@ -25,8 +25,8 @@ const config: Config = {
         },
         ink: {
           primary: "#EDEFF7",
-          secondary: "#9BA0BE",
-          muted: "#5C6180",
+          secondary: "#B4B9D3",
+          muted: "#959BBB",
         },
         // Signature two-tone accent for Concept C: a teal-to-violet glow.
         glow: {
@@ -48,7 +48,7 @@ const config: Config = {
       },
       boxShadow: {
         glass: "0 20px 50px rgba(0,0,0,.35)",
-        glow: "0 0 18px rgba(92,230,200,.5)",
+        raised: "0 1px 0 rgba(255,255,255,.22) inset, 0 6px 14px -4px rgba(0,0,0,.55)",
       },
       transitionDuration: {
         fast: "150ms",

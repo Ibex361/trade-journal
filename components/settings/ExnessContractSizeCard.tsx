@@ -302,7 +302,7 @@ export default function ExnessContractSizeCard() {
             <button onClick={startEdit} className="text-xs text-glow hover:underline">
               Edit
             </button>
-            <button onClick={confirmDelete} disabled={busy} className="text-xs text-loss/80 hover:text-loss disabled:opacity-50">
+            <button onClick={confirmDelete} disabled={busy} className="text-xs text-loss hover:brightness-125 disabled:opacity-50">
               {busy ? "Removing…" : "Delete"}
             </button>
           </div>

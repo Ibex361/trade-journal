@@ -25,7 +25,7 @@ export default function DateRangeSelector({
           onClick={() => onChange(opt.value)}
           className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
             value === opt.value
-              ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-glow"
+              ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
               : "text-ink-secondary hover:text-ink-primary"
           }`}
         >

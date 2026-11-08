@@ -17,9 +17,9 @@ export default function Chip({
 }) {
   return (
     <div className="flex items-center gap-2 shrink-0 bg-surface-2 border border-surface-border rounded-full pl-3.5 pr-3 py-2">
-      <span className="text-[10px] uppercase tracking-wide text-ink-muted whitespace-nowrap">{label}</span>
+      <span className="text-[11px] uppercase tracking-wide text-ink-muted whitespace-nowrap">{label}</span>
       <span className={`font-mono text-sm font-medium whitespace-nowrap ${valueClassName}`}>{value}</span>
-      {hint && <span className="text-[10px] text-ink-muted whitespace-nowrap hidden sm:inline">{hint}</span>}
+      {hint && <span className="text-[11px] text-ink-muted whitespace-nowrap hidden sm:inline">{hint}</span>}
     </div>
   );
 }
