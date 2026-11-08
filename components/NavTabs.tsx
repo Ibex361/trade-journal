@@ -20,7 +20,7 @@ export default function NavTabs() {
             href={tab.href}
             className={`px-4 py-1.5 rounded-full text-sm transition-all duration-fast ease-out ${
               active
-                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-glow"
+                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >

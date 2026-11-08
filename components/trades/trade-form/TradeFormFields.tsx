@@ -48,7 +48,7 @@ function SegmentedToggle<T extends string | boolean | null>({
             fullWidth ? "flex-1" : "px-3.5"
           } py-1.5 rounded-md text-xs font-medium capitalize transition-all duration-fast ${
             value === opt.value
-              ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 shadow-glow"
+              ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 shadow-raised"
               : "text-ink-secondary hover:text-ink-primary hover:bg-surface-1"
           }`}
         >

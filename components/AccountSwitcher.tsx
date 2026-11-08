@@ -48,7 +48,7 @@ export default function AccountSwitcher() {
               }`}
             >
               <span>{acc.name}</span>
-              {acc.is_demo && <span className="text-[10px] uppercase text-ink-muted">demo</span>}
+              {acc.is_demo && <span className="text-[11px] uppercase text-ink-muted">demo</span>}
             </button>
           ))}
         </div>

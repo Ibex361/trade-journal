@@ -86,9 +86,9 @@ const NoteCard = memo(function NoteCard({
               className="accent-glow mt-1 shrink-0"
             />
           )}
-          <h3 className="font-display text-base font-medium text-ink-primary truncate">
+          <h2 className="font-display text-base font-medium text-ink-primary truncate">
             {note.title || "Untitled"}
-          </h3>
+          </h2>
         </div>
         <p className="text-ink-secondary text-sm line-clamp-2 min-h-[2.5rem]">
           {preview || <span className="text-ink-muted italic">No content yet</span>}

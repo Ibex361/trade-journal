@@ -8,7 +8,7 @@ const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 function cellStyle(pnl: number, count: number, maxAbsPnl: number): React.CSSProperties {
   if (count === 0) return {};
   const intensity = maxAbsPnl > 0 ? Math.min(Math.abs(pnl) / maxAbsPnl, 1) : 0;
-  const alpha = 0.12 + intensity * 0.68;
+  const alpha = 0.12 + intensity * 0.5; // capped so ink-primary text stays >= 4.5:1 on the strongest cell
   const [r, g, b] = pnl >= 0 ? [43, 182, 115] : [229, 72, 77]; // gain / loss
   return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${alpha})` };
 }
@@ -45,14 +45,13 @@ function CalendarHeatmap({
 
       <div className="grid grid-cols-7 gap-1.5">
         {WEEKDAY_LABELS.map((label) => (
-          <div key={label} className="text-center text-[10px] uppercase tracking-wide text-ink-muted pb-1">
+          <div key={label} className="text-center text-[11px] uppercase tracking-wide text-ink-muted pb-1">
             {label}
           </div>
         ))}
         {cells.map((cell, i) => {
           if (!cell) return <div key={`blank-${i}`} className="aspect-square" />;
           const hasTrades = cell.count > 0;
-          const pnlColor = cell.pnl > 0 ? "text-gain" : cell.pnl < 0 ? "text-loss" : "text-ink-muted";
           const isBest = hasTrades && cell.date === bestDate;
           const isWorst = hasTrades && cell.date === worstDate;
           const title = hasTrades
@@ -73,16 +72,16 @@ function CalendarHeatmap({
             >
               {(isBest || isWorst) && (
                 <span
-                  className={`absolute -top-1.5 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wide px-1 rounded-full leading-tight ${
+                  className={`absolute -top-1.5 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-wide px-1.5 rounded-full leading-tight ${
                     isBest ? "bg-gain text-surface-0" : "bg-loss text-surface-0"
                   }`}
                 >
                   {isBest ? "Best" : "Worst"}
                 </span>
               )}
-              <span className="text-[10px] text-ink-muted leading-none">{cell.day}</span>
+              <span className={`text-[11px] leading-none ${hasTrades ? "text-ink-primary" : "text-ink-muted"}`}>{cell.day}</span>
               {hasTrades && (
-                <span className={`font-mono text-[10px] leading-none ${pnlColor}`}>
+                <span className="font-mono text-[11px] font-medium leading-none text-ink-primary">
                   {cell.pnl >= 0 ? "+" : ""}
                   {cell.pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </span>
