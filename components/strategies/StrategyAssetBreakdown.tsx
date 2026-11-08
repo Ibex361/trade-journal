@@ -86,7 +86,7 @@ export default function StrategyAssetBreakdown({
   const header = (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <h3 className="font-display text-sm font-normal">
+        <h3 className="font-display text-sm font-medium">
           {strategyLabel} <span className="text-ink-muted font-body font-normal">· asset &amp; direction breakdown</span>
         </h3>
         <p className="text-ink-secondary text-xs mt-0.5">Which instruments and which side this strategy actually works on</p>
@@ -117,12 +117,12 @@ export default function StrategyAssetBreakdown({
     <Card>
       <div className="mb-4">{header}</div>
       <div className="flex justify-end mb-3">
-        <div className="inline-flex items-center bg-surface-2  border border-surface-border rounded-full p-1">
+        <div className="inline-flex items-center bg-surface-2 backdrop-blur-md border border-surface-border rounded-full p-1">
           <button
             onClick={() => setReliableOnly(false)}
             className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
               !reliableOnly
-                ? "bg-glow text-surface-0 font-medium shadow-raised"
+                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >
@@ -132,7 +132,7 @@ export default function StrategyAssetBreakdown({
             onClick={() => setReliableOnly(true)}
             className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
               reliableOnly
-                ? "bg-glow text-surface-0 font-medium shadow-raised"
+                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >

@@ -5,44 +5,50 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // "Ledger at night" — flat, opaque, warm-graphite surfaces separated by
-        // hairlines (elevation = a lighter step, not blur). Hex on purpose so
-        // Tailwind opacity modifiers (bg-surface-0/70) work.
+        // Neutral surfaces. 1/2 are translucent "glass" fills meant to sit on
+        // top of the atmospheric gradient body background (see globals.css) —
+        // every existing bg-surface-1 / bg-surface-2 panel becomes a glass
+        // panel automatically, no component changes needed.
         surface: {
-          0: "#0C0C0B", // canvas, inputs, text-on-accent
-          1: "#141413", // panel
-          2: "#1D1D1B", // raised / hover / nested
-          border: "#2B2B28",
-          solid: "#101010", // slide-overs and drawers
-          popover: "#1A1A18", // chart tooltips / popovers
+          0: "#090A11", // solid near-black — inputs, overlays, text-on-accent
+          1: "rgba(255,255,255,0.045)", // primary glass panel fill
+          2: "rgba(255,255,255,0.07)", // nested / hover glass fill
+          border: "rgba(255,255,255,0.09)",
+          // Near-opaque dark fill for full-screen/slide-over surfaces that are
+          // the primary reading surface (forms), where the light 4.5-7% glass
+          // fills let too much of the busy background bleed through the text.
+          solid: "rgba(9,10,17,0.97)",
+          // Darker, more-opaque frosted fill for chart tooltips/popovers —
+          // still translucent (keeps the glass feel on hover/click) but dark
+          // and opaque enough that text stays legible over dense bar fills.
+          popover: "rgba(10,11,20,0.92)",
         },
         ink: {
-          primary: "#F2EFE7",
-          secondary: "#C2BDB0",
-          muted: "#9A9584",
+          primary: "#EDEFF7",
+          secondary: "#B4B9D3",
+          muted: "#959BBB",
         },
-        // The one accent: amber. Reserved for action, selection and focus —
-        // gain/loss keep their own green/red so a button never reads as a P&L.
+        // Signature two-tone accent for Concept C: a teal-to-violet glow.
         glow: {
-          DEFAULT: "#F2B544",
-          violet: "#E5A02E", // legacy gradient end; flat-equivalent
-          dim: "#B8861F",
+          DEFAULT: "#5CE6C8",
+          violet: "#7C6FF0",
+          dim: "#2F9885",
         },
-        gain: "#5BD59C",
-        loss: "#F0675D",
+        gain: "#5CE6C8", // same teal as glow — a win is the glow signal
+        loss: "#FB7185",
       },
       fontFamily: {
-        display: ["var(--font-display)", "Georgia", "serif"], // Instrument Serif
-        body: ["var(--font-body)", "system-ui", "sans-serif"], // Hanken Grotesk
-        mono: ["var(--font-mono)", "ui-monospace", "monospace"], // Spline Sans Mono
+        display: ["var(--font-display)", "sans-serif"], // Space Grotesk
+        body: ["var(--font-body)", "sans-serif"], // Inter
+        mono: ["var(--font-mono)", "monospace"], // JetBrains Mono
       },
       borderRadius: {
-        card: "12px",
-        panel: "14px",
+        card: "18px", // was 14px — every existing panel picks this up as-is
+        panel: "20px", // new, larger radius for Step 3's bigger glass sections
       },
       boxShadow: {
-        glass: "0 1px 0 rgba(255,255,255,0.035) inset, 0 12px 28px -16px rgba(0,0,0,0.7)",
-        raised: "0 1px 0 rgba(255,255,255,0.35) inset, 0 4px 10px -4px rgba(0,0,0,0.6)",
+        glass: "0 20px 50px rgba(0,0,0,.35)",
+        raised: "0 1px 0 rgba(255,255,255,.22) inset, 0 6px 14px -4px rgba(0,0,0,.55)",
       },
       transitionDuration: {
         fast: "150ms",

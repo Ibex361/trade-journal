@@ -102,12 +102,12 @@ export default function StrategyLeaderboard({
           : "Ranked by expectancy — click a column heading to sort"
       }
       action={
-        <div className="inline-flex items-center bg-surface-2  border border-surface-border rounded-full p-1">
+        <div className="inline-flex items-center bg-surface-2 backdrop-blur-md border border-surface-border rounded-full p-1">
           <button
             onClick={() => setReliableOnly(false)}
             className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
               !reliableOnly
-                ? "bg-glow text-surface-0 font-medium shadow-raised"
+                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >
@@ -117,7 +117,7 @@ export default function StrategyLeaderboard({
             onClick={() => setReliableOnly(true)}
             className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
               reliableOnly
-                ? "bg-glow text-surface-0 font-medium shadow-raised"
+                ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                 : "text-ink-secondary hover:text-ink-primary"
             }`}
           >

@@ -66,7 +66,7 @@ const MobileCard = memo(function MobileCard({
           )}
           <span
             className="w-1 h-8 rounded-full shrink-0"
-            style={{ background: t.pnl > 0 ? "var(--gain)" : t.pnl < 0 ? "var(--loss)" : "var(--ink-3)" }}
+            style={{ background: t.pnl > 0 ? "var(--glow)" : t.pnl < 0 ? "var(--loss)" : "var(--ink-3)" }}
           />
           <div>
             <p className="font-medium flex items-center gap-2">

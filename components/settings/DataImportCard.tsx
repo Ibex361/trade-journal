@@ -338,7 +338,7 @@ export default function DataImportCard() {
 
             {readyTrades && readyTrades.length === 0 && !checkingDuplicates ? (
               <p className="text-sm text-ink-secondary">
-                All trades in this file are already in this account, nothing new to import.
+                All trades in this file are already in this account — nothing new to import.
               </p>
             ) : (
               <Button onClick={handleImport} disabled={importing || checkingDuplicates || !readyTrades} size="sm">
@@ -376,7 +376,7 @@ export default function DataImportCard() {
           <p className="text-sm text-ink-primary">
             Updated sizes on <span className="font-medium">{repairResult.updated}</span> trade
             {repairResult.updated === 1 ? "" : "s"} in <span className="font-medium">{repairResult.accountName}</span>
-            {repairResult.failed > 0 ? ` (${repairResult.failed} couldn't be updated, please try again)` : ""}.
+            {repairResult.failed > 0 ? ` (${repairResult.failed} couldn't be updated — please try again)` : ""}.
           </p>
         )}
 

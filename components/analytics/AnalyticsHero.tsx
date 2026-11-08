@@ -52,7 +52,7 @@ function AnalyticsHero({
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 px-1 pt-1 pb-4">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-ink-secondary">Total return, this range</p>
-          <p className={`font-display text-3xl sm:text-4xl font-normal tracking-tight mt-1 leading-none ${returnClass}`}>
+          <p className={`font-display text-3xl sm:text-4xl font-medium tracking-tight mt-1 leading-none ${returnClass}`}>
             {totalReturnPct != null ? `${returnSign}${totalReturnPct.toFixed(1)}%` : "—"}
           </p>
         </div>

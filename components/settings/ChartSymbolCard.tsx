@@ -242,7 +242,7 @@ export default function ChartSymbolCard() {
               id="chart-symbol-listbox"
               role="listbox"
               style={{ top: panelRect.top, left: panelRect.left, width: panelRect.width }}
-              className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid  border border-surface-border rounded-lg shadow-glass"
+              className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
             >
               {filteredMatches.map((symbol, i) => (
                 <li

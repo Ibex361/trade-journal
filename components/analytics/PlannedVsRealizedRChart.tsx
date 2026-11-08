@@ -141,20 +141,20 @@ function PlannedVsRealizedRChart({
         <div className="h-72 cursor-pointer">
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 10, right: 20, left: 4, bottom: 20 }}>
-              <CartesianGrid stroke="#2B2B28" />
+              <CartesianGrid stroke="rgba(255,255,255,0.09)" />
               <XAxis
                 type="number"
                 dataKey="plannedR"
                 domain={domain}
                 tickFormatter={(v) => `${v}R`}
-                tick={{ fill: "#9A9584", fontSize: 11 }}
-                axisLine={{ stroke: "#2B2B28" }}
+                tick={{ fill: "#959BBB", fontSize: 11 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
                 label={{
                   value: "Planned R",
                   position: "insideBottom",
                   offset: -12,
-                  fill: "#9A9584",
+                  fill: "#959BBB",
                   fontSize: 11,
                 }}
               />
@@ -163,15 +163,15 @@ function PlannedVsRealizedRChart({
                 dataKey="realizedR"
                 domain={domain}
                 tickFormatter={(v) => `${v}R`}
-                tick={{ fill: "#9A9584", fontSize: 11 }}
-                axisLine={{ stroke: "#2B2B28" }}
+                tick={{ fill: "#959BBB", fontSize: 11 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
                 width={44}
                 label={{
                   value: "Realized R",
                   angle: -90,
                   position: "insideLeft",
-                  fill: "#9A9584",
+                  fill: "#959BBB",
                   fontSize: 11,
                 }}
               />
@@ -198,7 +198,7 @@ function PlannedVsRealizedRChart({
                 {points.map((p) => (
                   <Cell
                     key={p.id}
-                    fill={p.delta >= 0 ? "#5BD59C" : "#F0675D"}
+                    fill={p.delta >= 0 ? "#5CE6C8" : "#FB7185"}
                     opacity={selectedId == null || selectedId === p.id ? 0.85 : 0.25}
                   />
                 ))}

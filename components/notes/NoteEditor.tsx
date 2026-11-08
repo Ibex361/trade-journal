@@ -466,7 +466,7 @@ export default function NoteEditor({ content, onChange, editable = true, placeho
         // (top offset matches that header's height), borderless except for
         // the hairline underneath: reads as page chrome, not a boxed
         // widget bolted onto the text.
-        <div className="sticky top-[49px] z-[5] -mx-4 sm:-mx-10 px-4 sm:px-10 py-2 bg-surface-0/95  border-b border-surface-border">
+        <div className="sticky top-[49px] z-[5] -mx-4 sm:-mx-10 px-4 sm:px-10 py-2 bg-surface-0/95 backdrop-blur-md border-b border-surface-border">
           <Toolbar
             editor={editor}
             imagesEnabled={!!accountId}

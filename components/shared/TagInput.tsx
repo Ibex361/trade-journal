@@ -211,7 +211,7 @@ export default function TagInput({
           <ul
             id={listboxId}
             role="listbox"
-            className="absolute z-[60] left-0 right-0 mt-1 max-h-48 overflow-auto p-1 bg-surface-solid  border border-surface-border rounded-lg shadow-glass"
+            className="absolute z-[60] left-0 right-0 mt-1 max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
           >
             {filteredSuggestions.map((s, i) => (
               <li

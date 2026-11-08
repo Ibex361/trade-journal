@@ -36,7 +36,7 @@ function BreakdownDrilldown({
   return (
     <Card>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display text-sm font-normal">
+        <h3 className="font-display text-sm font-medium">
           {groupLabel} <span className="text-ink-muted font-body font-normal">· {trades.length} trade{trades.length === 1 ? "" : "s"}</span>
         </h3>
         <button

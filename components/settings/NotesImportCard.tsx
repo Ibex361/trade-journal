@@ -220,7 +220,7 @@ export default function NotesImportCard() {
 
             {readyNotes && readyNotes.length === 0 && !checking ? (
               <p className="text-sm text-ink-secondary">
-                All notes in this file are already in this account, nothing new to import.
+                All notes in this file are already in this account — nothing new to import.
               </p>
             ) : (
               <Button onClick={handleImport} disabled={importing || checking || !readyNotes} size="sm">

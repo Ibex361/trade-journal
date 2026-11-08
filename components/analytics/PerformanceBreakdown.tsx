@@ -91,7 +91,7 @@ function PerformanceBreakdown({
       description={subtitle}
       action={
         dimensions.length > 1 && (
-          <div className="inline-flex items-center bg-surface-2  border border-surface-border rounded-full p-1 flex-wrap">
+          <div className="inline-flex items-center bg-surface-2 backdrop-blur-md border border-surface-border rounded-full p-1 flex-wrap">
             {dimensions.map((d) => (
               <button
                 key={d.value}
@@ -101,7 +101,7 @@ function PerformanceBreakdown({
                 }}
                 className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
                   dimension === d.value
-                    ? "bg-glow text-surface-0 font-medium shadow-raised"
+                    ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
                     : "text-ink-secondary hover:text-ink-primary"
                 }`}
               >
@@ -122,19 +122,19 @@ function PerformanceBreakdown({
             <BarChart data={groups} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} onClick={handleChartClick}>
               <defs>
                 <linearGradient id="perfBarUp" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#5BD59C" />
-                  <stop offset="100%" stopColor="#5BD59C" stopOpacity={0.15} />
+                  <stop offset="0%" stopColor="#5CE6C8" />
+                  <stop offset="100%" stopColor="#5CE6C8" stopOpacity={0.15} />
                 </linearGradient>
                 <linearGradient id="perfBarDown" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#F0675D" />
-                  <stop offset="100%" stopColor="#F0675D" stopOpacity={0.15} />
+                  <stop offset="0%" stopColor="#FB7185" />
+                  <stop offset="100%" stopColor="#FB7185" stopOpacity={0.15} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#2B2B28" vertical={false} />
+              <CartesianGrid stroke="rgba(255,255,255,0.09)" vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fill: "#9A9584", fontSize: 11 }}
-                axisLine={{ stroke: "#2B2B28" }}
+                tick={{ fill: "#959BBB", fontSize: 11 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
                 interval={0}
                 angle={groups.length > 6 ? -35 : 0}
@@ -142,7 +142,7 @@ function PerformanceBreakdown({
                 height={groups.length > 6 ? 50 : 30}
               />
               <YAxis
-                tick={{ fill: "#9A9584", fontSize: 11 }}
+                tick={{ fill: "#959BBB", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={50}

@@ -5,7 +5,7 @@ import { useMemo, useId } from "react";
 /**
  * Minimal inline trend line for compact spaces (ribbon/chip contexts) where
  * a full EquityCurveGraph would be too heavy. Uses the same signature
- * single amber stroke as the main equity curve, no axes/grid/
+ * teal-to-violet gradient stroke as the main equity curve, no axes/grid/
  * tooltip — just the shape of the trend.
  */
 export default function Sparkline({
@@ -43,8 +43,8 @@ export default function Sparkline({
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#F2B544" />
-          <stop offset="100%" stopColor="#F2B544" />
+          <stop offset="0%" stopColor="#7C6FF0" />
+          <stop offset="100%" stopColor="#5CE6C8" />
         </linearGradient>
       </defs>
       <path

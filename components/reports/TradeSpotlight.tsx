@@ -82,7 +82,7 @@ function SpotlightCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-ink-secondary">{label}</p>
-          <p className="font-display text-base font-normal mt-1">{trade.instrument}</p>
+          <p className="font-display text-base font-medium mt-1">{trade.instrument}</p>
           <p className="text-xs text-ink-secondary font-mono mt-0.5">
             {formatDate(trade.entry_date)} · <span className="capitalize">{trade.direction ?? "—"}</span>
           </p>
@@ -132,7 +132,7 @@ function TradeSpotlight({ best, worst }: { best: Trade | null; worst: Trade | nu
 
   return (
     <div>
-      <h2 className="font-display text-base font-normal mb-3 print:mt-4">Highlights</h2>
+      <h2 className="font-display text-base font-medium mb-3 print:mt-4">Highlights</h2>
       <div className="flex flex-wrap gap-3">
         <SpotlightCard label="Best trade" trade={best} accent="gain" onOpenScreenshot={setLightboxUrl} />
         <SpotlightCard label="Worst trade" trade={worst} accent="loss" onOpenScreenshot={setLightboxUrl} />

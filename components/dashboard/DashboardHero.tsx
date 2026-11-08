@@ -8,7 +8,7 @@ function DeltaBadge({ value, currency }: { value: number; currency: string }) {
   const positive = value >= 0;
   return (
     <span
-      className={`inline-flex items-center gap-1 font-mono text-sm px-2.5 py-1 rounded-md ${
+      className={`inline-flex items-center gap-1 font-mono text-sm px-2.5 py-1 rounded-full ${
         positive ? "bg-gain/10 text-gain" : "bg-loss/10 text-loss"
       }`}
     >
@@ -59,9 +59,9 @@ export default function DashboardHero({
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-1 pt-1 pb-4">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-ink-secondary">Account balance</p>
-          <p className="font-display text-6xl sm:text-7xl tracking-tight mt-2 leading-none tabular-nums">
+          <p className="font-mono text-3xl sm:text-4xl font-medium tracking-tight mt-1 leading-none">
             {accountBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            <span className="font-mono text-sm sm:text-base text-ink-secondary ml-2 tracking-normal">{currency}</span>
+            <span className="text-base sm:text-lg text-ink-secondary ml-1.5">{currency}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">

@@ -1,9 +1,19 @@
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Chip({
+  label,
+  value,
+  hint,
+  valueClassName = "text-ink-primary",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  valueClassName?: string;
+}) {
   return (
-    <div className="px-4 sm:px-6 py-4 first:pl-5 sm:first:pl-7 min-w-0">
-      <p className="text-[11px] uppercase tracking-[0.08em] text-ink-muted whitespace-nowrap">{label}</p>
-      <p className="font-display text-4xl leading-none mt-2 tabular-nums">{value}</p>
-      {hint && <p className="text-[11px] text-ink-muted mt-1.5 hidden sm:block truncate">{hint}</p>}
+    <div className="flex items-center gap-2 shrink-0 bg-surface-1 backdrop-blur-md border border-surface-border rounded-full pl-3.5 pr-3 py-2">
+      <span className="text-[11px] uppercase tracking-wide text-ink-muted whitespace-nowrap">{label}</span>
+      <span className={`font-mono text-sm font-medium whitespace-nowrap ${valueClassName}`}>{value}</span>
+      {hint && <span className="text-[11px] text-ink-muted whitespace-nowrap hidden sm:inline">{hint}</span>}
     </div>
   );
 }
@@ -27,10 +37,10 @@ export default function StatChipRow({
   tradesCount: number;
 }) {
   return (
-    <div className="grid grid-cols-3 divide-x divide-surface-border bg-surface-1 border border-surface-border rounded-panel shadow-glass">
-      <Stat label="Win rate" value={winRate != null ? `${winRate.toFixed(0)}%` : "—"} hint={winRateHint} />
-      <Stat label="Avg R" value={avgR != null ? avgR.toFixed(2) : "—"} />
-      <Stat label="Trades" value={tradesCount.toString()} />
+    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <Chip label="Win rate" value={winRate != null ? `${winRate.toFixed(0)}%` : "—"} hint={winRateHint} />
+      <Chip label="Avg R" value={avgR != null ? avgR.toFixed(2) : "—"} />
+      <Chip label="Trades logged" value={tradesCount.toString()} />
     </div>
   );
 }

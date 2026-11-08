@@ -264,7 +264,7 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-display text-4xl sm:text-[2.75rem] leading-none font-normal tracking-tight">Analytics</h1>
+          <h1 className="font-display text-2xl font-medium tracking-tight">Analytics</h1>
           <p className="text-ink-secondary text-sm mt-1">
             {selectedAccount ? `Performance breakdown for ${selectedAccount.name}` : "Your trading performance, broken down."}
           </p>
@@ -321,7 +321,7 @@ export default function AnalyticsPage() {
               histogram) rather than dense time series, so they share a row
               on wide screens instead of each claiming full width. Each
               chart's drilldown lives inside its own column, directly
-              beneath the chart it belongs to, rather than after the row —
+              beneath the chart it belongs to — rather than after the row —
               so clicking a point/bar always shows its trades right under
               the chart you clicked, not under whichever chart happens to
               render second. */}

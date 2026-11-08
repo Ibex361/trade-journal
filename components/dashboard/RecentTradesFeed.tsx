@@ -57,7 +57,7 @@ export default function RecentTradesFeed({ trades }: { trades: Trade[] }) {
                       like the equivalent marker on Trades does. */}
                   <span
                     className="w-1 h-6 rounded-full shrink-0"
-                    style={{ background: t.pnl > 0 ? "var(--gain)" : t.pnl < 0 ? "var(--loss)" : "var(--ink-3)" }}
+                    style={{ background: t.pnl > 0 ? "var(--glow)" : t.pnl < 0 ? "var(--loss)" : "var(--ink-3)" }}
                   />
                   <div>
                     <p className="text-sm font-medium">{t.instrument}</p>

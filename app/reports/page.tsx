@@ -56,7 +56,7 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3 print:hidden">
         <div>
-          <h1 className="font-display text-4xl sm:text-[2.75rem] leading-none font-normal tracking-tight">Reports</h1>
+          <h1 className="font-display text-2xl font-medium tracking-tight">Reports</h1>
           <p className="text-ink-secondary text-sm mt-1">
             {selectedAccount ? `Monthly report for ${selectedAccount.name}` : "Your monthly trading report."}
           </p>
@@ -71,7 +71,7 @@ export default function ReportsPage() {
           this stands in as the report's title block on paper/PDF. */}
       {selectedAccount && (
         <div className="hidden print:block mb-2">
-          <h1 className="font-display text-4xl sm:text-[2.75rem] leading-none font-normal tracking-tight">{selectedAccount.name} — Trading Report</h1>
+          <h1 className="font-display text-2xl font-medium tracking-tight">{selectedAccount.name} — Trading Report</h1>
           <p className="text-ink-secondary text-sm mt-1">
             {MONTH_LABELS[month - 1]} {year} · Generated {new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
           </p>
@@ -98,7 +98,7 @@ export default function ReportsPage() {
           <TradeSpotlight best={bestTrade} worst={worstTrade} />
           <TagFrequency tags={tagFrequency} />
           <div>
-            <h2 className="font-display text-base font-normal mb-3 print:mt-4">Trades this month</h2>
+            <h2 className="font-display text-base font-medium mb-3 print:mt-4">Trades this month</h2>
             <MonthlyTradesTable trades={monthTrades} />
           </div>
         </>

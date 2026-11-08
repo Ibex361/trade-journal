@@ -39,12 +39,12 @@ export default function TradeFormPanel({
     <>
       <div className="fixed inset-0 z-40 flex justify-end">
         <div className="absolute inset-0 bg-black/60 motion-safe:animate-fade-in" onClick={f.requestClose} />
-        <div className="relative w-full sm:max-w-xl h-full bg-surface-solid border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
-          <div className="sticky top-0 z-10 bg-surface-solid border-b border-surface-border px-6 py-4 flex items-center justify-between">
+        <div className="relative w-full sm:max-w-xl h-full bg-surface-solid backdrop-blur-xl border-l border-surface-border overflow-y-auto motion-safe:animate-slide-in-right">
+          <div className="sticky top-0 z-10 bg-surface-solid backdrop-blur-xl border-b border-surface-border px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="signal-bar h-7" />
               <div>
-                <h2 className="font-display text-lg font-normal leading-tight">
+                <h2 className="font-display text-lg font-medium leading-tight">
                   {trade ? "Edit trade" : duplicateFrom ? "Duplicate trade" : "New trade"}
                 </h2>
                 <p className="text-[11px] text-ink-muted leading-tight mt-0.5">

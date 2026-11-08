@@ -11,7 +11,7 @@ function TagFrequency({ tags }: { tags: TagCount[] }) {
   if (tags.length === 0) {
     return (
       <div className="bg-surface-1 border border-surface-border rounded-card p-5 print:break-inside-avoid">
-        <h2 className="font-display text-base font-normal">Tag frequency</h2>
+        <h2 className="font-display text-base font-medium">Tag frequency</h2>
         <p className="text-ink-muted text-sm mt-3">No tags logged this month.</p>
       </div>
     );
@@ -22,7 +22,7 @@ function TagFrequency({ tags }: { tags: TagCount[] }) {
   return (
     <div className="bg-surface-1 border border-surface-border rounded-card p-5 print:break-inside-avoid">
       <div className="mb-4">
-        <h2 className="font-display text-base font-normal">Tag frequency</h2>
+        <h2 className="font-display text-base font-medium">Tag frequency</h2>
         <p className="text-ink-muted text-xs mt-0.5">
           Bar length is how often a tag was logged; color is whether it was net profitable
         </p>

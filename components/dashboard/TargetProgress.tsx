@@ -48,7 +48,7 @@ function TargetRow({
 
 // In-progress rows carry the signature teal-to-violet glow; flat gain/loss
 // colors are reserved for a resolved state (target hit, or over the risk cap).
-const GLOW_GRADIENT = "bg-glow";
+const GLOW_GRADIENT = "bg-gradient-to-r from-glow to-glow-violet";
 
 export default function TargetProgress({
   targetMonthlyPnl,

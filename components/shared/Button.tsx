@@ -19,9 +19,9 @@ const sizes: Record<Size, string> = {
 };
 
 const variants: Record<Variant, string> = {
-  primary: "bg-glow text-surface-0 shadow-raised hover:brightness-110",
+  primary: "bg-gradient-to-r from-glow to-glow-violet text-surface-0 shadow-raised hover:brightness-110",
   secondary:
-    "bg-surface-2  border border-surface-border text-ink-primary hover:border-glow/50 hover:text-glow",
+    "bg-surface-2 backdrop-blur-md border border-surface-border text-ink-primary hover:border-glow/50 hover:text-glow",
   ghost: "text-ink-secondary hover:text-ink-primary",
   danger: "border border-loss/40 text-loss hover:bg-loss/10",
 };

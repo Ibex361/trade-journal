@@ -61,7 +61,7 @@ export default function MobileTabBar() {
         className="relative flex flex-col items-center justify-center gap-1 py-2.5"
       >
         {active && (
-          <span className="absolute top-0 h-0.5 w-8 rounded-full bg-glow motion-safe:animate-fade-in" />
+          <span className="absolute top-0 h-0.5 w-8 rounded-full bg-gradient-to-r from-glow to-glow-violet motion-safe:animate-fade-in" />
         )}
         <Icon className={`w-5 h-5 transition-colors duration-fast ${active ? "text-glow" : "text-ink-muted"}`} />
         <span className={`text-[11px] leading-none transition-colors duration-fast ${active ? "text-ink-primary font-medium" : "text-ink-muted"}`}>
@@ -85,7 +85,7 @@ export default function MobileTabBar() {
 
   return (
     <nav
-      className="md:hidden print:hidden fixed bottom-0 inset-x-0 z-30 bg-surface-0 border-t border-surface-border"
+      className="md:hidden print:hidden fixed bottom-0 inset-x-0 z-30 bg-surface-0/85 backdrop-blur-xl border-t border-surface-border"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="relative grid grid-cols-5">
@@ -100,7 +100,7 @@ export default function MobileTabBar() {
             <PopoverTrigger asChild>
               <button
                 aria-label="Create new"
-                className="absolute -top-5 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full bg-glow text-surface-0 shadow-raised flex items-center justify-center transition-transform duration-fast motion-safe:active:scale-95 motion-safe:data-[state=open]:rotate-45"
+                className="absolute -top-5 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full bg-gradient-to-r from-glow to-glow-violet text-surface-0 shadow-raised flex items-center justify-center transition-transform duration-fast motion-safe:active:scale-95 motion-safe:data-[state=open]:rotate-45"
               >
                 <PlusIcon className="w-6 h-6" />
               </button>

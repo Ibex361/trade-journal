@@ -8,16 +8,14 @@
  * same palette Tailwind utility classes use, instead of hardcoding hex twice.
  */
 :root {
-  --ink: #f2efe7;
-  --ink-2: #c2bdb0;
-  --ink-3: #9a9584;
-  --glow: #f2b544; /* the one accent (amber) */
-  --glow-2: #e5a02e;
-  --gain: #5bd59c;
-  --loss: #f0675d;
-  --canvas: #0c0c0b;
-  --panel: #141413;
-  --panel-b: #2b2b28;
+  --ink: #edeff7;
+  --ink-2: #b4b9d3;
+  --ink-3: #959bbb;
+  --glow: #5ce6c8;
+  --glow-2: #7c6ff0;
+  --loss: #fb7185;
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-b: rgba(255, 255, 255, 0.09);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 150ms;
@@ -46,13 +44,14 @@ html {
 }
 
 body {
-  /* Flat canvas. The only atmosphere is a barely-there warm lamp at the top
-     edge (no blobs, no blur, not fixed-attachment: unreliable on iOS). */
-  background: radial-gradient(1200px 360px at 50% -120px, rgba(242, 181, 68, 0.07), transparent 70%), var(--canvas);
+  /* Atmospheric backdrop: violet glow upper-left, teal glow upper-right,
+     fading to near-black. Not `background-attachment: fixed` on purpose —
+     that's unreliable on iOS Safari/Samsung Internet, which this app has
+     been bitten by before. */
+  background: radial-gradient(900px 500px at 15% -10%, rgba(124, 111, 240, 0.28), transparent 60%),
+    radial-gradient(700px 500px at 100% 10%, rgba(92, 230, 200, 0.16), transparent 55%),
+    linear-gradient(180deg, #0b0d16 0%, #090a11 100%);
   color: var(--ink);
-  font-feature-settings: "tnum" 1, "cv11" 1;
-  -webkit-font-smoothing: antialiased;
-  letter-spacing: 0.005em;
 }
 
 /*
@@ -62,21 +61,20 @@ body {
  */
 .signal-bar {
   display: inline-block;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--glow);
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--glow) 0%, var(--glow-2) 100%);
 }
 
 /* Header brand mark — the glow motif as a small orb instead of a bar. */
 .brand-orb {
-  background: var(--glow);
-  border-radius: 3px;
-  transform: rotate(45deg) scale(0.78);
+  background: radial-gradient(circle at 35% 30%, var(--glow), var(--glow-2) 70%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 3px 8px rgba(0, 0, 0, 0.5);
 }
 
 ::selection {
   background: var(--glow);
-  color: #0c0c0b;
+  color: #090a11;
 }
 
 .no-scrollbar {
@@ -111,19 +109,6 @@ h1,
 h2,
 h3 {
   text-wrap: balance;
-  font-weight: 400; /* Instrument Serif ships one weight; never faux-bold it */
-}
-
-/* Keyboard focus: one consistent amber ring instead of browser defaults. */
-:focus-visible {
-  outline: 2px solid var(--glow);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline-offset: 0;
 }
 
 button {
@@ -152,10 +137,19 @@ button {
   }
 }
 
-/* Panels are flat and opaque now: elevation comes from a lighter surface
-   step and a hairline border, not blur. */
+/*
+ * Foundation-level glass effect. Every existing panel already uses the
+ * `bg-surface-1`/`bg-surface-2` + `rounded-card` recipe (StatCard,
+ * SettingsCard, every page section, etc.), so giving that shape a blur +
+ * elevation shadow here makes the whole app read as glass immediately,
+ * without editing each component. Step 3 should formalize this into a
+ * proper shared Card/Panel component instead of this attribute-selector
+ * shim (the same technique the print rules below already use).
+ */
 [class*="rounded-card"] {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 /*
@@ -217,10 +211,10 @@ button {
 .prose-notes h1,
 .prose-notes h2,
 .prose-notes h3 {
-  font-family: var(--font-display), serif;
-  font-weight: 400;
+  font-family: var(--font-display), sans-serif;
+  font-weight: 500;
   color: var(--ink);
-  line-height: 1.25;
+  line-height: 1.3;
 }
 .prose-notes h1 {
   font-size: 1.75rem;
@@ -355,7 +349,8 @@ button {
 }
 .prose-notes th {
   background: var(--panel);
-  font-weight: 600;
+  font-family: var(--font-display), sans-serif;
+  font-weight: 500;
   color: var(--ink);
 }
 .prose-notes td p,

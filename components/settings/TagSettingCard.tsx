@@ -250,7 +250,7 @@ export default function TagSettingCard() {
               id="tag-setting-listbox"
               role="listbox"
               style={{ top: panelRect.top, left: panelRect.left, width: panelRect.width }}
-              className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid  border border-surface-border rounded-lg shadow-glass"
+              className="fixed z-[100] max-h-48 overflow-auto p-1 bg-surface-solid backdrop-blur-md border border-surface-border rounded-lg shadow-glass"
             >
               {filteredMatches.map((tag, i) => (
                 <li
@@ -277,7 +277,7 @@ export default function TagSettingCard() {
 
       {!loading && allTags.length === 0 && (
         <p className="text-sm text-ink-muted mt-3">
-          No tags yet, tags you type on a trade or note will show up here once saved.
+          No tags yet — tags you type on a trade or note will show up here once saved.
         </p>
       )}
 

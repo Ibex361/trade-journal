@@ -108,19 +108,19 @@ function HoldingTimeChart({
               <BarChart data={buckets} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} onClick={handleChartClick}>
                 <defs>
                   <linearGradient id="holdBarUp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#5BD59C" />
-                    <stop offset="100%" stopColor="#5BD59C" stopOpacity={0.15} />
+                    <stop offset="0%" stopColor="#5CE6C8" />
+                    <stop offset="100%" stopColor="#5CE6C8" stopOpacity={0.15} />
                   </linearGradient>
                   <linearGradient id="holdBarDown" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#F0675D" />
-                    <stop offset="100%" stopColor="#F0675D" stopOpacity={0.15} />
+                    <stop offset="0%" stopColor="#FB7185" />
+                    <stop offset="100%" stopColor="#FB7185" stopOpacity={0.15} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#2B2B28" vertical={false} />
+                <CartesianGrid stroke="rgba(255,255,255,0.09)" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  tick={{ fill: "#9A9584", fontSize: 11 }}
-                  axisLine={{ stroke: "#2B2B28" }}
+                  tick={{ fill: "#959BBB", fontSize: 11 }}
+                  axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                   tickLine={false}
                   interval={0}
                   angle={-35}
@@ -128,7 +128,7 @@ function HoldingTimeChart({
                   height={50}
                 />
                 <YAxis
-                  tick={{ fill: "#9A9584", fontSize: 11 }}
+                  tick={{ fill: "#959BBB", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   width={50}

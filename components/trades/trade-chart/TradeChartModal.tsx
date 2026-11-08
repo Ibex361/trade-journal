@@ -236,11 +236,11 @@ export default function TradeChartModal({
         autoSize: true,
       });
       const series = chart.addSeries(CandlestickSeries, {
-        upColor: "#5BD59C",
-        downColor: "#F0675D",
+        upColor: "#2dd4bf",
+        downColor: "#fb7185",
         borderVisible: false,
-        wickUpColor: "#5BD59C",
-        wickDownColor: "#F0675D",
+        wickUpColor: "#2dd4bf",
+        wickDownColor: "#fb7185",
       });
       chartRef.current = chart;
       seriesRef.current = series;
@@ -321,7 +321,7 @@ export default function TradeChartModal({
           time: window_.entryUtcSeconds as UTCTimestamp,
           position: "atPriceMiddle",
           price: trade.entry_price,
-          color: "#5BD59C",
+          color: "#2dd4bf",
           shape: isLong === "long" ? "arrowUp" : "arrowDown",
           text: `Entry ${trade.entry_price}`,
         });
@@ -329,14 +329,14 @@ export default function TradeChartModal({
         markers.push({
           time: window_.entryUtcSeconds as UTCTimestamp,
           position: isLong === "long" ? "belowBar" : "aboveBar",
-          color: "#5BD59C",
+          color: "#2dd4bf",
           shape: isLong === "long" ? "arrowUp" : "arrowDown",
           text: "Entry",
         });
       }
     }
     if (window_?.exitUtcSeconds !== null && window_?.exitUtcSeconds !== undefined) {
-      const exitColor = trade.pnl >= 0 ? "#5BD59C" : "#F0675D";
+      const exitColor = trade.pnl >= 0 ? "#2dd4bf" : "#fb7185";
       if (trade.exit_price !== null) {
         markers.push({
           time: window_.exitUtcSeconds as UTCTimestamp,
@@ -388,10 +388,10 @@ export default function TradeChartModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-black/80 motion-safe:animate-fade-in" onClick={onClose} />
-      <div className="relative w-full h-full sm:h-[85vh] sm:max-w-5xl bg-surface-1  border border-surface-border rounded-panel shadow-glass flex flex-col motion-safe:animate-scale-in overflow-hidden">
+      <div className="relative w-full h-full sm:h-[85vh] sm:max-w-5xl bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass flex flex-col motion-safe:animate-scale-in overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-surface-border shrink-0">
           <div>
-            <h2 className="font-display text-lg font-normal flex items-center gap-2">
+            <h2 className="font-display text-lg font-medium flex items-center gap-2">
               {trade.instrument}
               {badge && <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-glow-violet/20 text-glow-violet font-medium">{badge}</span>}
             </h2>
@@ -416,7 +416,7 @@ export default function TradeChartModal({
               onClick={() => setTimeframe(tf.value)}
               className={`text-xs font-medium px-2.5 py-1 rounded-full transition-colors shrink-0 ${
                 timeframe === tf.value
-                  ? "bg-glow text-surface-0"
+                  ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0"
                   : "text-ink-secondary hover:text-ink-primary bg-surface-2"
               }`}
             >

@@ -76,8 +76,7 @@ export default function AppHeader() {
             >
               <HamburgerIcon className="w-5 h-5" />
             </button>
-            <span className="hidden sm:inline-flex items-center gap-2.5 font-display text-2xl leading-none tracking-tight">
-              <span aria-hidden className="brand-orb w-2.5 h-2.5" />
+            <span className="hidden sm:inline font-display font-medium text-lg tracking-tight">
               Trade journal
             </span>
           </div>
@@ -140,7 +139,7 @@ function MoreDrawer({
         className="absolute inset-0 bg-surface-0/70 backdrop-blur-sm motion-safe:animate-fade-in"
       />
       <div
-        className="absolute inset-y-0 left-0 w-[82%] max-w-xs bg-surface-solid border-r border-surface-border shadow-glass motion-safe:animate-slide-in-left flex flex-col"
+        className="absolute inset-y-0 left-0 w-[82%] max-w-xs bg-surface-solid backdrop-blur-xl border-r border-surface-border shadow-glass motion-safe:animate-slide-in-left flex flex-col"
         style={{ paddingBottom: "env(safe-area-inset-bottom)", paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-surface-border">

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Instrument_Serif, Hanken_Grotesk, Spline_Sans_Mono } from "next/font/google";
+import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import AppHeader from "@/components/AppHeader";
 import MobileTabBar from "@/components/MobileTabBar";
@@ -12,12 +12,11 @@ import { StrategiesPageStateProvider } from "@/lib/StrategiesPageStateContext";
 import { NotesPageStateProvider } from "@/lib/NotesPageStateContext";
 import ScrollRestoration from "@/components/ScrollRestoration";
 
-// "Ledger at night" type system: Instrument Serif for titles and the hero
-// balance (one weight, 400), Hanken Grotesk for all UI text, Spline Sans Mono
-// for figures and tickers.
-const instrumentSerif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-display" });
-const hankenGrotesk = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-body" });
-const splineMono = Spline_Sans_Mono({ subsets: ["latin"], variable: "--font-mono" });
+// Concept C's type pairing: Space Grotesk (display) + Inter (body) + JetBrains
+// Mono (numbers). Inter/JetBrains Mono are unchanged from before.
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" });
+const inter = Inter({ subsets: ["latin"], variable: "--font-body" });
+const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Trade journal",
@@ -39,7 +38,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0c0c0b",
+  themeColor: "#090a11",
   // Lets env(safe-area-inset-*) resolve on notched/home-indicator devices —
   // needed for MobileTabBar's bottom padding.
   viewportFit: "cover",
@@ -51,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${instrumentSerif.variable} ${hankenGrotesk.variable} ${splineMono.variable}`}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jbmono.variable}`}>
       <body className="font-body min-h-screen">
         <AccountProvider>
           <TradesDataProvider>

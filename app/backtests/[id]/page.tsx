@@ -161,7 +161,7 @@ export default function BacktestDetailPage() {
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <h1 className="font-display text-4xl sm:text-[2.75rem] leading-none font-normal tracking-tight break-words">{run.name}</h1>
+          <h1 className="font-display text-2xl font-medium tracking-tight break-words">{run.name}</h1>
           <p className="text-ink-secondary text-sm mt-1">
             {formatRunDate(run.start_date)} – {formatRunDate(run.end_date)}
             {duration && <span className="text-ink-muted"> · ran in {duration}</span>}
