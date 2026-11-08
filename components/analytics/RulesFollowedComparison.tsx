@@ -58,15 +58,15 @@ function ComparisonColumn({
       </p>
       <div className="flex items-center gap-4 mt-3">
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-ink-secondary">Win rate</p>
+          <p className="text-[10px] uppercase tracking-wide text-ink-secondary">Win rate</p>
           <p className="font-mono text-sm mt-0.5">{winRate != null ? `${winRate.toFixed(0)}%` : "—"}</p>
         </div>
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-ink-secondary">Avg R</p>
+          <p className="text-[10px] uppercase tracking-wide text-ink-secondary">Avg R</p>
           <p className="font-mono text-sm mt-0.5">{group.avgR != null ? group.avgR.toFixed(2) : "—"}</p>
         </div>
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-ink-secondary">Total P&amp;L</p>
+          <p className="text-[10px] uppercase tracking-wide text-ink-secondary">Total P&amp;L</p>
           <p className={`font-mono text-sm mt-0.5 ${pnlColor}`}>
             {pnlSign}
             {group.totalPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currency}

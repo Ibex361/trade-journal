@@ -93,7 +93,7 @@ function RemoveButton({
   }
 
   return (
-    <button onClick={startConfirm} className="text-xs text-loss hover:brightness-125">
+    <button onClick={startConfirm} className="text-xs text-loss/80 hover:text-loss">
       Remove
     </button>
   );

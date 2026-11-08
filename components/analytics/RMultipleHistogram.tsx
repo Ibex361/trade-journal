@@ -111,7 +111,7 @@ function RMultipleHistogram({
                 <CartesianGrid stroke="rgba(255,255,255,0.09)" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  tick={{ fill: "#959BBB", fontSize: 11 }}
+                  tick={{ fill: "#5C6180", fontSize: 11 }}
                   axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                   tickLine={false}
                   interval={0}
@@ -120,7 +120,7 @@ function RMultipleHistogram({
                   height={50}
                 />
                 <YAxis
-                  tick={{ fill: "#959BBB", fontSize: 11 }}
+                  tick={{ fill: "#5C6180", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   width={35}

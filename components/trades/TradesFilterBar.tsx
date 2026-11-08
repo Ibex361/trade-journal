@@ -329,7 +329,7 @@ export default function TradesFilterBar({
           <FilterIcon className="w-4 h-4" />
           <span>Filters</span>
           {activeCount > 0 && (
-            <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-glow text-surface-0 text-[11px] font-medium">
+            <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-glow text-surface-0 text-[10px] font-medium">
               {activeCount}
             </span>
           )}

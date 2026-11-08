@@ -147,14 +147,14 @@ function PlannedVsRealizedRChart({
                 dataKey="plannedR"
                 domain={domain}
                 tickFormatter={(v) => `${v}R`}
-                tick={{ fill: "#959BBB", fontSize: 11 }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
                 axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
                 label={{
                   value: "Planned R",
                   position: "insideBottom",
                   offset: -12,
-                  fill: "#959BBB",
+                  fill: "#5C6180",
                   fontSize: 11,
                 }}
               />
@@ -163,7 +163,7 @@ function PlannedVsRealizedRChart({
                 dataKey="realizedR"
                 domain={domain}
                 tickFormatter={(v) => `${v}R`}
-                tick={{ fill: "#959BBB", fontSize: 11 }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
                 axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
                 width={44}
@@ -171,7 +171,7 @@ function PlannedVsRealizedRChart({
                   value: "Realized R",
                   angle: -90,
                   position: "insideLeft",
-                  fill: "#959BBB",
+                  fill: "#5C6180",
                   fontSize: 11,
                 }}
               />

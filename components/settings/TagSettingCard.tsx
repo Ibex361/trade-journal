@@ -288,7 +288,7 @@ export default function TagSettingCard() {
             <button onClick={startRename} className="text-xs text-glow hover:underline">
               Rename
             </button>
-            <button onClick={startDelete} className="text-xs text-loss hover:brightness-125">
+            <button onClick={startDelete} className="text-xs text-loss/80 hover:text-loss">
               Delete
             </button>
           </div>

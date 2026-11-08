@@ -106,14 +106,14 @@ function ExitReasonByStrategyChart({
                 type="number"
                 domain={[0, 100]}
                 unit="%"
-                tick={{ fill: "#959BBB", fontSize: 11 }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
                 axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                 tickLine={false}
               />
               <YAxis
                 type="category"
                 dataKey="label"
-                tick={{ fill: "#959BBB", fontSize: 11 }}
+                tick={{ fill: "#5C6180", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={100}

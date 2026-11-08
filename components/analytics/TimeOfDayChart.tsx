@@ -108,7 +108,7 @@ function TimeOfDayChart({
               }}
               className={`px-3 py-1 text-xs font-mono rounded-full transition-all duration-fast ease-out ${
                 source === s.value
-                  ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-raised"
+                  ? "bg-gradient-to-r from-glow to-glow-violet text-surface-0 font-medium shadow-glow"
                   : "text-ink-secondary hover:text-ink-primary"
               }`}
             >
@@ -142,7 +142,7 @@ function TimeOfDayChart({
                 <CartesianGrid stroke="rgba(255,255,255,0.09)" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  tick={{ fill: "#959BBB", fontSize: 11 }}
+                  tick={{ fill: "#5C6180", fontSize: 11 }}
                   axisLine={{ stroke: "rgba(255,255,255,0.09)" }}
                   tickLine={false}
                   interval={0}
@@ -151,7 +151,7 @@ function TimeOfDayChart({
                   height={50}
                 />
                 <YAxis
-                  tick={{ fill: "#959BBB", fontSize: 11 }}
+                  tick={{ fill: "#5C6180", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   width={50}

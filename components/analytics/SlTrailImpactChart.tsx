@@ -17,7 +17,7 @@ export function slMovementSelectionKey(strategyKey: string, movement: StopMoveme
 // SL-hit rate isn't inherently better or worse out of context, so the three
 // groups are just distinguished, not judged.
 const MOVEMENT_META: { value: StopMovement; label: string; color: string }[] = [
-  { value: "held", label: "Held", color: "#B4B9D3" }, // ink-secondary — the untouched baseline
+  { value: "held", label: "Held", color: "#9BA0BE" }, // ink-secondary — the untouched baseline
   { value: "tightened", label: "Tightened", color: "#7C6FF0" }, // glow-violet
   { value: "widened", label: "Widened", color: "#5CE6C8" }, // glow teal
 ];
