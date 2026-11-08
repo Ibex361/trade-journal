@@ -26,20 +26,19 @@ export default function Card({
   className?: string;
   children: ReactNode;
 }) {
-  const pad = padding === "none" ? "" : padding === "tight" ? "p-4" : "p-6";
+  const pad = padding === "none" ? "" : padding === "tight" ? "p-4 sm:p-5" : "p-5 sm:p-7";
 
   return (
     <section
-      className={`bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass ${pad} ${className}`}
+      className={`bg-surface-1  border border-surface-border rounded-panel shadow-glass ${pad} ${className}`}
     >
       {(title || action) && (
         <div className="flex items-start justify-between gap-3 mb-5 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
-            {title && <span className="signal-bar h-6 mt-0.5 shrink-0" />}
             <div className="min-w-0">
-              {title && <h2 className="font-display text-lg font-medium">{title}</h2>}
+              {title && <h2 className="font-display text-2xl leading-tight font-normal">{title}</h2>}
               {description && (
-                <p className="text-ink-secondary text-sm mt-0.5">{description}</p>
+                <p className="text-ink-secondary text-sm mt-1 max-w-prose">{description}</p>
               )}
             </div>
           </div>

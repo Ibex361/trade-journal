@@ -22,7 +22,7 @@ export default function AccountSwitcher() {
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 bg-surface-2 backdrop-blur-md border border-surface-border rounded-full pl-3 pr-2 py-1.5 hover:border-glow/40 transition-colors"
+        className="flex items-center gap-2 bg-surface-2  border border-surface-border rounded-full pl-3 pr-2 py-1.5 hover:border-glow/40 transition-colors"
       >
         <span className="signal-bar h-4" />
         <span className="text-sm font-medium max-w-[6rem] sm:max-w-none truncate">
@@ -35,7 +35,7 @@ export default function AccountSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-56 bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass overflow-hidden z-20">
+        <div className="absolute right-0 mt-2 w-56 bg-surface-1  border border-surface-border rounded-panel shadow-glass overflow-hidden z-20">
           {accounts.map((acc) => (
             <button
               key={acc.id}

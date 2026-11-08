@@ -43,16 +43,16 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-3 justify-center mb-8">
           <span className="brand-orb w-6 h-6 rounded-full shrink-0" />
-          <span className="font-display font-medium text-xl tracking-tight">
+          <span className="font-display font-normal text-xl tracking-tight">
             Trade journal
           </span>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass p-6"
+          className="bg-surface-1  border border-surface-border rounded-panel shadow-glass p-6"
         >
-          <h1 className="font-display text-lg font-medium mb-1">Sign in</h1>
+          <h1 className="font-display text-lg font-normal mb-1">Sign in</h1>
           <p className="text-ink-secondary text-sm mb-6">
             This journal is private — sign in to continue.
           </p>

@@ -25,7 +25,7 @@ export default function Modal({
         className="absolute inset-0 bg-surface-0/70 backdrop-blur-sm motion-safe:animate-fade-in"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-md bg-surface-1 backdrop-blur-md border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in">
+      <div className="relative w-full max-w-md bg-surface-1  border border-surface-border rounded-panel shadow-glass p-6 motion-safe:animate-scale-in">
         {children}
       </div>
     </div>

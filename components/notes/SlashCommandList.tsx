@@ -54,14 +54,14 @@ const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandListProp
 
     if (items.length === 0) {
       return (
-        <div className="bg-surface-solid backdrop-blur-md border border-surface-border rounded-card shadow-glass px-3 py-2.5 text-sm text-ink-muted w-64">
+        <div className="bg-surface-solid  border border-surface-border rounded-card shadow-glass px-3 py-2.5 text-sm text-ink-muted w-64">
           No matching blocks
         </div>
       );
     }
 
     return (
-      <div className="bg-surface-solid backdrop-blur-md border border-surface-border rounded-card shadow-glass overflow-y-auto py-1 w-64 max-h-80">
+      <div className="bg-surface-solid  border border-surface-border rounded-card shadow-glass overflow-y-auto py-1 w-64 max-h-80">
         {items.map((item, index) => (
           <button
             key={item.title}

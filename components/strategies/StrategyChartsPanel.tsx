@@ -173,7 +173,7 @@ export default function StrategyChartsPanel({
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <span className="signal-bar h-5 shrink-0" />
-        <h3 className="font-display text-sm font-medium text-ink-secondary">
+        <h3 className="font-display text-sm font-normal text-ink-secondary">
           {strategyLabel} <span className="text-ink-muted font-normal">· charts</span>
         </h3>
       </div>

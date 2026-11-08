@@ -211,7 +211,7 @@ export const ToolbarButton = React.forwardRef<
         "inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-md text-sm font-medium transition-colors duration-fast shrink-0",
         "disabled:opacity-30 disabled:pointer-events-none",
         active
-          ? "bg-glow/15 text-glow shadow-[inset_0_0_0_1px_rgba(92,230,200,0.3)]"
+          ? "bg-glow/15 text-glow shadow-[inset_0_0_0_1px_rgba(242,181,68,0.35)]"
           : "text-ink-secondary hover:text-ink-primary hover:bg-surface-2",
         className ?? "",
       ]

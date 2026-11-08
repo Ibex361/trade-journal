@@ -37,9 +37,9 @@ function CalendarHeatmap({
   return (
     <div className="bg-surface-1 border border-surface-border rounded-card p-5">
       <div className="mb-4">
-        <h2 className="font-display text-base font-medium">Daily P&amp;L</h2>
+        <h2 className="font-display text-base font-normal">Daily P&amp;L</h2>
         <p className="text-ink-muted text-xs mt-0.5">
-          Darker shading means a bigger day, teal for gains and rose for losses — best and worst days are ringed
+          Darker shading means a bigger day, green for gains and red for losses — best and worst days are ringed
         </p>
       </div>
 

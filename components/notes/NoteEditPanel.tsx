@@ -401,7 +401,7 @@ export default function NoteEditPanel({
          Tiptap's own reference editor reads. */}
       <div className="fixed inset-0 z-40 bg-surface-0 overflow-y-auto motion-safe:animate-fade-in">
         <div className="max-w-4xl mx-auto min-h-full px-4 sm:px-10">
-          <div className="sticky top-0 -mx-4 sm:-mx-10 px-4 sm:px-10 py-3 bg-surface-0/95 backdrop-blur-md border-b border-surface-border flex items-center justify-between gap-3 z-10">
+          <div className="sticky top-0 -mx-4 sm:-mx-10 px-4 sm:px-10 py-3 bg-surface-0/95  border-b border-surface-border flex items-center justify-between gap-3 z-10">
             {saveStatus === "error" ? (
               <button
                 type="button"
@@ -432,7 +432,7 @@ export default function NoteEditPanel({
             <input
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
-              className="w-full bg-transparent font-display text-3xl sm:text-4xl font-medium text-ink-primary placeholder:text-ink-muted/60 focus:outline-none"
+              className="w-full bg-transparent font-display text-3xl sm:text-4xl font-normal text-ink-primary placeholder:text-ink-muted/60 focus:outline-none"
               placeholder="Untitled"
             />
 
